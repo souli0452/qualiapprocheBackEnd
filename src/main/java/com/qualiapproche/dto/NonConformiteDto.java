@@ -10,7 +10,6 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class NonConformiteDto extends AuditEntityDto {
 
     private String intitule;

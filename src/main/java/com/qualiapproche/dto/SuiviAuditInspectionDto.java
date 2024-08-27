@@ -9,7 +9,7 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
+
 public class SuiviAuditInspectionDto extends  AuditEntityDto{
     private String resultatSuiviAuditInspection;
     private String actionRecommender;

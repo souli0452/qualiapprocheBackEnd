@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class FichierDto extends AuditEntityDto{
 
     private String nomFichier;

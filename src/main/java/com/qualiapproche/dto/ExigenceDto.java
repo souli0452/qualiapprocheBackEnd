@@ -11,7 +11,6 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class ExigenceDto extends AuditEntityDto{
 
     private String libelleExigence;

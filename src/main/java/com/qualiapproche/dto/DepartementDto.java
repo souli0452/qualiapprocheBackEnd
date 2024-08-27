@@ -10,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
+
 public class DepartementDto extends AuditEntityDto{
 
     private String libelleDepartement;

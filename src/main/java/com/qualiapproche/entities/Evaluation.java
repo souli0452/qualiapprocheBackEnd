@@ -8,9 +8,13 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
- @AllArgsConstructor @NoArgsConstructor @Getter @Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
 public class Evaluation extends AuditEntity {
 
     private String libelle;
@@ -20,10 +24,8 @@ public class Evaluation extends AuditEntity {
     @OneToMany
     private List<Formation> formations;
 
-
     private LocalDateTime dateEvaluation;
-    @ManyToMany
-    private List<Fournisseur> fournisseurs;
+    private UUID fournisseurId;
     @ManyToMany
     private List<ActionCorrectivePreventive> actionCorrectivePreventiveReconmenders;
 }
