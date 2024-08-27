@@ -8,7 +8,6 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class ProduitDto extends AuditEntityDto{
     private String libelleProduit;
     private String descriptionProduit;

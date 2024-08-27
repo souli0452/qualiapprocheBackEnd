@@ -17,8 +17,8 @@ public interface FounisseurMapper {
     List<FournisseurDto> toDtos(List<Fournisseur> fournisseurList);
 
     List<Fournisseur> toEntities(List<FournisseurDto> fournisseurDtos);
-    @Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
-    void updateEntityFromDto(FournisseurDto enqueteDto, @MappingTarget Fournisseur enquete);
+    //@Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
+    void updateEntityFromDto(FournisseurDto enqueteDto, @MappingTarget Fournisseur fournisseur);
     default Fournisseur map(UUID id) {
         if (id == null) {
             return null;

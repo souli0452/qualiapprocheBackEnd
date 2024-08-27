@@ -19,6 +19,7 @@ import java.util.UUID;
 public class FournisseurServiceImpl implements FournisseurService {
     private final FournisseurRepository fournisseurRepository;
     private final FounisseurMapper founisseurMapper;
+
     @Override
     public FournisseurDto create(FournisseurDto fournisseurDto) {
         Fournisseur fournisseur = founisseurMapper.toEntity(fournisseurDto);
@@ -36,14 +37,15 @@ public class FournisseurServiceImpl implements FournisseurService {
     @Override
     public List<FournisseurDto> allFournisseurs() {
         return  founisseurMapper.toDtos(fournisseurRepository.findAll()) ;
+
     }
 
     @Override
     public FournisseurDto getFounisseurById(UUID id) {
-        if (fournisseurRepository.existsById(id)){
-            return  founisseurMapper.toDto(fournisseurRepository.getReferenceById(id));
-        }else {
-            throw  new ResponseStatusException(HttpStatus.NOT_FOUND, "Ce fournisseur n'existe pas.");
+        if (fournisseurRepository.existsById(id)) {
+            return founisseurMapper.toDto(fournisseurRepository.getReferenceById(id));
+        } else {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ce fournisseur n'existe pas.");
 
         }
     }

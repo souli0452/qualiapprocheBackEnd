@@ -8,7 +8,6 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class CrictereEvaluationDto extends AuditEntityDto{
 
     private String noteAtribuerCritere;

@@ -1,13 +1,22 @@
 package com.qualiapproche.entities;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.OneToMany;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
+
 import java.util.List;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
+@Getter
+@Setter
 @Entity
- @AllArgsConstructor @NoArgsConstructor @Getter @Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@JsonInclude(NON_NULL)
+@SuperBuilder
+@Table(name = "proc_fournisseur")
 public class Fournisseur extends AuditEntity {
     private String nom;
     private String adresse;
@@ -16,11 +25,5 @@ public class Fournisseur extends AuditEntity {
     private String siteWeb;
     private String contactPrincipal;
     private String statut;
-    @ManyToMany
-    private List<Audite> audites;
-    @OneToMany
-    private List<ContratAccord> contratAccords;
-    @ManyToMany
-    private List<Evaluation> evaluations;
 
 }

@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class ContratAccordDto extends AuditEntityDto{
 
     private String libelleContratAccord;

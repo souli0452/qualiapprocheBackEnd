@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class ReclamationDto extends AuditEntityDto{
     private String numeroReference;
     private String nomDemendeur;

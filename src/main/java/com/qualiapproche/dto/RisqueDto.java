@@ -11,7 +11,7 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
+
 public class RisqueDto extends  AuditEntityDto {
     private String libelleRisque;
     private String descriptionRisque;

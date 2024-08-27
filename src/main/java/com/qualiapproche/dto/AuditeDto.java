@@ -2,13 +2,12 @@ package com.qualiapproche.dto;
 
 import com.qualiapproche.entities.NonConformite;
 import com.qualiapproche.entities.Risque;
-import jakarta.persistence.OneToMany;
 import lombok.*;
 
 import java.util.List;
 
-@NoArgsConstructor @AllArgsConstructor @Getter @Setter @Builder
-public class Audite extends AuditEntityDto{
+@NoArgsConstructor @AllArgsConstructor @Getter @Setter
+public class AuditeDto extends AuditEntityDto{
 
     private String libelleAudite;
     private String descriptionAudite;

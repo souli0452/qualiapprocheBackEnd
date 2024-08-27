@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class ActionCorrectivePreventiveDto extends AuditEntityDto {
 
     private String libelleActionCorrectivePreventive;

@@ -6,11 +6,13 @@ import jakarta.persistence.OneToOne;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter @Setter
+@Getter
+@Setter
 public class ContratAccord extends AuditEntity {
     private String libelleContratAccord;
     private String descriptionContratAccord;
@@ -20,8 +22,7 @@ public class ContratAccord extends AuditEntity {
     private String termeConditionContratAccord;
     private String niveauService;
     private String conditionPaiement;
-    @OneToOne
-    private Fournisseur fournisseur;
+    private UUID fournisseurId;
 
 
 }

@@ -9,7 +9,6 @@ import java.util.List;
 @AllArgsConstructor
 @Getter
 @Setter
-@Builder
 public class FormationDtao extends AuditEntityDto{
 
     private String libelleFormation;
