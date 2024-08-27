@@ -35,7 +35,6 @@ public class FournisseurServiceImpl implements FournisseurService {
 
     @Override
     public List<FournisseurDto> allFournisseurs() {
-
         return  founisseurMapper.toDtos(fournisseurRepository.findAll()) ;
     }
 
