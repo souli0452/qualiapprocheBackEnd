@@ -16,7 +16,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @NoArgsConstructor
 @JsonInclude(NON_NULL)
 @SuperBuilder
-@Table(name = "proc_fournisseur")
+@Table(name = "fournisseur")
 public class Fournisseur extends AuditEntity {
     private String nom;
     private String adresse;

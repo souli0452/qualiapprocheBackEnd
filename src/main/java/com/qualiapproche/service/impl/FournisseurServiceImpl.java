@@ -31,13 +31,12 @@ public class FournisseurServiceImpl implements FournisseurService {
         return fournisseurRepository.findById(fournisseurDto.getId()).map(fournisseurExisted -> {
             founisseurMapper.updateEntityFromDto(fournisseurDto, fournisseurExisted);
             return founisseurMapper.toDto(fournisseurRepository.save(fournisseurExisted));
-        }).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Aucun fournisseur trouvé."));
+        }).orElseThrow(() -> new ResponseStatusException(HttpStatus.OK, "Aucun fournisseur trouvé."));
     }
 
     @Override
     public List<FournisseurDto> allFournisseurs() {
         return  founisseurMapper.toDtos(fournisseurRepository.findAll()) ;
-
     }
 
     @Override
@@ -45,7 +44,7 @@ public class FournisseurServiceImpl implements FournisseurService {
         if (fournisseurRepository.existsById(id)) {
             return founisseurMapper.toDto(fournisseurRepository.getReferenceById(id));
         } else {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ce fournisseur n'existe pas.");
+            throw new ResponseStatusException(HttpStatus.OK, "Ce fournisseur n'existe pas.");
 
         }
     }

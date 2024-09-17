@@ -1,4 +1,16 @@
 package com.qualiapproche.service;
 
+import com.qualiapproche.dto.CategorieFichierDto;
+
+import java.util.List;
+import java.util.UUID;
+
 public interface CategorieFichierService {
+    CategorieFichierDto create(CategorieFichierDto categorieFichierDto);
+
+    CategorieFichierDto update(CategorieFichierDto categorieFichierDto);
+
+    List<CategorieFichierDto> allCategorieFichier();
+
+    CategorieFichierDto getCategorieFichierById(UUID id);
 }
