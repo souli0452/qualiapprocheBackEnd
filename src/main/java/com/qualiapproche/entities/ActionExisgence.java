@@ -1,7 +1,9 @@
-package com.qualiapproche.dto;
+package com.qualiapproche.entities;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Entity;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,17 +14,14 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
 @Getter
 @Setter
+@Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @JsonInclude(NON_NULL)
-@MappedSuperclass
 @SuperBuilder
-public class FournisseurDto extends AuditEntityDto{
-    private String nom;
-    private String adresse;
-    private String telephone;
-    private String email;
-    private String siteWeb;
-    private String contactPrincipal;
-    private String statut;
+public class ActionExisgence extends   AuditEntity{
+    @OneToOne
+    private ActionCorrectivePreventive action;
+    @OneToOne
+    private Exigence exigence;
 }

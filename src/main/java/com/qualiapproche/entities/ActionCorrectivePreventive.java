@@ -1,29 +1,34 @@
 package com.qualiapproche.entities;
 
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.OneToOne;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.qualiapproche.utils.StatutEnum;
+import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
+@Getter
+@Setter
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
-@Setter
+@JsonInclude(NON_NULL)
+@SuperBuilder
 public class ActionCorrectivePreventive extends AuditEntity {
-    private String libelleActionCorrectivePreventive;
+    private String libelle;
     @Column(columnDefinition = "text",length = 1000000000)
     private String descriptionActionCorrectivePreventive;
     private String responsable;
-    private String statut;
-    private String typeActionCorrectivePreventive;
-    private LocalDateTime dateDebutActionCorrectivePreventive;
-    private LocalDateTime dateFinActionCorrectivePreventive;
+    @Enumerated(EnumType.STRING)
+    private StatutEnum statut;
+    private String type;
+    private LocalDateTime dateDebut;
+    private LocalDateTime dateFin;
     @OneToOne
     private Reclamation reclamation;
     @ManyToMany
