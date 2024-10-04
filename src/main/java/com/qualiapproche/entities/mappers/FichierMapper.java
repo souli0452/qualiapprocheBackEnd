@@ -3,7 +3,6 @@ package com.qualiapproche.entities.mappers;
 import com.qualiapproche.dto.FichierDto;
 import com.qualiapproche.dto.FournisseurDto;
 import com.qualiapproche.entities.Fichier;
-import com.qualiapproche.entities.Fournisseur;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 
