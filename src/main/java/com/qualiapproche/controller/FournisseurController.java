@@ -1,8 +1,11 @@
 package com.qualiapproche.controller;
 
+import com.qualiapproche.dto.CrictereEvaluationDto;
+import com.qualiapproche.dto.CritereEvaluationIdsRequestDto;
 import com.qualiapproche.dto.FournisseurDto;
+import com.qualiapproche.entities.CrictereEvaluation;
+import com.qualiapproche.entities.Fournisseur;
 import com.qualiapproche.service.FournisseurService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +22,7 @@ import static com.qualiapproche.utils.ApiUrls.*;
 public class FournisseurController {
     @Autowired
     private  FournisseurService fournisseurService;
-    @PostMapping
+    @PostMapping(CREATE_FOURNISSEUR)
     public ResponseEntity<FournisseurDto> create(@RequestBody FournisseurDto fournisseurDto) {
         FournisseurDto fournisseur = fournisseurService.create(fournisseurDto);
         return new ResponseEntity<>(fournisseur, HttpStatus.OK);
@@ -39,4 +42,17 @@ public class FournisseurController {
       FournisseurDto fournisseur = fournisseurService.getFounisseurById(id);
         return new ResponseEntity<>(fournisseur, HttpStatus.OK);
     }
+
+
+    @PostMapping(ASSIGN_CRICTERE_FOURNISSEUR)
+    public List<CrictereEvaluationDto> assignCriteresToFournisseur(@PathVariable UUID fournisseurId, @RequestBody CritereEvaluationIdsRequestDto request) {
+        return fournisseurService.assignCriteresToFournisseur(fournisseurId, request.getCritereEvaluationIds());
+    }
+
+
+    @GetMapping(FOURNISSEUR_GET_CRICTERE_EVALUATION)
+    public Fournisseur getFournisseurWithCriteres(@PathVariable UUID fournisseurId) {
+        return fournisseurService.getFournisseurWithCriteres(fournisseurId);
+    }
+
 }

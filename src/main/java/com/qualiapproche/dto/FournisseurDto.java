@@ -1,9 +1,10 @@
 package com.qualiapproche.dto;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.qualiapproche.entities.Audite;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.MappedSuperclass;
+import com.qualiapproche.entities.CrictereEvaluation;
+import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -28,6 +29,9 @@ public class FournisseurDto extends AuditEntityDto{
     private String siteWeb;
     private String contactPrincipal;
     private String statut;
+    @OneToMany(mappedBy = "fournisseur", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+   // @JsonBackReference
+    private List<CrictereEvaluation> criteresEvaluation;
 
 
 }

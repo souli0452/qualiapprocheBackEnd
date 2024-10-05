@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Mapper(componentModel = "spring")
 public interface CritereEvaluationMapper {
-    CrictereEvaluation toDto(CrictereEvaluation crictereEvaluation);
+    CrictereEvaluationDto toDto(CrictereEvaluation crictereEvaluation);
     CrictereEvaluation toEntity(CrictereEvaluationDto crictereEvaluationDto);
     List<CrictereEvaluation> toDtos(List<CrictereEvaluation> crictereEvaluationList);
     List<CrictereEvaluation> toEntities(List<CrictereEvaluationDto> crictereEvaluationDtos);
