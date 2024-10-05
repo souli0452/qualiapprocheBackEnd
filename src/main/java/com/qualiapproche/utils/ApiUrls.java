@@ -21,6 +21,21 @@ public class ApiUrls {
     public static final String CREATE_FICHIER_ROOT_URL = "/create";
     public static final String DELETE_FICHIER_ROOT_URL = "/delete" + "/{fichierId}";
 
+    /* Action corrective et preventive urls */
+    public static final String ACTION_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/action-corrective";
+    public static final String GET_ALL_ACTION = "/all";
+    public static final String GET_ACTION_BY_ID = "/get";
+    public static final String UPDATE_ACTION = "/update";
+    public static final String DELETE_ACTION = "/delete";
+
+
+    /* Formation urls */
+    public static final String FORMATION_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/formation";
+    public static final String GET_ALL_FORMATION = "/all";
+    public static final String GET_FORMATION_BY_ID = "/get";
+    public static final String UPDATE_FORMATION = "/update";
+    public static final String DELETE_FORMATION = "/delete";
+
 
     public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/crictere-evaluation";
     public static final String CREATE_CRICTERE_EVALUATION = "/create";

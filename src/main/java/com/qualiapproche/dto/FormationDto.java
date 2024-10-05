@@ -1,19 +1,16 @@
 package com.qualiapproche.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.qualiapproche.entities.Evaluation;
 import com.qualiapproche.entities.Exigence;
-import com.qualiapproche.entities.Reclamation;
-import com.qualiapproche.entities.Risque;
-import com.qualiapproche.utils.StatutEnum;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.MappedSuperclass;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 
 @Getter
 @Setter
@@ -22,16 +19,13 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonInclude(NON_NULL)
 @MappedSuperclass
 @SuperBuilder
-public class ActionCorrectivePreventiveDto extends AuditEntityDto {
+public class FormationDto extends AuditEntityDto{
 
     private String libelle;
     private String description;
-    private String responsable;
-    private StatutEnum statut;
-    private String type;
-    private LocalDateTime dateDebut;
-    private LocalDateTime dateFin;
-    private Reclamation reclamation;
-    private List<Risque> risques;
+    private String objectif;
+    private String prerequis;
+    private String competence;
     private List<Exigence> exigences;
+    private Evaluation evaluation;
 }

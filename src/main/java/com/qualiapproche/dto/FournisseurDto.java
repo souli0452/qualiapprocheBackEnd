@@ -1,18 +1,18 @@
 package com.qualiapproche.dto;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.qualiapproche.entities.Audite;
 import com.qualiapproche.entities.CrictereEvaluation;
 import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.MappedSuperclass;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-
 
 @Getter
 @Setter
@@ -29,9 +29,8 @@ public class FournisseurDto extends AuditEntityDto{
     private String siteWeb;
     private String contactPrincipal;
     private String statut;
-    @OneToMany(mappedBy = "fournisseur", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-   // @JsonBackReference
-    private List<CrictereEvaluation> criteresEvaluation;
 
+    @OneToMany(mappedBy = "fournisseur", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<CrictereEvaluation> criteresEvaluation;
 
 }

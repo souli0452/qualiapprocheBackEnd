@@ -21,8 +21,7 @@ public class Exigence extends AuditEntity {
     private List<Reglementation> reglementations;
     @ManyToMany
     private List<Formation> formations;
-    @ManyToMany
-    private List<ActionCorrectivePreventive> actionCorrectivePreventives;
+
 
 
 }
