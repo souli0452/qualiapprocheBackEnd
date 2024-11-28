@@ -44,6 +44,12 @@ public class ApiUrls {
     public static final String UPDATE_CRICTERE_EVALUATION = "/update";
     public static final String DELETE_CRICTERE_EVALUATION = "/delete";
 
+    public static final String DEPARTEMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/departement";
+    public static final String CREATE_DEPARTEMENT = "/create";
+    public static final String GET_DEPARTEMENT_BY_ID = "/get";
+    public static final String GET_ALL_DEPARTEMENT = "/all";
+    public static final String UPDATE_DEPARTEMENT = "/update";
+    public static final String DELETE_DEPARTEMENT = "/delete";
 
 
 
