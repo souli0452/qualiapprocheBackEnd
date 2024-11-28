@@ -39,6 +39,10 @@ public class ApiUrls {
 
     public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/crictere-evaluation";
     public static final String CREATE_CRICTERE_EVALUATION = "/create";
+    public static final String GET_CRICTERE_EVALUATION_BY_ID = "/get";
+    public static final String GET_ALL_CRICTERE_EVALUATION = "/all";
+    public static final String UPDATE_CRICTERE_EVALUATION = "/update";
+    public static final String DELETE_CRICTERE_EVALUATION = "/delete";
 
 
 

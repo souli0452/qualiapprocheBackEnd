@@ -12,7 +12,7 @@ import java.util.UUID;
 public interface CritereEvaluationMapper {
     CrictereEvaluationDto toDto(CrictereEvaluation crictereEvaluation);
     CrictereEvaluation toEntity(CrictereEvaluationDto crictereEvaluationDto);
-    List<CrictereEvaluation> toDtos(List<CrictereEvaluation> crictereEvaluationList);
+    List<CrictereEvaluationDto> toDtos(List<CrictereEvaluation> crictereEvaluationList);
     List<CrictereEvaluation> toEntities(List<CrictereEvaluationDto> crictereEvaluationDtos);
     //@Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
     void updateEntityFromDto(CrictereEvaluationDto enqueteDto, @MappingTarget CrictereEvaluation crictereEvaluation);
