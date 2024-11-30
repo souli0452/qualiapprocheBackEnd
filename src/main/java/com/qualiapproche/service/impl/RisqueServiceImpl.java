@@ -4,9 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.qualiapproche.service.RisqueService;
-import com.qualiapproche.utils.StatutEnum;
-
-import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,7 +18,6 @@ import com.qualiapproche.entities.mappers.FounisseurMapper;
 import com.qualiapproche.entities.mappers.RisqueMapper;
 import com.qualiapproche.repository.FournisseurRepository;
 import com.qualiapproche.repository.RisqueRepository;
-
 @Service
 @RequiredArgsConstructor
 public class RisqueServiceImpl implements RisqueService {
@@ -58,9 +54,9 @@ public class RisqueServiceImpl implements RisqueService {
     }
 
     @Override
-    public void delete(UUID risqueId) {
-        if (risqueRepository.existsById(risqueId)) {
-            risqueRepository.deleteById(risqueId);
+    public void delete(UUID id) {
+        if (risqueRepository.existsById(id)) {
+            risqueRepository.deleteById(id);
         } else {
             throw new ResponseStatusException(HttpStatus.OK, "Ce risque n'existe pas.");
         }

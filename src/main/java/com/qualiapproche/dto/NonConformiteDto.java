@@ -2,14 +2,25 @@ package com.qualiapproche.dto;
 
 import com.qualiapproche.entities.Fichier;
 import com.qualiapproche.entities.Reclamation;
+
 import lombok.*;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
-@NoArgsConstructor
-@AllArgsConstructor
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
+import jakarta.persistence.MappedSuperclass;
+import lombok.experimental.SuperBuilder;
+
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@JsonInclude(NON_NULL)
+@MappedSuperclass
+@SuperBuilder
 public class NonConformiteDto extends AuditEntityDto {
 
     private String intitule;
@@ -17,7 +28,7 @@ public class NonConformiteDto extends AuditEntityDto {
     private String numeroReference;
     private String priorite;
     private String detailleSuplementaire;
-    private LocalDateTime dateEcheance;
+    private String dateEcheance;
     private String statut;
     private String commentaires;
     private Reclamation reclamation;
