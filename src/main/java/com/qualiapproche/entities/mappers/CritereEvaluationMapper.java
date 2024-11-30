@@ -21,7 +21,7 @@ public interface CritereEvaluationMapper {
             return null;
         }
         CrictereEvaluation crictereEvaluation = new CrictereEvaluation();
-        crictereEvaluation.setId(id);
+        // crictereEvaluation.setId(id);
         return crictereEvaluation;
     }
 }

@@ -1,6 +1,6 @@
 package com.qualiapproche.entities;
-
 import com.qualiapproche.utils.StatutEnum;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.OneToOne;
@@ -9,19 +9,35 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity
- @AllArgsConstructor
-@NoArgsConstructor
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+
+import lombok.experimental.SuperBuilder;
+
 @Getter
 @Setter
+@Entity
+@AllArgsConstructor
+@NoArgsConstructor
+@JsonInclude(NON_NULL)
+@SuperBuilder
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Risque extends AuditEntity {
 
     private String libelle;
     private String description;
     private String niveau;
-    private StatutEnum statut;
+    private StatutRisque statut;
     private String plantAttenuation;
     private String commentaireRisque;
-    private String evidenceRisuqe;
-    private LocalDateTime dateIdentificationRisque;
+    private String evidenceRisque;
+    // private LocalDateTime dateIdentificationRisque;
+
+    public enum StatutRisque {
+        STATUS_1,
+        STATUS_2,
+        STATUS_3,
+    }
 }
