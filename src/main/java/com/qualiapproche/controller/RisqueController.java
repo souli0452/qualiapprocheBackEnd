@@ -75,16 +75,4 @@ public class RisqueController {
         risqueService.delete(risqueId);
     }
 
-
-
-    // @PostMapping(ASSIGN_CRICTERE_FOURNISSEUR)
-    // public List<CrictereEvaluationDto> assignCriteresToFournisseur(@PathVariable UUID fournisseurId, @RequestBody CritereEvaluationIdsRequestDto request) {
-    //     return risqueService.assignCriteresToFournisseur(fournisseurId, request.getCritereEvaluationIds());
-    // }
-
-
-    // @GetMapping(FOURNISSEUR_GET_CRICTERE_EVALUATION)
-    // public Fournisseur getFournisseurWithCriteres(@PathVariable UUID fournisseurId) {
-    //     return risqueService.getFournisseurWithCriteres(fournisseurId);
-    // }
 }
