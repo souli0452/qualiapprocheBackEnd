@@ -85,8 +85,6 @@ public class FournisseurServiceImpl implements FournisseurService {
     }
 
 
-
-
     @Override
     public Fournisseur getFournisseurWithCriteres(UUID fournisseurId) {
         return fournisseurRepository.findByIdWithCriteres(fournisseurId);
