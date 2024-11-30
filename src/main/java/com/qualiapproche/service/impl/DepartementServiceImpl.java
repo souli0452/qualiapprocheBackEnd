@@ -48,8 +48,8 @@ public class DepartementServiceImpl implements DepartementService {
     }
 
     @Override
-    public DepartementDto delete(UUID id) {
+    public void delete(UUID id) {
         Departement departement=departementRepository.getReferenceById(id);
-        return departementMapper.toDto(departement);
+        departementRepository.delete(departement);
     }
 }
