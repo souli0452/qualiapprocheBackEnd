@@ -41,6 +41,5 @@ public class FormationController {
     @DeleteMapping(DELETE_FORMATION)
     public void deleteyId(@RequestParam UUID id) {
         formationService.delete(id);
-
     }
 }
