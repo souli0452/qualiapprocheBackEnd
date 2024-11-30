@@ -1,5 +1,4 @@
 package com.qualiapproche.entities.mappers;
-
 import com.qualiapproche.dto.RisqueDto;
 import com.qualiapproche.entities.Risque;
 import org.mapstruct.Mapper;

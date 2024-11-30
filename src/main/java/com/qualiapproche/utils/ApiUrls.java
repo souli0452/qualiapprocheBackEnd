@@ -57,7 +57,6 @@ public class ApiUrls {
     public static final String UPDATE_RISQUE = "/update";
     public static final String DELETE_RISQUE = "/delete" + "/{risqueId}";
 
-
     public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";

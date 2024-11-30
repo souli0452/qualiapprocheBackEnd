@@ -1,5 +1,4 @@
 package com.qualiapproche.entities;
-
 import com.qualiapproche.utils.StatutEnum;
 
 import jakarta.persistence.Entity;

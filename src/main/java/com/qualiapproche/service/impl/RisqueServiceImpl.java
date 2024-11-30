@@ -9,14 +9,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.qualiapproche.dto.FormationDto;
 import com.qualiapproche.dto.RisqueDto;
-import com.qualiapproche.dto.RisqueDto;
+import com.qualiapproche.entities.Formation;
+import com.qualiapproche.entities.Fournisseur;
 import com.qualiapproche.entities.Risque;
+import com.qualiapproche.entities.mappers.FounisseurMapper;
 import com.qualiapproche.entities.mappers.RisqueMapper;
+import com.qualiapproche.repository.FournisseurRepository;
 import com.qualiapproche.repository.RisqueRepository;
-
-import lombok.RequiredArgsConstructor;
-
 @Service
 @RequiredArgsConstructor
 public class RisqueServiceImpl implements RisqueService {
@@ -35,7 +36,7 @@ public class RisqueServiceImpl implements RisqueService {
         return risqueRepository.findById(risqueDto.getId()).map(risqueExisted -> {
             risqueMapper.updateEntityFromDto(risqueDto, risqueExisted);
             return risqueMapper.toDto(risqueRepository.save(risqueExisted));
-        }).orElseThrow(() -> new ResponseStatusException(HttpStatus.OK, "Aucun Risque trouvé."));
+        }).orElseThrow(() -> new ResponseStatusException(HttpStatus.OK, "Aucun risque trouvé."));
     }
 
     @Override

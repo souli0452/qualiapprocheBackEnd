@@ -5,11 +5,12 @@ import com.qualiapproche.entities.ActionCorrectivePreventive;
 import jakarta.persistence.ManyToMany;
 import lombok.*;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 import com.qualiapproche.entities.Risque;
 
 import jakarta.persistence.MappedSuperclass;
@@ -29,7 +30,9 @@ public class RisqueDto extends  AuditEntityDto {
     private Risque.StatutRisque statut;
     private String plantAttenuation;
     private String commentaireRisque;
-    private String evidenceRisuqe;
+    private String evidenceRisque;
     // private LocalDateTime dateIdentificationRisque;
     private List<ActionCorrectivePreventive> actionCorrectivePreventives;
+
+
 }
