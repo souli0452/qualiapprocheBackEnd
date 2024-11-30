@@ -2,11 +2,10 @@ package com.qualiapproche.utils;
 
 public class ApiUrls {
     public static final String QUALI_APPROCHE_ROOT_URL="api/v1/quali-approche";
-    public static final String FOURNISSEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/fournisseurs";
 
+    public static final String FOURNISSEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/fournisseurs";
     public static final String CREATE_FOURNISSEUR = "/create";
     public static final String GET_ALL_FOURNISSEUR = "/all";
-
     public static final String UPDATE_FOURNISSEUR = "/update";
     public static final String ASSIGN_CRICTERE_FOURNISSEUR = "/{fournisseurId}/criteres";
     public static final String FOURNISSEUR_GET_CRICTERE_EVALUATION = "/{fournisseurId}";
@@ -51,9 +50,19 @@ public class ApiUrls {
     public static final String UPDATE_DEPARTEMENT = "/update";
     public static final String DELETE_DEPARTEMENT = "/delete";
 
+    public static final String RISQUE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/risque";
+    public static final String CREATE_RISQUE = "/create";
+    public static final String GET_RISQUE_BY_ID = "/get" + "/{risqueId}";
+    public static final String GET_ALL_RISQUE = "/all";
+    public static final String UPDATE_RISQUE = "/update";
+    public static final String DELETE_RISQUE = "/delete" + "/{risqueId}";
 
 
-
-
+    public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
+    public static final String CREATE_NON_CONFORMITE = "/create";
+    public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";
+    public static final String GET_ALL_NON_CONFORMITE = "/all";
+    public static final String UPDATE_NON_CONFORMITE = "/update";
+    public static final String DELETE_NON_CONFORMITE = "/delete" + "/{id}";
 
 }
