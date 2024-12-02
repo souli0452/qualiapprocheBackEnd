@@ -87,7 +87,17 @@ public class FournisseurServiceImpl implements FournisseurService {
 
     @Override
     public Fournisseur getFournisseurWithCriteres(UUID fournisseurId) {
-        return fournisseurRepository.findByIdWithCriteres(fournisseurId);
-             //   .orElseThrow(() -> new RuntimeException("Fournisseur n'existe pas."));
+        Fournisseur fournisseur = fournisseurRepository.findByIdWithCriteres(fournisseurId);
+        if (fournisseur == null) {
+            throw new RuntimeException("Fournisseur n'existe pas.");
+        }
+        return fournisseur;
+    }
+
+
+    @Override
+    public void delete(UUID id) {
+        Fournisseur fournisseur=fournisseurRepository.getReferenceById(id);
+        fournisseurRepository.delete(fournisseur);
     }
 }

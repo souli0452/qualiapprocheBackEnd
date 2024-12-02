@@ -25,7 +25,7 @@ public interface RisqueMapper {
             return null;
         }
         Risque risque = new Risque();
-        Risque.setId(id);
+        risque.setId(id);
         return risque;
     }
 }

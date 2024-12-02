@@ -2,6 +2,7 @@ package com.qualiapproche.controller;
 
 import com.qualiapproche.dto.FichierDto;
 import com.qualiapproche.service.FichierService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,9 @@ import static com.qualiapproche.utils.ApiUrls.*;
 
 @RestController
 @RequestMapping(FICHIER_ROOT_URL)
+@RequiredArgsConstructor
 public class FichierController {
 
-    @Autowired
     FichierService fichierService;
 
     /*----------------------------------------------------------------------------/

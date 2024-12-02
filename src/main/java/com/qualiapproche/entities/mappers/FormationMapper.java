@@ -25,7 +25,7 @@ public interface FormationMapper {
             return null;
         }
         Formation formation = new Formation();
-        // formation.setId(id);
+        formation.setId(id);
         return formation;
     }
 }

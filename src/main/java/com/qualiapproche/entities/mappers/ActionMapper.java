@@ -25,7 +25,7 @@ public interface ActionMapper {
             return null;
         }
         ActionCorrectivePreventive actionCorrectivePreventive = new ActionCorrectivePreventive();
-        // actionCorrectivePreventive.setId(id);
+         actionCorrectivePreventive.setId(id);
         return actionCorrectivePreventive;
     }
 }

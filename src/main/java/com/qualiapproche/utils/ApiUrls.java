@@ -4,17 +4,17 @@ public class ApiUrls {
 
     /* Base urls */
     public static final String QUALI_APPROCHE_ROOT_URL="api/v1/quali-approche";
-<<<<<<< HEAD
-    /* Fournnisseur urls */
-=======
 
->>>>>>> 9d947de6c0d9202afed86b6882e87dc33aaa3075
+    /* Fournnisseur urls */
+
     public static final String FOURNISSEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/fournisseurs";
+    public static final String ASSIGN_CRICTERE_FOURNISSEUR = "/{fournisseurId}/criteres";
+    public static final String FOURNISSEUR_GET_CRICTERE_EVALUATION = "/{fournisseurId}";
     public static final String CREATE_FOURNISSEUR = "/create";
     public static final String GET_ALL_FOURNISSEUR = "/all";
     public static final String UPDATE_FOURNISSEUR = "/update";
-    public static final String ASSIGN_CRICTERE_FOURNISSEUR = "/{fournisseurId}/criteres";
-    public static final String FOURNISSEUR_GET_CRICTERE_EVALUATION = "/{fournisseurId}";
+    public static final String DELETE_FOURNISSEUR = "/delete";
+
 
     /* Catégories urls */
 
@@ -60,8 +60,8 @@ public class ApiUrls {
     public static final String UPDATE_DEPARTEMENT = "/update";
     public static final String DELETE_DEPARTEMENT = "/delete";
 
-<<<<<<< HEAD
-=======
+    /* Risque urls */
+
     public static final String RISQUE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/risque";
     public static final String CREATE_RISQUE = "/create";
     public static final String GET_RISQUE_BY_ID = "/get" + "/{risqueId}";
@@ -69,8 +69,4 @@ public class ApiUrls {
     public static final String UPDATE_RISQUE = "/update";
     public static final String DELETE_RISQUE = "/delete" + "/{risqueId}";
 
-
-
-
->>>>>>> 9d947de6c0d9202afed86b6882e87dc33aaa3075
 }

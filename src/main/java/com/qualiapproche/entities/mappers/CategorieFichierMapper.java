@@ -25,7 +25,7 @@ public interface CategorieFichierMapper {
             return null;
         }
         CategorieFichier categorieFichier = new CategorieFichier();
-        // categorieFichier.setId(id);
+        categorieFichier.setId(id);
         return categorieFichier;
     }
 }
