@@ -25,7 +25,7 @@ public interface FichierMapper {
             return null;
         }
         Fichier fichier = new Fichier();
-        // fichier.setId(id);
+         fichier.setId(id);
         return fichier;
     }
 }

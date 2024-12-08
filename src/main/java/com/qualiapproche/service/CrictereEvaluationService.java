@@ -14,5 +14,5 @@ public interface CrictereEvaluationService {
 
     CrictereEvaluationDto update(CrictereEvaluationDto crictereEvaluationDto);
 
-    CrictereEvaluationDto delete(UUID id);
+    void delete(UUID id);
 }

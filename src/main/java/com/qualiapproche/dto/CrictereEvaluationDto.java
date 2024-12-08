@@ -29,7 +29,7 @@ public class CrictereEvaluationDto extends AuditEntityDto{
     private String descriptionCrictereEvaluation;
     private String noteAtribuerCritere;
     private String delaisLivraison;
-    private String ServiceClient;
+    private String serviceClient;
     private String commentaireEvaluation;
 
     @JoinColumn(name = "fournisseur_id")
@@ -43,7 +43,7 @@ public class CrictereEvaluationDto extends AuditEntityDto{
         this.libelleCrictereEvaluation = libelleCrictereEvaluation;
         this.descriptionCrictereEvaluation = descriptionCrictereEvaluation;
         this.noteAtribuerCritere = noteAtribuerCritere;
-        this.ServiceClient = serviceClient;
+        this.serviceClient = serviceClient;
         this.commentaireEvaluation = commentaireEvaluation;
         this.delaisLivraison = delaisLivraison;
         this.fournisseurId = fournisseurId;

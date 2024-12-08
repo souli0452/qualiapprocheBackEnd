@@ -50,8 +50,8 @@ public class CrictereEvaluationServiceImpl implements CrictereEvaluationService 
     }
 
     @Override
-    public CrictereEvaluationDto delete(UUID id) {
+    public void delete(UUID id) {
         CrictereEvaluation crictereEvaluation=crictereEvaluationRepository.getReferenceById(id);
-        return critereEvaluationMapper.toDto(crictereEvaluation);
+        crictereEvaluationRepository.delete(crictereEvaluation);
     }
 }

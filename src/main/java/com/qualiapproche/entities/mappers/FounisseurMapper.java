@@ -25,7 +25,7 @@ public interface FounisseurMapper {
             return null;
         }
         Fournisseur fournisseur = new Fournisseur();
-        // fournisseur.setId(id);
+        fournisseur.setId(id);
         return fournisseur;
     }
 }

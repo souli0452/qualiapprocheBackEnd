@@ -25,7 +25,7 @@ public interface DepartementMapper {
             return null;
         }
         Departement departement = new Departement();
-        // departement.setId(id);
+         departement.setId(id);
         return departement;
     }
 }

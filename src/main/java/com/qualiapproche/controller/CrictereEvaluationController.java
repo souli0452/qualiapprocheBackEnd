@@ -1,7 +1,7 @@
 package com.qualiapproche.controller;
 import com.qualiapproche.dto.CrictereEvaluationDto;
 import com.qualiapproche.service.CrictereEvaluationService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,10 +13,10 @@ import static com.qualiapproche.utils.ApiUrls.*;
 
 @RestController
 @RequestMapping(CRICTERE_EVALUATION_ROOT_URL)
+@RequiredArgsConstructor
 public class CrictereEvaluationController {
 
-    @Autowired
-    private CrictereEvaluationService crictereEvaluationService;
+    private final CrictereEvaluationService crictereEvaluationService;
 
 
     /*-----------------------------------------------------------------------/

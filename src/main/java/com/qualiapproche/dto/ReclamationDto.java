@@ -11,6 +11,4 @@ import java.time.LocalDateTime;
 public class ReclamationDto extends AuditEntityDto{
     private String numeroReference;
     private String nomDemendeur;
-    private String dateReclamation;
-    private LocalDateTime dateModificationReclamation;
 }

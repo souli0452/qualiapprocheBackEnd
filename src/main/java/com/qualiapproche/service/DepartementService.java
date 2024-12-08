@@ -14,5 +14,5 @@ public interface DepartementService {
 
     DepartementDto update(DepartementDto departementDto);
 
-    DepartementDto delete(UUID id);
+    void delete(UUID id);
 }
