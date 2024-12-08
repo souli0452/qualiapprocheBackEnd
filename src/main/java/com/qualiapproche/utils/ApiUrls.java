@@ -41,11 +41,12 @@ public class ApiUrls {
     public static final String GET_ALL_FORMATION = "/all";
     public static final String GET_FORMATION_BY_ID = "/get";
     public static final String UPDATE_FORMATION = "/update";
+    public static final String CREATE_FORMATION = "/create";
     public static final String DELETE_FORMATION = "/delete";
 
     /* Crictère d'évaluation urls */
 
-    public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/crictere-evaluation";
+    public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/critere-evaluation";
     public static final String CREATE_CRICTERE_EVALUATION = "/create";
     public static final String GET_CRICTERE_EVALUATION_BY_ID = "/get";
     public static final String GET_ALL_CRICTERE_EVALUATION = "/all";
@@ -69,8 +70,6 @@ public class ApiUrls {
     public static final String UPDATE_RISQUE = "/update";
     public static final String DELETE_RISQUE = "/delete" + "/{risqueId}";
 
-<<<<<<< HEAD
-=======
     public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";
@@ -78,5 +77,4 @@ public class ApiUrls {
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete" + "/{id}";
 
->>>>>>> f866b6bcada0ea8e4c7f0d99ba887ccc49b46cfc
 }
