@@ -30,7 +30,7 @@ public class CrictereEvaluation extends AuditEntity {
     private String descriptionCrictereEvaluation;
     private String noteAtribuerCritere;
     private String delaisLivraison;
-    private String ServiceClient;
+    private String serviceClient;
     private String commentaireEvaluation;
     @ManyToOne
     @JoinColumn(name = "fournisseur_id")

@@ -29,7 +29,6 @@ public class FournisseurDto extends AuditEntityDto{
     private String siteWeb;
     private String contactPrincipal;
     private String statut;
-
     @OneToMany(mappedBy = "fournisseur", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CrictereEvaluation> criteresEvaluation;
 

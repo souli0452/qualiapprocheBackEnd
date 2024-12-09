@@ -21,38 +21,50 @@ import static com.qualiapproche.utils.ApiUrls.*;
 
 public class FournisseurController {
     @Autowired
-    private  FournisseurService fournisseurService;
+    private FournisseurService fournisseurService;
+
     @PostMapping(CREATE_FOURNISSEUR)
     public ResponseEntity<FournisseurDto> create(@RequestBody FournisseurDto fournisseurDto) {
         FournisseurDto fournisseur = fournisseurService.create(fournisseurDto);
         return new ResponseEntity<>(fournisseur, HttpStatus.OK);
     }
+
     @PutMapping(UPDATE_FOURNISSEUR)
     public ResponseEntity<FournisseurDto> update(@RequestBody FournisseurDto fournisseurDto) {
         FournisseurDto fournisseur = fournisseurService.update(fournisseurDto);
         return new ResponseEntity<>(fournisseur, HttpStatus.OK);
     }
+
     @GetMapping(GET_ALL_FOURNISSEUR)
     public ResponseEntity<List<FournisseurDto>> allFournissseurs() {
         List<FournisseurDto> fournisseurs = fournisseurService.allFournisseurs();
         return new ResponseEntity<>(fournisseurs, HttpStatus.OK);
     }
+
     @GetMapping
     public ResponseEntity<FournisseurDto> getFournisseurById(@RequestParam UUID id) {
-      FournisseurDto fournisseur = fournisseurService.getFounisseurById(id);
+        FournisseurDto fournisseur = fournisseurService.getFounisseurById(id);
         return new ResponseEntity<>(fournisseur, HttpStatus.OK);
     }
-
 
     @PostMapping(ASSIGN_CRICTERE_FOURNISSEUR)
     public List<CrictereEvaluationDto> assignCriteresToFournisseur(@PathVariable UUID fournisseurId, @RequestBody CritereEvaluationIdsRequestDto request) {
         return fournisseurService.assignCriteresToFournisseur(fournisseurId, request.getCritereEvaluationIds());
     }
 
-
     @GetMapping(FOURNISSEUR_GET_CRICTERE_EVALUATION)
     public Fournisseur getFournisseurWithCriteres(@PathVariable UUID fournisseurId) {
         return fournisseurService.getFournisseurWithCriteres(fournisseurId);
+    }
+
+      /*--------------------------------------------------------------------------/
+     /                    Méthode de suppression d'une fournnisseur              /
+    /--------------------------------------------------------------------------*/
+
+    @DeleteMapping(DELETE_FOURNISSEUR)
+    public void deleteyId(@RequestParam UUID id) {
+        fournisseurService.delete(id);
+
     }
 
 }

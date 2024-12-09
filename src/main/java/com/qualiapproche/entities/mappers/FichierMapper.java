@@ -1,13 +1,13 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.FichierDto;
-import com.qualiapproche.dto.FournisseurDto;
-import com.qualiapproche.entities.Fichier;
+import java.util.List;
+import java.util.UUID;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 
-import java.util.List;
-import java.util.UUID;
+import com.qualiapproche.dto.FichierDto;
+import com.qualiapproche.entities.Fichier;
 
 @Mapper(componentModel = "spring")
 public interface FichierMapper {
@@ -25,7 +25,7 @@ public interface FichierMapper {
             return null;
         }
         Fichier fichier = new Fichier();
-        fichier.setId(id);
+         fichier.setId(id);
         return fichier;
     }
 }

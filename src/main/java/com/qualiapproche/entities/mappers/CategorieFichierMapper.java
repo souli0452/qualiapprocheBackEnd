@@ -1,12 +1,13 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.CategorieFichierDto;
-import com.qualiapproche.entities.CategorieFichier;
+import java.util.List;
+import java.util.UUID;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 
-import java.util.List;
-import java.util.UUID;
+import com.qualiapproche.dto.CategorieFichierDto;
+import com.qualiapproche.entities.CategorieFichier;
 
 @Mapper(componentModel = "spring")
 public interface CategorieFichierMapper {

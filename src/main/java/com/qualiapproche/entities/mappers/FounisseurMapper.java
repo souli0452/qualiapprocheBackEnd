@@ -1,11 +1,13 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.FournisseurDto;
-import com.qualiapproche.entities.Fournisseur;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
 import java.util.List;
 import java.util.UUID;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.MappingTarget;
+
+import com.qualiapproche.dto.FournisseurDto;
+import com.qualiapproche.entities.Fournisseur;
 
 @Mapper(componentModel = "spring")
 public interface FounisseurMapper {

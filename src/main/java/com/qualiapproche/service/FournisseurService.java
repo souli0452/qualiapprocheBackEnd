@@ -17,4 +17,6 @@ public interface FournisseurService {
     List<CrictereEvaluationDto> assignCriteresToFournisseur(UUID fournisseurId, List<UUID> critereEvaluationIds);
 
     Fournisseur getFournisseurWithCriteres(UUID fournisseurId);
+
+    void delete(UUID id);
 }
