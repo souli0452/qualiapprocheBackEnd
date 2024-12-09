@@ -50,6 +50,6 @@ public class FormationServiceImpl implements FormationService {
     public FormationDto delete(UUID id) {
         Formation formation=formationRepository.getReferenceById(id);
         formation.setStatut(StatutEnum.INACTIF);
-        return formationMapper.toDto(formation);
+        return formationMapper.toDto(   formationRepository.save(formation));
     }
 }

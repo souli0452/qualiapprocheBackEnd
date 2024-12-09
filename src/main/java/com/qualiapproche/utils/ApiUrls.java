@@ -32,9 +32,9 @@ public class ApiUrls {
     /* Formation urls */
     public static final String FORMATION_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/formation";
     public static final String GET_ALL_FORMATION = "/all";
-    public static final String GET_FORMATION_BY_ID = "/get";
+    public static final String GET_FORMATION_BY_ID = "/get/{id}";
     public static final String UPDATE_FORMATION = "/update";
-    public static final String DELETE_FORMATION = "/delete";
+    public static final String DELETE_FORMATION = "/delete/{id}";
 
 
     public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/crictere-evaluation";

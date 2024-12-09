@@ -34,12 +34,12 @@ public class FormationController {
         return new ResponseEntity<>(formationDtos, HttpStatus.OK);
     }
     @GetMapping(GET_FORMATION_BY_ID)
-    public ResponseEntity<FormationDto> getFournisseurById(@RequestParam UUID id) {
+    public ResponseEntity<FormationDto> getFournisseurById(@PathVariable UUID id) {
         FormationDto formationDto = formationService.getById(id);
         return new ResponseEntity<>(formationDto, HttpStatus.OK);
     }
     @DeleteMapping(DELETE_FORMATION)
-    public void deleteyId(@RequestParam UUID id) {
+    public void deleteyId(@PathVariable UUID id) {
         formationService.delete(id);
 
     }
