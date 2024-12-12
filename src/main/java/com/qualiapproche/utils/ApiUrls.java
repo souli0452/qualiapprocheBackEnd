@@ -10,6 +10,7 @@ public class ApiUrls {
     public static final String FOURNISSEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/fournisseurs";
 
     public static final String CREATE_FOURNISSEUR = "/create";
+    public static final String DELETE_FOURNISSEUR = "/delete";
     public static final String GET_ALL_FOURNISSEUR = "/all";
     public static final String UPDATE_FOURNISSEUR = "/update";
     public static final String ASSIGN_CRICTERE_FOURNISSEUR = "/{fournisseurId}/criteres";
@@ -71,5 +72,7 @@ public class ApiUrls {
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete" + "/{id}";
+
+    public static final String URL_ROLES =QUALI_APPROCHE_ROOT_URL+"/roles";
 
 }

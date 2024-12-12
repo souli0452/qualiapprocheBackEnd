@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/bd_qualiapproche
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: root
+
+  jpa:
+    show-sql: true
+
+server:
+  port: 8086
+
+docs:
+  pj:
+    directory: C:\Users\l\Desktop\SM\e-banking\PIECES_JOINTES
