@@ -16,7 +16,16 @@ import static com.qualiapproche.utils.ApiUrls.*;
 @RestController
 @RequestMapping(FICHIER_ROOT_URL)
 @RequiredArgsConstructor
-public class FichierController {
+public class
+
+
+
+
+
+
+
+
+FichierController {
 
     FichierService fichierService;
 
