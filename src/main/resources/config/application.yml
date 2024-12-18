@@ -62,7 +62,8 @@ kc:
     token-uri: http://localhost:8080/realms/quali/protocol/openid-connect/token
     issuer-uri: http://localhost:8080/realms/quali
     server-url: http://localhost:8080
-    admin-username: admin
+    admin-username:
+
     admin-password: admin
 
 logging:
