@@ -29,8 +29,8 @@ public class ActionCorrectivePreventiveDto extends AuditEntityDto {
     private String responsable;
     private StatutEnum statut;
     private String type;
-    private LocalDateTime dateDebut;
-    private LocalDateTime dateFin;
+    private String dateDebut;
+    private String dateFin;
     private Reclamation reclamation;
     private List<Risque> risques;
     private List<Exigence> exigences;

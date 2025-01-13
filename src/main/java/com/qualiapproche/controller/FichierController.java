@@ -9,16 +9,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
-
 import static com.qualiapproche.utils.ApiUrls.*;
-
 
 @RestController
 @RequestMapping(FICHIER_ROOT_URL)
 @RequiredArgsConstructor
 public class FichierController {
 
-    FichierService fichierService;
+ private final FichierService fichierService;
 
     /*----------------------------------------------------------------------------/
     /                   Méthode de création d'un document                         /

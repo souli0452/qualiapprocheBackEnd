@@ -59,9 +59,7 @@ public class KcSecurityConfig {
                             "/test/**",
                             "/api/v1/quali-approche/**",
                             "/api/v1/quali-approche/login",
-                           "/api/v1/quali-approche/roles"
-
-
+                            "/api/v1/quali-approche/roles"
                     ).permitAll();
                     auth.anyRequest().authenticated();
                 })

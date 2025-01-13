@@ -17,8 +17,12 @@ import static com.qualiapproche.utils.ApiUrls.*;
 @RequiredArgsConstructor
 @RequestMapping(FORMATION_ROOT_URL)
 public class FormationController {
+
+
     private final FormationService formationService;
-    @PostMapping
+
+
+    @PostMapping(CREATE_FORMATION)
     public ResponseEntity<FormationDto> create(@RequestBody FormationDto formationDto) {
         FormationDto formationDto1 = formationService.create(formationDto);
         return new ResponseEntity<>(formationDto1, HttpStatus.OK);
