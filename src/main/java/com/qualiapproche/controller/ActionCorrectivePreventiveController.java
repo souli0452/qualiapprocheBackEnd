@@ -14,11 +14,14 @@ import static com.qualiapproche.utils.ApiUrls.*;
 @RequestMapping(ACTION_ROOT_URL)
 public class ActionCorrectivePreventiveController {
     private final ActionCorrectivePreventiveService actionCorrectivePreventiveService;
-    @PostMapping
+
+
+    @PostMapping(CREATE_ACTION)
     public ResponseEntity<ActionCorrectivePreventiveDto> create(@RequestBody ActionCorrectivePreventiveDto actionCorrectivePreventiveDto) {
         ActionCorrectivePreventiveDto action = actionCorrectivePreventiveService.createAction(actionCorrectivePreventiveDto);
         return new ResponseEntity<>(action, HttpStatus.OK);
     }
+
     @PutMapping(UPDATE_ACTION)
     public ResponseEntity<ActionCorrectivePreventiveDto> update(@RequestBody ActionCorrectivePreventiveDto actionCorrectivePreventiveDto) {
         ActionCorrectivePreventiveDto action = actionCorrectivePreventiveService.updateAction(actionCorrectivePreventiveDto);
@@ -30,12 +33,12 @@ public class ActionCorrectivePreventiveController {
         return new ResponseEntity<>(actions, HttpStatus.OK);
     }
     @GetMapping(GET_ACTION_BY_ID)
-    public ResponseEntity<ActionCorrectivePreventiveDto> getById(@RequestParam UUID id) {
+    public ResponseEntity<ActionCorrectivePreventiveDto> getById(@PathVariable UUID id) {
         ActionCorrectivePreventiveDto action = actionCorrectivePreventiveService.getActionById(id);
         return new ResponseEntity<>(action, HttpStatus.OK);
     }
     @DeleteMapping(DELETE_ACTION)
-    public void deleteyId(@RequestParam UUID id) {
+    public void deleteyId(@PathVariable UUID id) {
         actionCorrectivePreventiveService.deleteAction(id);
 
     }

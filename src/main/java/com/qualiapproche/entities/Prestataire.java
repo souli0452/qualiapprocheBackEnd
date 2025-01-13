@@ -1,13 +1,14 @@
 package com.qualiapproche.entities;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import jakarta.persistence.Entity;
-import jakarta.persistence.ManyToMany;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
-
-import java.util.List;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
@@ -19,14 +20,13 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonInclude(NON_NULL)
 @SuperBuilder
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Reglementation extends AuditEntity {
+public class Prestataire extends AuditEntity {
 
-    private String nomReglementation;
-    private String descriptionReglementation;
-    private String organismeReglementation;
-    @ManyToMany
-    private List<Exigence> exigences;
-    @ManyToMany
-    private List<SuiviAuditInspection> suiviAuditInspections;
-
+    private String nomPrestataire;
+    private String adressePrestataire;
+    private String telephonePrestataire;
+    private String contactPrincipalPrestataire;
+    private String emailPrestataire;
+    private String siteWebPrestataire;
+    private String statutPrestataire;
 }

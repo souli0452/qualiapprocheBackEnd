@@ -52,8 +52,6 @@ public class KcUserService {
     @Value("${frontend.url}")
     private String frontendUrl;
 
-
-
     public ResponseEntity<Object> login(KcLoginRequestDto loginRequest, HttpServletResponse response) {
         log.info("Start to verify user conditions before login");
 

@@ -65,7 +65,7 @@ public class DepartementController {
     /--------------------------------------------------------------------------*/
 
     @DeleteMapping(DELETE_DEPARTEMENT)
-    public void deleteyId(@RequestParam UUID id) {
+    public void deleteyId(@PathVariable UUID id) {
         departementService.delete(id);
     }
 }

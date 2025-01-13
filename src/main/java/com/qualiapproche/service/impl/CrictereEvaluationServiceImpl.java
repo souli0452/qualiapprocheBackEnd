@@ -38,7 +38,7 @@ public class CrictereEvaluationServiceImpl implements CrictereEvaluationService 
 
     @Override
     public List<CrictereEvaluationDto> allCrictereEvaluations() {
-        return  critereEvaluationMapper.toDtos(crictereEvaluationRepository.findAll()) ;
+        return critereEvaluationMapper.toDtos(crictereEvaluationRepository.findAll());
     }
 
     @Override
@@ -50,8 +50,9 @@ public class CrictereEvaluationServiceImpl implements CrictereEvaluationService 
     }
 
     @Override
-    public void delete(UUID id) {
-        CrictereEvaluation crictereEvaluation=crictereEvaluationRepository.getReferenceById(id);
+    public void  delete(UUID id) {
+        CrictereEvaluation crictereEvaluation = crictereEvaluationRepository.getReferenceById(id);
         crictereEvaluationRepository.delete(crictereEvaluation);
     }
 }
+

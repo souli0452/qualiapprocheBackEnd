@@ -27,8 +27,8 @@ public class ActionCorrectivePreventive extends AuditEntity {
     @Enumerated(EnumType.STRING)
     private StatutEnum statut;
     private String type;
-    private LocalDateTime dateDebut;
-    private LocalDateTime dateFin;
+    private String dateDebut;
+    private String dateFin;
     @OneToOne
     private Reclamation reclamation;
     @ManyToMany

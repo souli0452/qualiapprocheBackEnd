@@ -62,7 +62,7 @@ public class FournisseurController {
     /--------------------------------------------------------------------------*/
 
     @DeleteMapping(DELETE_FOURNISSEUR)
-    public void deleteyId(@RequestParam UUID id) {
+    public void deleteyId(@PathVariable UUID id) {
         fournisseurService.delete(id);
 
     }

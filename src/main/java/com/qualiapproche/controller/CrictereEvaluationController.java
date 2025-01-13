@@ -62,8 +62,11 @@ public class CrictereEvaluationController {
      /           Méthode de suppression d'un crictère d'évaluation               /
     /--------------------------------------------------------------------------*/
 
+
+
+
     @DeleteMapping(DELETE_CRICTERE_EVALUATION)
-    public void deleteyId(@RequestParam UUID id) {
+    public void deleteyId(@PathVariable UUID id) {
         crictereEvaluationService.delete(id);
     }
 }
