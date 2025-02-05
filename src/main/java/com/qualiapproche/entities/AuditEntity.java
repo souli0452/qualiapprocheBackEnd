@@ -30,5 +30,14 @@ public class AuditEntity {
     @Column(name = "update_at")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy ' à ' HH:mm:ss")
     private LocalDateTime UpdateAt;
+    @Column(name = "created_by_id")
+    private String createdById;
+    @Column(name = "update_by_id")
+    private String updateById;
+
+    @Column(name = "current_user_full_name")
+    private String currentUserfullName;
+    @Column(name = "current_user_email")
+    private String currentUserEmail;
 
 }
