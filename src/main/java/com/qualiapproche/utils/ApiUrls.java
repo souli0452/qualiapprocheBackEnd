@@ -46,6 +46,7 @@ public class ApiUrls {
     public static final String GET_FORMATION_BY_ID = "/get/{id}";
     public static final String UPDATE_FORMATION = "/update";
     public static final String DELETE_FORMATION = "/delete/{id}";
+    public static final String CREATE_FORMATION = "/create";
 
     /* Crictère d'évaluation urls */
 
