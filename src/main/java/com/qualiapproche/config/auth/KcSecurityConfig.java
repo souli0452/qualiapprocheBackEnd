@@ -58,14 +58,9 @@ public class KcSecurityConfig {
                             "/webjars/**",
                             "/test/**",
                             "/api/v1/quali-approche/login",
-<<<<<<< HEAD
-                            "/api/v1/quali-approche/roles"
-=======
                             "/api/v1/quali-approche/update-pwd",
                            "/api/v1/quali-approche/roles"
 
-
->>>>>>> 99875ca (add user)
                     ).permitAll();
                     auth.anyRequest().authenticated();
                 })

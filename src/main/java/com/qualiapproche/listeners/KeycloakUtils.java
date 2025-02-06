@@ -3,12 +3,6 @@ package com.qualiapproche.listeners;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
-/**
- * @author :  <A HREF="mailto:dieudonneouedra@gmail.com">Dieudonné OUEDRAOGO (Wendkouny)</A>
- * @version : 1.0
- * Copyright (c) 2024 SONGRE-TECH, All rights reserved.
- * @since : 2024/07/09 à 10:01
- */
 public class KeycloakUtils {
     public static Jwt getCurrentUserToken() {
         return (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -17,7 +11,6 @@ public class KeycloakUtils {
     public static String getCurrentUsername() {
         return getCurrentUserToken().getClaim("preferred_username").toString();
     }
-
     public static String getUserFullname() {
         return getCurrentUserToken().getClaim("name").toString();
     }
