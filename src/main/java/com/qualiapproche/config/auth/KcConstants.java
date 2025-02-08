@@ -1,11 +1,5 @@
 package com.qualiapproche.config.auth;
 
-/**
- * @author :  <A HREF="mailto:dieudonneouedra@gmail.com">Dieudonné OUEDRAOGO (Wendkouny)</A>
- * @version : 1.0
- * Copyright (c) 2024 SWITCH MAKER, All rights reserved.
- * @since : 2024/11/25 à 16:24
- */
 public class KcConstants {
     public static final String CLAIM_REALM_ACCESS = "realm_access";
     public static final String CLAIM_RESOURCE_ACCESS = "resource_access";

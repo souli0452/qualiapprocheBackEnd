@@ -57,9 +57,10 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/webjars/**",
                             "/test/**",
-                            "/api/v1/quali-approche/**",
                             "/api/v1/quali-approche/login",
-                            "/api/v1/quali-approche/roles"
+                            "/api/v1/quali-approche/update-pwd",
+                           "/api/v1/quali-approche/roles"
+
                     ).permitAll();
                     auth.anyRequest().authenticated();
                 })
