@@ -23,6 +23,8 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -66,7 +68,7 @@ public class FichierServiceImpl implements FichierService {
                 .filter(f -> f.getNomFichier() != null && f.getNomFichier().equals(fichierDto.getNomFichier()))
                 .collect(Collectors.toList());
 
-        Fichier fichier = convertBase64File(fichierDto);
+        Fichier fichier = (Fichier) convertBase64File(fichierDto);
         if (existingFichiers.isEmpty()) {
             // Si le fichier n'existe pas, créer un nouveau fichier avec la version 1
             fichier.setVersionFichier(1);
@@ -143,54 +145,78 @@ public class FichierServiceImpl implements FichierService {
         }
     }
 
-    private String saveBase64FichierAndReturnUrl(String fichierBase64, String fichierRootPath, String type, String document) throws IOException {
+    public String saveBase64FichierAndReturnUrl(String fichierBase64, String fichierRootPath, String type) throws IOException {
         if (type.compareToIgnoreCase("application/pdf") == 0) {
             byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
             String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid + document + ".pdf");
+            File imageFile = new File(fichierRootPath, uuid + ".pdf");
             imageFile.createNewFile();
             FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
             fileOutputStream.write(imageByteRequiredDocuments);
             fileOutputStream.close();
             // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFilePDF", uuid + document + ".pdf").build().toString();
+            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFilePDF", uuid + ".pdf").build().toString();
 
         } else if (type.compareToIgnoreCase("image/png") == 0 || type.compareToIgnoreCase("image/jpg") == 0 || type.compareToIgnoreCase("image/jpeg") == 0) {
             byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
             String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid + document.replace(" ", "") + ".png");
+            File imageFile = new File(fichierRootPath, uuid.replace(" ", "") + ".png");
             imageFile.createNewFile();
             FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
             fileOutputStream.write(imageByteRequiredDocuments);
             fileOutputStream.close();
             // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFile", uuid + document.replace(" ", "") + ".png").build().toString();
+            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFile", uuid.replace(" ", "") + ".png").build().toString();
 
         } else if (type.compareToIgnoreCase("application/msword") == 0) {
             byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
             String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid + document.replace(" ", "") + ".doc");
+            File imageFile = new File(fichierRootPath, uuid.replace(" ", "") + ".doc");
             imageFile.createNewFile();
             FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
             fileOutputStream.write(imageByteRequiredDocuments);
             fileOutputStream.close();
             // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFileMsword", uuid + document.replace(" ", "") + ".doc").build().toString();
+            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFileMsword", uuid.replace(" ", "") + ".doc").build().toString();
         } else return "fichier non valide";
     }
 
-    private Fichier convertBase64File(FichierDto fichierDtos) throws IOException {
+    public List<Fichier> convertBase64File(FichierDto fichierDtos) throws IOException {
         Fichier fichier = new Fichier();
         try {
-            String url = saveBase64FichierAndReturnUrl(fichierDtos.getFichierBase64(), String.valueOf(fichierRootPath), fichierDtos.getTypeFichier(), fichierDtos.getNomFichier().replace(" ", ""));
+            String url = saveBase64FichierAndReturnUrl(fichierDtos.getFichierBase64(), String.valueOf(fichierRootPath), fichierDtos.getTypeFichier().replace(" ", ""));
             fichier.setUrlFichier(url);
             fichier.setNomFichier(fichierDtos.getNomFichier());
             fichier.setDescriptionFichier(fichierDtos.getDescriptionFichier());
             fichier.setVersionFichier(fichierDtos.getVersionFichier());
-            return fichierRepository.save(fichier);
+            return Collections.singletonList(fichierRepository.save(fichier));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
+
+
+
+    public List<Fichier> convertBase64(List<Fichier> fichierDtos) throws IOException {
+        List<Fichier> fichiersUrls = new ArrayList<>();
+        // Vérifie si fichierDtos est null ou vide
+        if (fichierDtos == null || fichierDtos.isEmpty()) {
+            return fichiersUrls; // Retourne une liste vide sans erreur
+            }
+        fichierDtos.forEach(f -> {
+            try {
+                String url = saveBase64FichierAndReturnUrl(f.getFichierBase64(), String.valueOf(fichierRootPath), f.getTypeFichier().replace(" ", ""));
+                Fichier fichier = new Fichier();
+                fichier.setUrlFichier(url);
+                fichiersUrls.add(fichierRepository.save(fichier));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        return fichiersUrls;
+    }
+
+
+
 
 }
