@@ -1,13 +1,10 @@
 package com.qualiapproche.entities;
 
-
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.qualiapproche.utils.StatutEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;

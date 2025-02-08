@@ -47,6 +47,48 @@ public class ApiUrls {
     public static final String UPDATE_FORMATION = "/update";
     public static final String DELETE_FORMATION = "/delete/{id}";
 
+    /* Efficacite urls */
+
+    public static final String EFFICACITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/efficacite";
+    public static final String CREATE_EFFICACITE = "/create";
+    public static final String GET_ALL_EFFICACITE = "/all";
+    public static final String GET_EFFICACITE_BY_ID = "/get/{id}";
+    public static final String UPDATE_EFFICACITE = "/update";
+    public static final String DELETE_EFFICACITE = "/delete/{id}";
+
+    /* Type non conformités urls */
+
+    public static final String TYPE_NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-non-conformite";
+    public static final String CREATE_TYPE_NON_CONFORMITE = "/create";
+    public static final String GET_ALL_TYPE_NON_CONFORMITE = "/all";
+    public static final String GET_TYPE_NON_CONFORMITE_BY_ID = "/get/{id}";
+    public static final String UPDATE_TYPE_NON_CONFORMITE = "/update";
+    public static final String DELETE_TYPE_NON_CONFORMITE = "/delete/{id}";
+
+    /* Type processus urls */
+
+    public static final String TYPE_PROCESSUS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-processus";
+    public static final String CREATE_TYPE_PROCESSUS = "/create";
+    public static final String GET_ALL_TYPE_PROCESSUS = "/all";
+    public static final String GET_TYPE_PROCESSUS_BY_ID = "/get/{id}";
+    public static final String UPDATE_TYPE_PROCESSUS = "/update";
+    public static final String DELETE_TYPE_PROCESSUS = "/delete/{id}";
+    /* Actions urls */
+
+    public static final String ACTIONS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/actions";
+    public static final String CREATE_ACTIONS = "/create";
+    public static final String GET_ALL_ACTIONS = "/all";
+    public static final String GET_ACTIONS_BY_ID = "/get/{id}";
+    public static final String UPDATE_ACTIONS = "/update";
+    public static final String DELETE_ACTIONS = "/delete/{id}";
+    /* Niveau Non Conformités urls */
+
+    public static final String NIVEAU_NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/niveau/non-conformite";
+    public static final String CREATE_NIVEAU_NON_CONFORMITE = "/create";
+    public static final String GET_ALL_NIVEAU_NON_CONFORMITE = "/all";
+    public static final String GET_NIVEAU_NON_CONFORMITE_BY_ID = "/get/{id}";
+    public static final String UPDATE_NIVEAU_NON_CONFORMITE = "/update";
+    public static final String DELETE_NIVEAU_NON_CONFORMITE = "/delete/{id}";
     /* Crictère d'évaluation urls */
 
     public static final String CRICTERE_EVALUATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/critere-evaluation";
@@ -75,13 +117,16 @@ public class ApiUrls {
     public static final String DELETE_RISQUE = "/delete" + "/{risqueId}";
 
     /* Non conformité urls */
-    
+
     public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     public static final String CREATE_NON_CONFORMITE = "/create";
+    public static final String CREATE_NON_CONFORMITE_RPOCESSUS = "/processus/create";
+    public static final String UPDATE_NON_CONFORMITE_RPOCESSUS = "/processus/update"+ "/{id}";
     public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete" + "/{id}";
+    public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etatNonConformite}";
 
     /* Reclamation urls */
 
