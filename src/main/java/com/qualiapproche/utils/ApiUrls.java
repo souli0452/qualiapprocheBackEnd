@@ -46,7 +46,7 @@ public class ApiUrls {
     public static final String GET_FORMATION_BY_ID = "/get/{id}";
     public static final String UPDATE_FORMATION = "/update";
     public static final String DELETE_FORMATION = "/delete/{id}";
-    public static final String CREATE_FORMATION = "/create";
+    //public static final String CREATE_FORMATION = "/create";
 
     /* Efficacite urls */
 
@@ -122,12 +122,12 @@ public class ApiUrls {
     public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String CREATE_NON_CONFORMITE_RPOCESSUS = "/processus/create";
-    public static final String UPDATE_NON_CONFORMITE_RPOCESSUS = "/processus/update"+ "/{id}";
+    public static final String UPDATE_NON_CONFORMITE_RPOCESSUS = "/update/{id}";
     public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
-    public static final String DELETE_NON_CONFORMITE = "/delete" + "/{id}";
-    public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etatNonConformite}";
+    public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
+    public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etapeTraitement}";
 
     /* Reclamation urls */
 

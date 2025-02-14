@@ -3,6 +3,7 @@ package com.qualiapproche.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.entities.*;
 import com.qualiapproche.enumeration.Etat;
+import com.qualiapproche.enumeration.Status;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -38,7 +39,8 @@ public class NonConformiteDto extends AuditEntityDto {
     private String numeroTelephone;
     private String dateEcheance;
     private String delaisMiseOeuvre;
-    private Etat etatNonConformite;
+    private Etat etapeTraiement;
+    private Status status;
     private String observationsRq;
     private String dateObservationsRq;
     private String observationsCloture;
