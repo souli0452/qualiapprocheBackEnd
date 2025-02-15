@@ -57,20 +57,7 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/webjars/**",
                             "/test/**",
-                              "/api/**",
-                            "/api/auth/refresh",
-                            "/api/auth/login",
-                            "/api/actuality/publish",
-                            "/api/auth/refresh",
-                            "/api/auth/update-pwd",
-                            "/api/auth/initiate-reset-pwd",
-                            "/api/auth/reinitialize-pwd",
-                            "/api/auth/is-email-verified",
-                            "/api/auth/verify-email",
-                            "/auth/users/create",
-                            "/api/v1/quali-approche/login",
-                            "/api/v1/quali-approche/update-pwd",
-                           "/api/v1/quali-approche/roles"
+                            "/api/v1/quali-approche/**"
 
                     ).permitAll();
                     auth.anyRequest().authenticated();
