@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import com.qualiapproche.dto.FichierDto;
 import com.qualiapproche.enumeration.Etat;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,10 +19,9 @@ import static com.qualiapproche.utils.ApiUrls.*;
 
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
+@RequiredArgsConstructor
 public class NonConformiteController {
-
-    @Autowired
-    private  NonConformiteService nonConformiteService;
+    private final   NonConformiteService nonConformiteService;
 
 
     /**
@@ -76,10 +76,8 @@ public class NonConformiteController {
     /-----------------------------------------------------------------------*/
 
     @GetMapping(GET_ETAT_BAY_NON_CONFORMITE)
-    public List<NonConformiteDto> getNonConformitesByEtat(@PathVariable String etatNonConformite) {
-        // Conversion de la chaîne en Enum
-        Etat etat = Etat.valueOf(etatNonConformite.toUpperCase());
-        return nonConformiteService.getNonConformitesByEtatNonConformite(etat);
+    public List<NonConformiteDto> getNonConformitesByEtat(@PathVariable Etat etapeTraitement) {
+        return nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement);
     }
 
     /*-----------------------------------------------------------------------/

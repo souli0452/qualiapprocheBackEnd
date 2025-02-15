@@ -1,6 +1,7 @@
 package com.qualiapproche.entities;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.enumeration.Etat;
+import com.qualiapproche.enumeration.Status;
 import jakarta.persistence.*;
 import lombok.*;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
@@ -39,13 +40,14 @@ public class NonConformite extends AuditEntity {
     private String numeroTelephone;
     private String dateEcheance;
     private String delaisMiseOeuvre;
-    private Etat etatNonConformite;
+    private Etat etapeTraiement;
     private String observationsRq;
     private String dateObservationsRq;
     private String observationsCloture;
     private String dateVerification;
     private String dispositionPreventives;
     private String dateClotureRq;
+    private Status status;
     // On stocke uniquement les ID des objets associés
     private UUID efficaciteId;
     private UUID niveauNonConformiteId;

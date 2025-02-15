@@ -19,12 +19,10 @@ public class KcAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
         KcResponseDto errorResponse = KcResponseDto.builder()
                 .status("UNAUTHORIZED")
                 .message("Vous devez vous connecter pour accéder à cette ressource")
                 .build();
-
         ObjectMapper mapper = new ObjectMapper();
         mapper.writeValue(response.getWriter(), errorResponse);
     }

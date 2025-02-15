@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.qualiapproche.entities.*;
 import com.qualiapproche.entities.mappers.*;
 import com.qualiapproche.enumeration.Etat;
+import com.qualiapproche.enumeration.Status;
 import com.qualiapproche.repository.*;
 import com.qualiapproche.service.FichierService;
 import jakarta.persistence.EntityNotFoundException;
@@ -113,8 +114,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setActionId(findActionById(dto.getActionId()));
         nonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         nonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        nonConformite.setEtatNonConformite(dto.getEtatNonConformite());
+        nonConformite.setEtapeTraiement(Etat.RECEPTION);
         nonConformite.setDateVisaEmetteur(LocalDateTime.now());
+        nonConformite.setStatus(Status.PENDING);
         nonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
         // Sauvegarde en base
         NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
@@ -133,7 +135,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setActionId(findActionById(dto.getActionId()));
         existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        existingNonConformite.setEtatNonConformite(dto.getEtatNonConformite());
+        existingNonConformite.setEtapeTraiement(dto.getEtapeTraiement());
         // Mettre à jour les fichiers s'ils sont fournis
         if (dto.getFichiers() != null) {
             existingNonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
@@ -169,7 +171,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findByEtatNonConformite(etat));
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtapeTraiement(etat));
     }
 
     @Override
