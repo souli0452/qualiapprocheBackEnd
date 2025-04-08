@@ -12,6 +12,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import lombok.experimental.SuperBuilder;
+import org.attoparser.dom.Text;
 
 @Getter
 @Setter
@@ -31,7 +32,7 @@ public class NonConformite extends AuditEntity {
     private String fonctionEmetteur;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
     private LocalDateTime dateVisaEmetteur;
-    private String justification;
+    private Text justification;
     private String numeroOdre;
     private String causeIdentifiees;
     private String solutionRetenues;
@@ -40,13 +41,15 @@ public class NonConformite extends AuditEntity {
     private String numeroTelephone;
     private String dateEcheance;
     private String delaisMiseOeuvre;
+    @Enumerated(EnumType.STRING)
     private Etat etapeTraiement;
-    private String observationsRq;
+    private Text observationsRq;
     private String dateObservationsRq;
-    private String observationsCloture;
+    private Text observationsCloture;
     private String dateVerification;
-    private String dispositionPreventives;
+    private Text dispositionPreventives;
     private String dateClotureRq;
+    @Enumerated(EnumType.STRING)
     private Status status;
     // On stocke uniquement les ID des objets associés
     private UUID efficaciteId;
