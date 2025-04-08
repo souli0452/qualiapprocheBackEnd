@@ -2,14 +2,16 @@ package com.qualiapproche.service.impl;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 import com.qualiapproche.entities.*;
 import com.qualiapproche.entities.mappers.*;
 import com.qualiapproche.enumeration.Etat;
 import com.qualiapproche.enumeration.Status;
 import com.qualiapproche.repository.*;
-import com.qualiapproche.service.FichierService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -22,7 +24,6 @@ import lombok.RequiredArgsConstructor;
 
 import static com.qualiapproche.utils.UtilsClass.generateNumeroReferences;
 
-
 @Service
 @RequiredArgsConstructor
 public class NonConformiteServiceImpl implements NonConformiteService {
@@ -30,27 +31,17 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final NonConformiteRepository nonConformiteRepository;
     private final NonConformiteMapper nonConformiteMapper;
     private final TypeNonConformiteRepository typeNonConformiteRepository;
-    private final TypeNonConformiteMapper typeNonConformiteMapper;
     private final TypeProcessusRepository typeProcessusRepository;
-    private final TypeProcessusMapper typeProcessusMapper;
     private final EfficaciteRepository efficaciteRepository;
-    private final EfficaciteMapper efficaciteMapper;
     private final ActionRepository actionRepository;
-    private final ActionMapper actionMapper;
     private final NiveauNonConformiteRepository niveauNonConformiteRepository;
-    private final NiveauNonConformiteMapper niveauNonConformiteMapper;
-    private final FichierRepository fichierRepository;
-    private final FichierMapper fichierMapper;
     private final FichierServiceImpl fichierServiceImpl;
-    private final FichierService  fichierService;
 
     /**
      * Vérifie les champs obligatoires.
      */
     private void validateNonConformiteDto(NonConformiteDto dto) {
-  /*      if (!StringUtils.hasText(dto.getNumeroReference())) {
-            throw new IllegalArgumentException("Le numéro de référence est obligatoire.");
-        }*/
+
         if (!StringUtils.hasText(dto.getIntitule())) {
             throw new IllegalArgumentException("L'intitulé est obligatoire.");
         }
@@ -146,9 +137,49 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         return nonConformiteMapper.toDto(updatedNonConformite);
     }
 
+    @Override
+    public List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException {
+        List<NonConformiteDto> updatedNonConformites = new ArrayList<>();
+
+        for (NonConformiteDto dto : dtos) {
+            UUID id = dto.getId(); // Assurez-vous que le DTO contient l'ID
+            NonConformite existingNonConformite = nonConformiteRepository.findById(id)
+                    .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + id));
+
+            // Mise à jour des champs modifiables
+            existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
+            existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
+            existingNonConformite.setActionId(findActionById(dto.getActionId()));
+            existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
+            existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
+            existingNonConformite.setEtapeTraiement(dto.getEtapeTraiement());
+
+            // Mettre à jour les fichiers s'ils sont fournis
+            if (dto.getFichiers() != null) {
+                existingNonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
+            }
+
+            // Sauvegarde en base de données
+            NonConformite updatedNonConformite = nonConformiteRepository.save(existingNonConformite);
+            updatedNonConformites.add(nonConformiteMapper.toDto(updatedNonConformite));
+        }
+
+        return updatedNonConformites;
+    }
 
 
+    /**
+     * Récupère toutes les non-conformités créées par un utilisateur donné.
+     *
+     * @param email de l'utilisateur (Keycloak subject)
+     * @return Liste de NonConformiteDto
+     */
 
+    @Override
+    public List<NonConformiteDto> getNonConformitesByEmail(String email) {
+        List<NonConformite> nonConformites = nonConformiteRepository.findByCurrentUserEmail(email);
+        return nonConformites.stream().map(nonConformiteMapper::toDto).collect(Collectors.toList());
+    }
 
     @Override
     public NonConformiteDto create(NonConformiteDto nonConformiteDto) {

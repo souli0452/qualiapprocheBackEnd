@@ -128,6 +128,8 @@ public class ApiUrls {
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
     public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etapeTraitement}";
+    public static final String GET_NON_CONFORMITE_BAY_USER = "/user";
+    public static final String UPDATE_LISTE_NON_CONFORMITE_RPOCESSUS = "update/liste";
 
     /* Reclamation urls */
 

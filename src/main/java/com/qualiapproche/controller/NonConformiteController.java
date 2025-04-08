@@ -1,7 +1,10 @@
 package com.qualiapproche.controller;
 
 import java.io.IOException;
+import java.security.Principal;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.qualiapproche.dto.FichierDto;
@@ -10,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 import com.qualiapproche.dto.NonConformiteDto;
@@ -43,6 +48,16 @@ public class NonConformiteController {
     public ResponseEntity<NonConformiteDto> updateNonConformite(@PathVariable UUID id, @RequestBody NonConformiteDto dto) throws IOException {
         return ResponseEntity.ok(nonConformiteService.updateNonConformite(id, dto));
     }
+
+    /*-----------------------------------------------------------------------/
+    /      Méthode de modification d'une liste de non conformité             /
+    /-----------------------------------------------------------------------*/
+    @PutMapping(UPDATE_LISTE_NON_CONFORMITE_RPOCESSUS)
+    public ResponseEntity<List<NonConformiteDto>> updateNonConformites(@RequestBody List<NonConformiteDto> dtos) throws IOException {
+        List<NonConformiteDto> updatedNonConformites = nonConformiteService.updateNonConformites(dtos);
+        return ResponseEntity.ok(updatedNonConformites);
+    }
+
 
 
     /*-----------------------------------------------------------------------/
@@ -96,5 +111,27 @@ public class NonConformiteController {
     public void deleteById(@PathVariable UUID id) {
         nonConformiteService.delete(id);
     }
+
+     /*-----------------------------------------------------------------------------------------------------/
+    /                   Méthode de recupération des non conformité lie à utilisateur                       /
+    /----------------------------------------------------------------------------------------------------*/
+
+    @GetMapping(GET_NON_CONFORMITE_BAY_USER)
+    public ResponseEntity<List<NonConformiteDto>> getMyNonConformites(Principal principal) {
+        if (principal instanceof JwtAuthenticationToken jwtToken) {
+            Map<String, Object> claims = jwtToken.getToken().getClaims();
+            String email = (String) claims.get("email"); // ✅ Récupération de l'email depuis le token
+
+            if (email == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Collections.emptyList()); // 🛑 Si l'email n'est pas présent
+            }
+
+            List<NonConformiteDto> nonConformites = nonConformiteService.getNonConformitesByEmail(email);
+            return ResponseEntity.ok(nonConformites);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+
 
 }
