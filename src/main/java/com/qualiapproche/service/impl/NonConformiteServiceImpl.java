@@ -2,7 +2,6 @@ package com.qualiapproche.service.impl;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -12,6 +11,7 @@ import com.qualiapproche.entities.mappers.*;
 import com.qualiapproche.enumeration.Etat;
 import com.qualiapproche.enumeration.Status;
 import com.qualiapproche.repository.*;
+import com.qualiapproche.service.FichierService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -24,40 +24,20 @@ import lombok.RequiredArgsConstructor;
 
 import static com.qualiapproche.utils.UtilsClass.generateNumeroReferences;
 
+
 @Service
 @RequiredArgsConstructor
 public class NonConformiteServiceImpl implements NonConformiteService {
 
     private final NonConformiteRepository nonConformiteRepository;
     private final NonConformiteMapper nonConformiteMapper;
+    private final PlanActionMapper planActionMapper;
     private final TypeNonConformiteRepository typeNonConformiteRepository;
     private final TypeProcessusRepository typeProcessusRepository;
     private final EfficaciteRepository efficaciteRepository;
     private final ActionRepository actionRepository;
     private final NiveauNonConformiteRepository niveauNonConformiteRepository;
     private final FichierServiceImpl fichierServiceImpl;
-
-    /**
-     * Vérifie les champs obligatoires.
-     */
-    private void validateNonConformiteDto(NonConformiteDto dto) {
-
-        if (!StringUtils.hasText(dto.getIntitule())) {
-            throw new IllegalArgumentException("L'intitulé est obligatoire.");
-        }
-        if (!StringUtils.hasText(dto.getNomProcessus())) {
-            throw new IllegalArgumentException("Le nom du processus est obligatoire.");
-        }
-        if (!StringUtils.hasText(dto.getResponsable())) {
-            throw new IllegalArgumentException("Le responsable est obligatoire.");
-        }
-        if (!StringUtils.hasText(dto.getMail())) {
-            throw new IllegalArgumentException("L'adresse email est obligatoire.");
-        }
-        if (dto.getDateEcheance() == null) {
-            throw new IllegalArgumentException("La date d'échéance est obligatoire.");
-        }
-    }
 
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
@@ -95,21 +75,33 @@ public class NonConformiteServiceImpl implements NonConformiteService {
      */
     @Override
     public NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException {
-        validateNonConformiteDto(dto);
-        // Conversion DTO → Entité
         NonConformite nonConformite = nonConformiteMapper.toEntity(dto);
-        // Vérification et assignation des entités associées via leurs ID
+
         nonConformite.setNumeroReference("NRF-" + generateNumeroReferences(2));
-        nonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
         nonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
         nonConformite.setActionId(findActionById(dto.getActionId()));
         nonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         nonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        nonConformite.setEtapeTraiement(Etat.RECEPTION);
+        nonConformite.setEtatTraitement(Etat.RECEPTION);
         nonConformite.setDateVisaEmetteur(LocalDateTime.now());
         nonConformite.setStatus(Status.PENDING);
         nonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
-        // Sauvegarde en base
+
+        // Associer les PlanActions après avoir créé la NonConformité
+        if (dto.getPlanActions() != null && !dto.getPlanActions().isEmpty()) {
+            // Crée les objets PlanAction et associe-les à la NonConformité
+            List<PlanAction> planActions = dto.getPlanActions().stream()
+                    .map(planActionDto -> {
+                        PlanAction planAction = planActionMapper.toEntity(planActionDto);
+                        planAction.setNonConformite(nonConformite); // Associer la NonConformité persistée
+                        return planAction;
+                    }).collect(Collectors.toList());
+
+            // Ajouter les PlanActions à la NonConformité
+            nonConformite.setPlanActions(planActions);
+        }
+
+        // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
         NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
         // Retour DTO
         return nonConformiteMapper.toDto(savedNonConformite);
@@ -126,7 +118,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setActionId(findActionById(dto.getActionId()));
         existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        existingNonConformite.setEtapeTraiement(dto.getEtapeTraiement());
+        existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
         // Mettre à jour les fichiers s'ils sont fournis
         if (dto.getFichiers() != null) {
             existingNonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
@@ -137,55 +129,15 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         return nonConformiteMapper.toDto(updatedNonConformite);
     }
 
-    @Override
-    public List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException {
-        List<NonConformiteDto> updatedNonConformites = new ArrayList<>();
-
-        for (NonConformiteDto dto : dtos) {
-            UUID id = dto.getId(); // Assurez-vous que le DTO contient l'ID
-            NonConformite existingNonConformite = nonConformiteRepository.findById(id)
-                    .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + id));
-
-            // Mise à jour des champs modifiables
-            existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
-            existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
-            existingNonConformite.setActionId(findActionById(dto.getActionId()));
-            existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
-            existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-            existingNonConformite.setEtapeTraiement(dto.getEtapeTraiement());
-
-            // Mettre à jour les fichiers s'ils sont fournis
-            if (dto.getFichiers() != null) {
-                existingNonConformite.setFichiers(fichierServiceImpl.convertBase64(dto.getFichiers()));
-            }
-
-            // Sauvegarde en base de données
-            NonConformite updatedNonConformite = nonConformiteRepository.save(existingNonConformite);
-            updatedNonConformites.add(nonConformiteMapper.toDto(updatedNonConformite));
-        }
-
-        return updatedNonConformites;
-    }
 
 
-    /**
-     * Récupère toutes les non-conformités créées par un utilisateur donné.
-     *
-     * @param email de l'utilisateur (Keycloak subject)
-     * @return Liste de NonConformiteDto
-     */
 
-    @Override
-    public List<NonConformiteDto> getNonConformitesByEmail(String email) {
-        List<NonConformite> nonConformites = nonConformiteRepository.findByCurrentUserEmail(email);
-        return nonConformites.stream().map(nonConformiteMapper::toDto).collect(Collectors.toList());
-    }
 
-    @Override
+    /*@Override
     public NonConformiteDto create(NonConformiteDto nonConformiteDto) {
         NonConformite nonConformite = nonConformiteMapper.toEntity(nonConformiteDto);
         return nonConformiteMapper.toDto(nonConformiteRepository.save(nonConformite));
-    }
+    } */
 
     @Override
     public NonConformiteDto update(NonConformiteDto nonConformiteDto) {
@@ -202,7 +154,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtapeTraiement(etat));
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtatTraitement(etat));
     }
 
     @Override

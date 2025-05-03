@@ -27,6 +27,7 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
     @Override
     public TypeNonConformiteDto create(TypeNonConformiteDto typeNonConformiteDto) {
         TypeNonConformite typeNonConformite = typeNonConformiteMapper.toEntity(typeNonConformiteDto);
+        System.out.println(typeNonConformite);
         return typeNonConformiteMapper.toDto(typeNonConformiteRepository.save(typeNonConformite));
     }
 

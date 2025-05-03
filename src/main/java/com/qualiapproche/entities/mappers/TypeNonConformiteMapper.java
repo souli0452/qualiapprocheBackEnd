@@ -1,12 +1,14 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.TypeNonConformiteDto;
-import com.qualiapproche.entities.TypeNonConformite;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
-
 import java.util.List;
 import java.util.UUID;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+
+import com.qualiapproche.dto.TypeNonConformiteDto;
+import com.qualiapproche.entities.TypeNonConformite;
 
 @Mapper(componentModel = "spring")
 public interface TypeNonConformiteMapper {
@@ -17,7 +19,10 @@ public interface TypeNonConformiteMapper {
     List<TypeNonConformiteDto> toDtos(List<TypeNonConformite> typeNonConformites);
 
     List<TypeNonConformite> toEntities(List<TypeNonConformiteDto> typeNonConformiteDtos);
-    // @Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
+    @Mapping(target = "updateAt", ignore = true)
+    @Mapping(target = "updateById", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdById", ignore = true)
     void updateEntityFromDto(TypeNonConformiteDto typeNonConformiteDto, @MappingTarget TypeNonConformite typeNonConformite);
     default TypeNonConformite map(UUID id) {
         if (id == null) {

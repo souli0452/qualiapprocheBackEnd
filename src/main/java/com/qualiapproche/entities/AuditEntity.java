@@ -29,7 +29,7 @@ public class AuditEntity {
     private LocalDateTime createdAt;
     @Column(name = "update_at")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy ' à ' HH:mm:ss")
-    private LocalDateTime UpdateAt;
+    private LocalDateTime updateAt;
     @Column(name = "created_by_id")
     private String createdById;
     @Column(name = "update_by_id")

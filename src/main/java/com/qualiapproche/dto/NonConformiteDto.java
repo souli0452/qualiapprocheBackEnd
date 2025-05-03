@@ -12,7 +12,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 import lombok.experimental.SuperBuilder;
-import org.attoparser.dom.Text;
+import org.springframework.transaction.annotation.Transactional;
 
 @Getter
 @Setter
@@ -21,32 +21,24 @@ import org.attoparser.dom.Text;
 @JsonInclude(NON_NULL)
 @MappedSuperclass
 @SuperBuilder
-
+@Transactional
 public class NonConformiteDto extends AuditEntityDto {
 
     private String numeroReference;
-    private String intitule;
     private String nomProcessus;
     private String origineService;
     private String fonctionEmetteur;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
     private LocalDateTime dateVisaEmetteur;
-    private Text justification;
-    private String numeroOdre;
-    private String causeIdentifiees;
-    private String solutionRetenues;
-    private String responsable;
-    private String mail;
-    private String numeroTelephone;
-    private String dateEcheance;
+    private String justification;
     private String delaisMiseOeuvre;
-    private Etat etapeTraiement;
+    private Etat etatTraitement;
     private Status status;
-    private Text observationsRq;
+    private String observationsRq;
     private String dateObservationsRq;
-    private Text observationsCloture;
+    private String observationsCloture;
     private String dateVerification;
-    private Text dispositionPreventives;
+    private String dispositionPreventives;
     private String dateClotureRq;
     // On stocke uniquement les ID des objets associés
     private UUID efficaciteId;
@@ -54,6 +46,6 @@ public class NonConformiteDto extends AuditEntityDto {
     private UUID actionId;
     private UUID typeNonConformiteId;
     private UUID typeProcessusId;
-    @OneToMany
     private List<Fichier> fichiers;
+    private List<PlanActionDto> planActions;
 }

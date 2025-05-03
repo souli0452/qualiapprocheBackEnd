@@ -1,13 +1,9 @@
 package com.qualiapproche.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.qualiapproche.entities.CategorieFichier;
 import jakarta.persistence.MappedSuperclass;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 

@@ -9,7 +9,9 @@ import com.qualiapproche.repository.FichierRepository;
 import com.qualiapproche.service.FichierService;
 import com.qualiapproche.utils.RootPath;
 import jakarta.annotation.PostConstruct;
-import org.apache.tomcat.util.codec.binary.Base64;
+
+import java.util.*;
+
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -23,10 +25,6 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -145,40 +143,51 @@ public class FichierServiceImpl implements FichierService {
         }
     }
 
-    public String saveBase64FichierAndReturnUrl(String fichierBase64, String fichierRootPath, String type) throws IOException {
-        if (type.compareToIgnoreCase("application/pdf") == 0) {
-            byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
-            String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid + ".pdf");
-            imageFile.createNewFile();
-            FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
-            fileOutputStream.write(imageByteRequiredDocuments);
-            fileOutputStream.close();
-            // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFilePDF", uuid + ".pdf").build().toString();
 
-        } else if (type.compareToIgnoreCase("image/png") == 0 || type.compareToIgnoreCase("image/jpg") == 0 || type.compareToIgnoreCase("image/jpeg") == 0) {
-            byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
-            String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid.replace(" ", "") + ".png");
-            imageFile.createNewFile();
-            FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
-            fileOutputStream.write(imageByteRequiredDocuments);
-            fileOutputStream.close();
-            // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFile", uuid.replace(" ", "") + ".png").build().toString();
+    public String saveBase64FichierAndReturnUrl(String fichierBase64, String fichierRootPath, String mimeType) throws IOException {
+        byte[] fileBytes;
+        try {
+            fileBytes = Base64.getDecoder().decode(fichierBase64);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Le contenu du fichier n'est pas valide en base64.");
+        }
 
-        } else if (type.compareToIgnoreCase("application/msword") == 0) {
-            byte[] imageByteRequiredDocuments = Base64.decodeBase64(fichierBase64);
-            String uuid = String.valueOf(UUID.randomUUID());
-            File imageFile = new File(fichierRootPath, uuid.replace(" ", "") + ".doc");
-            imageFile.createNewFile();
-            FileOutputStream fileOutputStream = new FileOutputStream(imageFile);
-            fileOutputStream.write(imageByteRequiredDocuments);
-            fileOutputStream.close();
-            // Génération de l'URL du fichier en supposant que MvcUriComponentsBuilder est configuré correctement
-            return MvcUriComponentsBuilder.fromMethodName(FichierController.class, "getFileMsword", uuid.replace(" ", "") + ".doc").build().toString();
-        } else return "fichier non valide";
+        String uuid = UUID.randomUUID().toString().replace(" ", "");
+
+        Map<String, String> mimeToExtension = Map.ofEntries(
+                Map.entry("application/pdf", "pdf"),
+                Map.entry("image/png", "png"),
+                Map.entry("image/jpg", "jpg"),
+                Map.entry("image/jpeg", "jpeg"),
+                Map.entry("application/msword", "doc"),
+                Map.entry("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+                Map.entry("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+                Map.entry("text/plain", "txt")
+        );
+
+        String extension = mimeToExtension.get(mimeType.toLowerCase());
+
+        if (extension == null) {
+            throw new IllegalArgumentException("Type de fichier non supporté : " + mimeType);
+        }
+
+        File file = new File(fichierRootPath, uuid + "." + extension);
+        file.createNewFile();
+
+        try (FileOutputStream outputStream = new FileOutputStream(file)) {
+            outputStream.write(fileBytes);
+        }
+
+        String methodName = switch (extension) {
+            case "pdf" -> "getFilePDF";
+            case "doc" -> "getFileMsword";
+            default -> "getFile";
+        };
+
+        return MvcUriComponentsBuilder
+                .fromMethodName(FichierController.class, methodName, uuid + "." + extension)
+                .build()
+                .toString();
     }
 
     public List<Fichier> convertBase64File(FichierDto fichierDtos) throws IOException {

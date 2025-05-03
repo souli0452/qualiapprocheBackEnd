@@ -3,6 +3,7 @@ package com.qualiapproche.entities.mappers;
 import com.qualiapproche.dto.NonConformiteDto;
 import com.qualiapproche.entities.NonConformite;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +17,10 @@ public interface NonConformiteMapper {
     List<NonConformiteDto> toDtos(List<NonConformite> nonConformiteList);
 
     List<NonConformite> toEntities(List<NonConformiteDto> nonConformiteDtos);
-    //@Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
+    @Mapping(target = "updateAt", ignore = true)
+    @Mapping(target = "updateById", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdById", ignore = true)
     void updateEntityFromDto(NonConformiteDto enqueteDto, @MappingTarget NonConformite nonConformite);
     default NonConformite map(UUID id) {
         if (id == null) {

@@ -1,12 +1,14 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.NiveauNonConformiteDto;
-import com.qualiapproche.entities.NiveauNonConformite;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
-
 import java.util.List;
 import java.util.UUID;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+
+import com.qualiapproche.dto.NiveauNonConformiteDto;
+import com.qualiapproche.entities.NiveauNonConformite;
 
 @Mapper(componentModel = "spring")
 public interface NiveauNonConformiteMapper {
@@ -17,7 +19,10 @@ public interface NiveauNonConformiteMapper {
     List<NiveauNonConformiteDto> toDtos(List<NiveauNonConformite> niveauNonConformites);
 
     List<NiveauNonConformite> toEntities(List<NiveauNonConformiteDto> niveauNonConformiteDtos);
-    // @Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
+    @Mapping(target = "updateAt", ignore = true)
+    @Mapping(target = "updateById", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdById", ignore = true)
     void updateEntityFromDto(NiveauNonConformiteDto niveauNonConformiteDto, @MappingTarget NiveauNonConformite niveauNonConformite);
     default NiveauNonConformite map(UUID id) {
         if (id == null) {
