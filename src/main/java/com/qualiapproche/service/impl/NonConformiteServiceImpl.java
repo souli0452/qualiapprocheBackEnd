@@ -154,7 +154,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtatTraitement(etat));
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findByEtatTraitement(etat));
     }
 
     @Override
