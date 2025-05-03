@@ -20,7 +20,7 @@ public class AuditEntityDto implements Serializable {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm:ss")
     private LocalDateTime createdAt;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm:ss")
-    private LocalDateTime UpdateAt;
+    private LocalDateTime updateAt;
     private String createdById;
     private String updateById;
     private String currentUserfullName;

@@ -1,10 +1,12 @@
 package com.qualiapproche.service;
 
 import com.qualiapproche.dto.FichierDto;
+import com.qualiapproche.entities.Fichier;
 import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.Resource;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -21,5 +23,4 @@ public interface FichierService {
     void deleteAll();
 
     Stream<Path> loadAll();
-
 }

@@ -1,12 +1,14 @@
 package com.qualiapproche.entities.mappers;
 
-import com.qualiapproche.dto.EfficaciteDto;
-import com.qualiapproche.entities.Efficacite;
-import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
-
 import java.util.List;
 import java.util.UUID;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+
+import com.qualiapproche.dto.EfficaciteDto;
+import com.qualiapproche.entities.Efficacite;
 
 @Mapper(componentModel = "spring")
 public interface EfficaciteMapper {
@@ -17,7 +19,10 @@ public interface EfficaciteMapper {
     List<EfficaciteDto> toDtos(List<Efficacite> efficacites);
 
     List<Efficacite> toEntities(List<EfficaciteDto> efficaciteDtos);
-    // @Mapping(target = "id", ignore = true) // Ignorer l'id pour éviter de le modifier
+    @Mapping(target = "updateAt", ignore = true)
+    @Mapping(target = "updateById", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdById", ignore = true)
     void updateEntityFromDto(EfficaciteDto efficaciteDto, @MappingTarget Efficacite efficacite);
     default Efficacite map(UUID id) {
         if (id == null) {

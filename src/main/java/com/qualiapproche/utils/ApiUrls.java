@@ -119,11 +119,11 @@ public class ApiUrls {
 
     /* Non conformité urls */
 
-    public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
-    public static final String CREATE_NON_CONFORMITE = "/create";
-    public static final String CREATE_NON_CONFORMITE_RPOCESSUS = "/processus/create";
-    public static final String UPDATE_NON_CONFORMITE_RPOCESSUS = "/update/{id}";
-    public static final String GET_NON_CONFORMITE_BY_ID = "/get" + "/{id}";
+    public static final String NON_CONFORMITE_ROOT_URL = "api/v1/quali-approche/non-conformite";
+    //public static final String CREATE_NON_CONFORMITE = "/create";
+    public static final String CREATE_NON_CONFORMITE_PROCESSUS = "/create";
+    public static final String UPDATE_NON_CONFORMITE_PROCESSUS = "/update/{id}";
+    public static final String GET_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
@@ -184,5 +184,13 @@ public class ApiUrls {
     public static final String GET_ALL_PRODUIT = "/all";
     public static final String UPDATE_PRODUIT = "/update";
     public static final String DELETE_PRODUIT = "/delete" + "/{id}";
+
+
+
+    public static final String PLAN_ACTION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/plan-action";
+    public static final String CREATE_PLAN_ACTION = "/create";
+    public static final String GET_PLAN_ACTION_BY_ID = "/get" + "/{id}";
+    public static final String GET_ALL_PLAN_ACTION = "/all";
+    public static final String DELETE_PLAN_ACTION = "/delete" + "/{id}";
 
 }

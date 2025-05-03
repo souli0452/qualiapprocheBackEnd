@@ -12,17 +12,15 @@ import lombok.experimental.SuperBuilder;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
+@Entity
 @Getter
 @Setter
-@Entity
-@AllArgsConstructor
 @NoArgsConstructor
-@JsonInclude(NON_NULL)
+@AllArgsConstructor
 @SuperBuilder
+@JsonInclude(NON_NULL)
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-
-public class TypeNonConformite extends AuditEntity{
-
+public class TypeNonConformite extends AuditEntity {
     private String libelle;
     private String description;
 }

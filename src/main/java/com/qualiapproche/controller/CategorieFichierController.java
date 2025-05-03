@@ -3,7 +3,6 @@ package com.qualiapproche.controller;
 import com.qualiapproche.dto.CategorieFichierDto;
 import com.qualiapproche.service.CategorieFichierService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

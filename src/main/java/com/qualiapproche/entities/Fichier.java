@@ -1,3 +1,5 @@
+
+
 package com.qualiapproche.entities;
 
 
@@ -32,3 +34,4 @@ public class Fichier extends AuditEntity {
     @OneToMany
     private List<Archivage> archivages;
 }
+
