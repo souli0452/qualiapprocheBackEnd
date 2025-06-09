@@ -123,13 +123,17 @@ public class ApiUrls {
     //public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String CREATE_NON_CONFORMITE_PROCESSUS = "/create";
     public static final String UPDATE_NON_CONFORMITE_PROCESSUS = "/update/{id}";
+    public static final String UPDATE_MANY_NON_CONFORMITE_PROCESSUS = "/update/many";
     public static final String GET_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
     public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
     public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etapeTraitement}";
+    public static final String GET_ALL_CONFORMITE_IMPUTED = "/imputed/{userId}/{etapeTraitement}";
     public static final String GET_NON_CONFORMITE_BAY_USER = "/user";
     public static final String UPDATE_LISTE_NON_CONFORMITE_RPOCESSUS = "update/liste";
+    public static final String GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTORIGIN = "/structure/origin/{etapeTraitement}/{structureId}";
+    public static final String GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTSOUMISSION = "/structure/soumission/{etapeTraitement}/{structureId}";
 
     /* Reclamation urls */
 
@@ -192,5 +196,18 @@ public class ApiUrls {
     public static final String GET_PLAN_ACTION_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_PLAN_ACTION = "/all";
     public static final String DELETE_PLAN_ACTION = "/delete" + "/{id}";
+
+
+    public static final String ROOT_STRUCTURE_API = QUALI_APPROCHE_ROOT_URL+"/structures";
+    public static final String CREATE_STRUCTURE = "/create";
+    public static final String GET_ALL_STRUCTURE = "/all";
+    public static final String UPDATE_STRUCTURE = "/update";
+    public static final String DELETE_STRUCTURE = "/delete/{id}";
+    public static final String STRUCTURE_BY_ID = "/{id}";
+    public static final String STRUCTURENAME_BY_ID = "/structure-name/{structureid}";
+    public static final String STRUCTURE_BY_LIBELLE_URL = "/by-libelle/{libelle}";
+
+/* reporting */
+public static final String CREATE_REPORTING_ROOT_URL = "api/v1/quali-approche/reports/reporting";
 
 }

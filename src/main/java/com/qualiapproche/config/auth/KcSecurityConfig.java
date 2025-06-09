@@ -19,7 +19,14 @@ import org.springframework.security.oauth2.server.resource.authentication.Delega
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.List;
 
 @Slf4j
 @Configuration
@@ -34,7 +41,8 @@ public class KcSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
                                                    KcAuthenticationEntryPoint entryPoint,
                                                    KcAccessDenied accessDenied) throws Exception {
-
+        httpSecurity.csrf(csrf -> csrf.disable());
+        httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
         DelegatingJwtGrantedAuthoritiesConverter authoritiesConverter = new DelegatingJwtGrantedAuthoritiesConverter(
                 new JwtGrantedAuthoritiesConverter(),
                 new KcJwtRoleConverter(kcAuthProperties.getClientId()));
@@ -57,7 +65,7 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/webjars/**",
                             "/test/**",
-                            "/api/v1/quali-approche/**"
+                            "/api/v1/quali-approche/login"
 
                     ).permitAll();
                     auth.anyRequest().authenticated();
@@ -78,5 +86,18 @@ public class KcSecurityConfig {
     @Bean
     GrantedAuthorityDefaults grantedAuthorityDefaults() {
         return new GrantedAuthorityDefaults("");
+    }
+
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:4200")); // Ou * pour tout autoriser (à éviter en prod)
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true); // Autorise les cookies et headers comme Authorization
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }

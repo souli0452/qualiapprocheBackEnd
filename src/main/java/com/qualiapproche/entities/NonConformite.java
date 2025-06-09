@@ -3,6 +3,7 @@ package com.qualiapproche.entities;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.enumeration.Etat;
 import com.qualiapproche.enumeration.Status;
+import com.qualiapproche.enumeration.TypeDemande;
 import jakarta.persistence.*;
 import lombok.*;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
@@ -25,46 +26,59 @@ import lombok.experimental.SuperBuilder;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 
 public class NonConformite extends AuditEntity {
-
-    // Les propriétés qui interviennent dans la première partie de soumission d'une non conformité
     private String numeroReference;
-    // private String intitule;
+    private String version;
+    private String origineId;
     private String nomProcessus;
-    // Il s'agit là de l'origine de la non conformité (par exemple: Une non conformité au niveau du Contrôle qualité)
     private String origineService;
-    // Il s'agit de la fonction de celui qui emet la non conformité (par exemple: Un inspecteur qualité)
     private String fonctionEmetteur;
-    // Il s'agit de la date d'émission de la non conformité (Récupérée automatiquement)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
     private LocalDateTime dateVisaEmetteur;
-    // Il s'agit d'une description de la non conformité
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
+    private LocalDateTime dateSuivi;
     private String justification;
-    // On stocke uniquement les ID des objets associés
     private UUID efficaciteId;
-    // Mineur ou Majeur
     private UUID niveauNonConformiteId;
-    // AC - AP - Correction
     private UUID actionId;
-    // Reclamation client / fournisseur - Produit / Service - Système
+    private String structureSoumissionId;
+    private String structureSoumissionLibelle;
+    private String actionLibelle;
+    private  String typeNonConformiteLibelle;
+    private  String niveauNonConformiteLibelle;
+    private  String efficaciteLibelle;
+    private  String typeProcessusLibelle;
     private UUID typeNonConformiteId;
-    // Réalisation - Support - Management
     private UUID typeProcessusId;
-
-    // Il s'agit du total des dates d'échéance pour les différents plans d'action
     private String delaisMiseOeuvre;
+    @Enumerated(EnumType.STRING)
     private Etat etatTraitement;
+    @Enumerated(EnumType.STRING)
+    private TypeDemande typeDemande ;
     private String observationsRq;
     private String dateObservationsRq;
     private String observationsCloture;
     private String dateVerification;
+    private String structureResponsableId;
+    private String structureResponsableSigle;
+    private String structureResponsableLibelle;
     private String dispositionPreventives;
     private String dateClotureRq;
+    @Enumerated(EnumType.STRING)
     private Status status;
-
+    private  String pertinanceRs;
+    private  String justificationRs;
+    private  String pertinancePilote;
+    private  String justificationPilote;
+    private  String userImputId;
+    private  String userImputFullName;
+    private String numeroFdac;
+    private String pertinanceRsSuivi;
     @OneToMany
     private List<Fichier> fichiers;
     //@OneToMany(mappedBy = "nonConformite", cascade = CascadeType.ALL, orphanRemoval = true)
     //private List<PlanAction> planActions;
     @OneToMany(mappedBy = "nonConformite", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PlanAction> planActions = new ArrayList<>();
+    @Embedded
+    private Participants participants = new Participants();
 }

@@ -16,10 +16,11 @@ import com.qualiapproche.dto.NonConformiteDto;
 import com.qualiapproche.service.NonConformiteService;
 
 import static com.qualiapproche.utils.ApiUrls.*;
-
+@CrossOrigin("*")
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
 @RequiredArgsConstructor
+
 public class NonConformiteController {
     private final   NonConformiteService nonConformiteService;
 
@@ -42,6 +43,23 @@ public class NonConformiteController {
     @PutMapping(UPDATE_NON_CONFORMITE_PROCESSUS)
     public ResponseEntity<NonConformiteDto> updateNonConformite(@PathVariable UUID id, @RequestBody NonConformiteDto dto) throws IOException {
         return ResponseEntity.ok(nonConformiteService.updateNonConformite(id, dto));
+    }
+
+    @PutMapping(UPDATE_MANY_NON_CONFORMITE_PROCESSUS)
+    public ResponseEntity<List<NonConformiteDto>> updateManyNonConformite( @RequestBody List<NonConformiteDto> dtos) throws IOException {
+        return ResponseEntity.ok(nonConformiteService.updateNonConformites(dtos));
+    }
+    @GetMapping(GET_ALL_CONFORMITE_IMPUTED)
+    public ResponseEntity<List<NonConformiteDto>> getNonConformiteByUserId(@PathVariable Etat etapeTraitement ,@PathVariable String userId) throws IOException {
+        return ResponseEntity.ok(nonConformiteService.findImupted(userId,etapeTraitement));
+    }
+    @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTORIGIN)
+    public ResponseEntity<List<NonConformiteDto>> getNonConformitesByEtatAndOrigineId(@PathVariable Etat etapeTraitement, @PathVariable String structureId)  {
+        return ResponseEntity.ok(nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId));
+    }
+    @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTSOUMISSION)
+    public ResponseEntity<List<NonConformiteDto>> getNonConformitesByEtatAndStructureSoumission(@PathVariable Etat etapeTraitement, @PathVariable String structureId)  {
+        return ResponseEntity.ok(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId));
     }
 
 

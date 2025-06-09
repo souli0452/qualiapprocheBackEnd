@@ -11,13 +11,15 @@ public interface NonConformiteService {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
 
     NonConformiteDto updateNonConformite(UUID id, NonConformiteDto dto) throws IOException;
-
+    List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException;
    // NonConformiteDto create(NonConformiteDto nonConformiteDto);
     NonConformiteDto update(NonConformiteDto nonConformiteDto);
     List<NonConformiteDto> allNonConformites();
-
+    List<NonConformiteDto> findImupted(String userId,Etat etat);
     // Méthode pour récupérer les non-conformités par état
     List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat);
+    List<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid);
+    List<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid);
 
     NonConformiteDto getNonConformiteById(UUID id);
 

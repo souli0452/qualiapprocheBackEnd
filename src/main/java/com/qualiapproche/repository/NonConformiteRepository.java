@@ -11,5 +11,8 @@ import java.util.UUID;
 public interface NonConformiteRepository extends JpaRepository<NonConformite, UUID> {
 
     List<NonConformite> findByEtatTraitement(Etat etat);
+    List<NonConformite> findAllByEtatTraitementAndStructureSoumissionId(Etat etatTraitement, String structureSoumissionId);
+    List<NonConformite> findAllByEtatTraitementAndOrigineId(Etat etatTraitement, String origineId);
 
+    List<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId,Etat etatTraitement);
 }

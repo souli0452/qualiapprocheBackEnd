@@ -24,6 +24,7 @@ public class KcUserDto {
     private boolean enabled;
     private boolean emailVerified;
     private String firstName;
+    private String structure;
     private String lastName;
     private String email;
     private String password;
