@@ -161,8 +161,39 @@ public class KcUserService {
     }
 
     public List<KcUserDto> getAllUsers() {
-        return kcUserMapper.toDto(keycloak.realm(kcAuthProperties.getRealm()).users().list());
-}
+        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
+        return users.stream()
+                .map(user -> {
+                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
+
+                    Map<String, List<String>> attributes = user.getAttributes();
+
+                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
+                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
+
+                    return kcUserDto;
+                })
+                .collect(Collectors.toList());
+    }
+    public List<KcUserDto> getUsersByStructure(String structure) {
+
+        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
+
+        return users.stream()
+                .map(user -> {
+                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
+                    Map<String, List<String>> attributes = user.getAttributes();
+
+                    // Récupère les attributs
+                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
+                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
+
+                    return kcUserDto;
+                })
+                // Filtre les utilisateurs dont la structure correspond
+                .filter(kcUserDto -> kcUserDto.getStructure() != null && kcUserDto.getStructure().equals(structure))
+                .collect(Collectors.toList());
+    }
     public KcUserDto getUserById(String userId) {
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
                 .users()
@@ -176,9 +207,48 @@ public class KcUserService {
         if (user.getAttributes() != null && user.getAttributes().containsKey("phoneNumber")) {
             kcUserDto.setPhoneNumber(user.getAttributes().get("phoneNumber").get(0));
         }
+        if (user.getAttributes() != null && user.getAttributes().containsKey("structure")) {
+            kcUserDto.setStructure(user.getAttributes().get("structure").get(0));
+        }
         return kcUserDto;
     }
+    private String getAttributeValue(Map<String, List<String>> attributes, String key) {
+        return (attributes != null && attributes.containsKey(key) && attributes.get(key) != null && !attributes.get(key).isEmpty())
+                ? attributes.get(key).get(0)
+                : null;
+    }
+    public List<KcUserDto> getAllUsersByStructure(String structureId) {
+        List<UserRepresentation> users;
+        if (structureId != null) {
+            GroupRepresentation group = keycloak.realm(kcAuthProperties.getRealm())
+                    .groups()
+                    .groups()
+                    .stream()
+                    .filter(g -> structureId.equals(g.getName()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Group not found: " + structureId));
 
+            users = keycloak.realm(kcAuthProperties.getRealm())
+                    .groups()
+                    .group(group.getId())
+                    .members();
+        } else {
+            users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
+        }
+
+        return users.stream()
+                .map(user -> {
+                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
+
+                    Map<String, List<String>> attributes = user.getAttributes();
+
+                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
+
+
+                    return kcUserDto;
+                })
+                .collect(Collectors.toList());
+    }
 
 
     public KcUserDto createUser(KcUserDto kcUserDto) {
@@ -189,8 +259,8 @@ public class KcUserService {
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue(kcUserDto.getPassword());
         credential.setValue(password);
-
         user.singleAttribute("phoneNumber",kcUserDto.getPhoneNumber());
+        user.singleAttribute("structure",kcUserDto.getStructure());
         user.setCredentials(Collections.singletonList(credential));
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
         if (response.getStatus() == Response.Status.CREATED.getStatusCode()) {

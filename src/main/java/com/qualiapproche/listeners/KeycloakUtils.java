@@ -14,6 +14,9 @@ public class KeycloakUtils {
     public static String getUserFullname() {
         return getCurrentUserToken().getClaim("name").toString();
     }
+    public static String getUserStructure() {
+        return "";
+    }
 
     public static String getUserEmail() {
         return getCurrentUserToken().getClaim("email").toString();

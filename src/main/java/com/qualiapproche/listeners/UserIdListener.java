@@ -13,6 +13,7 @@ public class UserIdListener {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setCurrentUserfullName(KeycloakUtils.getUserFullname());
         entity.setCurrentUserEmail(KeycloakUtils.getUserEmail());
+        entity.setCurrentUserStructure(KeycloakUtils.getUserStructure());
     }
 
     @PreUpdate
@@ -23,5 +24,6 @@ public class UserIdListener {
         entity.setUpdateById(KeycloakUtils.getCurrentUserId());
         entity.setCurrentUserfullName(KeycloakUtils.getUserFullname());
         entity.setCurrentUserEmail(KeycloakUtils.getUserEmail());
+        entity.setCurrentUserStructure(KeycloakUtils.getUserStructure());
     }
 }

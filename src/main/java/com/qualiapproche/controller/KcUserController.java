@@ -38,6 +38,11 @@ public class KcUserController {
         List<KcUserDto> users = kcUserService.getAllUsers();
         return ResponseEntity.ok(users);
     }
+    @GetMapping("/users/{structureId}")
+    public ResponseEntity<List<KcUserDto>> getAllUsersByStructureId(@PathVariable String structureId) {
+        List<KcUserDto> users = kcUserService.getUsersByStructure(structureId);
+        return ResponseEntity.ok(users);
+    }
 
     @GetMapping("/user-by-id")
     public ResponseEntity<KcUserDto> getUserById(@RequestParam String userId) {

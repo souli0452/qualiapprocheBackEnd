@@ -25,4 +25,5 @@ public class AuditEntityDto implements Serializable {
     private String updateById;
     private String currentUserfullName;
     private String currentUserEmail;
+    private String currentUserStructure;
 }

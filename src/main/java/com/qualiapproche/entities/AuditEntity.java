@@ -39,5 +39,7 @@ public class AuditEntity {
     private String currentUserfullName;
     @Column(name = "current_user_email")
     private String currentUserEmail;
+    @Column(name = "current_user_structure")
+    private String currentUserStructure;
 
 }
