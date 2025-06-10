@@ -155,9 +155,11 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 existingNonConformite.setDateSuivi(LocalDateTime.now());
             }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
+            if (dto.getEtatTraitement()==Etat.VALIDATION){
             dto.getParticipants().forEach(participant -> {
                 existingNonConformite.getParticipants().getFullNames().add(participant);
             });
+            }
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
             if (dto.getPlanActions() != null && !dto.getPlanActions().isEmpty()) {
                 List<PlanAction> existingPlanActions = existingNonConformite.getPlanActions();

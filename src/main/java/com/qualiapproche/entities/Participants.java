@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
 @Embeddable
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,5 +20,5 @@ public class Participants {
     @ElementCollection
     @CollectionTable(name = "non_conformite_participants", joinColumns = @JoinColumn(name = "non_conformite_id"))
     @Column(name = "participants")
-    private List<String> fullNames = new ArrayList<>();
+    private Set<String> fullNames = new HashSet<>();
 }

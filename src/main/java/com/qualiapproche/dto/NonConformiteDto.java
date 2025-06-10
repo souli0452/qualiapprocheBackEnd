@@ -8,9 +8,8 @@ import com.qualiapproche.enumeration.TypeDemande;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 import lombok.experimental.SuperBuilder;
@@ -76,5 +75,5 @@ public class NonConformiteDto extends AuditEntityDto {
     private  String justificationPilote;
     private  String userImputId;
     private  String userImputFullName;
-    private List<String> participants=new ArrayList<>();
+    private Set<String> participants=new HashSet<>();
 }
