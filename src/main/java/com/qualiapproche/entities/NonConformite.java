@@ -38,6 +38,7 @@ public class NonConformite extends AuditEntity {
     private LocalDateTime dateSuivi;
     private String justification;
     private UUID efficaciteId;
+    private  String userImputeEmail;
     private UUID niveauNonConformiteId;
     private UUID actionId;
     private String structureSoumissionId;

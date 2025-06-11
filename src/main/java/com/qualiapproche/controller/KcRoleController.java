@@ -58,8 +58,8 @@ public class KcRoleController {
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping("/user-roles")
-    public List<KcRoleDto> getRoles(@RequestParam String userId) {
+    @GetMapping("/user-roles/{userId}")
+    public List<KcRoleDto> getRoles(@PathVariable String userId) {
         return kcRoleService.getRolesForUser(userId);
     }
 }

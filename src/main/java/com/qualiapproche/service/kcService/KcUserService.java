@@ -68,13 +68,13 @@ public class KcUserService {
         UserRepresentation user = userRepresentations.get(0);
         UserStatusDto userStatus = checkCredentialsByUsername(loginRequest.getUsername());
 
-        if (!userStatus.isEmailVerified() || !userStatus.isEnabled() || userStatus.isTemporaryPwd()) {
+       /* if (!userStatus.isEmailVerified() || !userStatus.isEnabled() || userStatus.isTemporaryPwd()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(KcResponseDto.builder()
                     .status("FAILED")
                     .message("User conditions not met")
                     .data(userStatus)
                     .build());
-        }
+        }*/
 
         log.info("All conditions satisfied for user {}. Proceeding with token generation.", loginRequest.getUsername());
         KcTokenDto kcTokenDto = kcTokenService.getAccessToken(loginRequest);
@@ -259,8 +259,6 @@ public class KcUserService {
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue(kcUserDto.getPassword());
         credential.setValue(password);
-        user.singleAttribute("phoneNumber",kcUserDto.getPhoneNumber());
-        user.singleAttribute("structure",kcUserDto.getStructure());
         user.setCredentials(Collections.singletonList(credential));
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
         if (response.getStatus() == Response.Status.CREATED.getStatusCode()) {
@@ -273,7 +271,7 @@ public class KcUserService {
 
             String verificationUrl = frontendUrl+"/verify-email?token=" + token + "&userId=" + userId;
 
-          //  sendMailService.sendVerificationEmail(recipientEmail, firstName, lastName, password, verificationUrl);
+            sendMailService.sendVerificationEmail(recipientEmail, firstName, lastName, password, verificationUrl);
         } else {
             throw new RuntimeException("Erreur lors de la création de l'utilisateur : " + response.getStatus());
         }

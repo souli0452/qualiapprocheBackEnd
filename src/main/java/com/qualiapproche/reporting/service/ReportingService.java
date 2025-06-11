@@ -4,6 +4,7 @@ import com.qualiapproche.entities.NonConformite;
 import com.qualiapproche.enumeration.TypeDemande;
 import com.qualiapproche.reporting.config.ReportConfigService;
 import com.qualiapproche.reporting.config.ReportConstant;
+import com.qualiapproche.reporting.dto.JasperPlanActionDto;
 import com.qualiapproche.reporting.dto.ReportingInputDto;
 import com.qualiapproche.reporting.dto.ReportingResponseDto;
 import com.qualiapproche.repository.NonConformiteRepository;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -78,7 +80,8 @@ public class ReportingService {
             throws IOException, JRException {
         NonConformite nonConformite = conformiteRepository.findById(inputDto.getEntityId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "demande introuvable."));
-        return this.configService.buildReport(inputDto, buildNonConformiteParam(nonConformite));
+        List<JasperPlanActionDto> planActionDtos =nonConformite.getPlanActions().stream().map(planAction -> new JasperPlanActionDto(planAction)).toList();
+        return this.configService.buildReport(inputDto,planActionDtos,buildNonConformiteParam(nonConformite));
     }
 
 
@@ -95,24 +98,32 @@ public class ReportingService {
                 demande.getJustificationPilote() != null ? demande.getJustificationPilote() : "");
         parameterMap.put(ReportConstant.JASPER_PARAM_JUSTIFICATION_RS,
                 demande.getJustificationRs() != null ? demande.getJustificationRs() : "");
-        parameterMap.put(ReportConstant.JASPER_PARAM_RESPONSABLE,
-                demande.getUserImputFullName() != null ? demande.getUserImputFullName() : "");
         parameterMap.put(ReportConstant.JASPER_PARAM_PARICIPANTS,
-                demande.getParticipants() != null ? demande.getParticipants() : "");
-        if (demande.getPertinancePilote() != null) {
+                demande.getParticipants() != null ? demande.getParticipants().getFullNames() : "");
             parameterMap.put(ReportConstant.JASPER_PARAM_PERTINENCE_OUI,
                     demande.getPertinancePilote().compareToIgnoreCase("Oui")==0? "X" : "");
             parameterMap.put(ReportConstant.JASPER_PARAM_PERTINENCE_NON,
                     demande.getPertinancePilote().compareToIgnoreCase("Non")==0? "X" : "");
-        }
-        if (demande.getPertinanceRs() != null) {
+
             parameterMap.put(ReportConstant.JASPER_PARAM_RS_PERTINENCE_OUI,
                     demande.getPertinanceRs().compareToIgnoreCase("Oui")==0? "X" : "");
             parameterMap.put(ReportConstant.JASPER_PARAM_RS_PERTINENCE_NON,
                     demande.getPertinanceRs().compareToIgnoreCase("Non")==0? "X" : "");
-        }
-
         parameterMap.put(ReportConstant.JASPER_PARAM_NUMERO,
+                demande.getNumeroReference() != null ? demande.getNumeroReference() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_REACTION,
+                demande.getJustification() != null ? demande.getJustification() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_SERVICE_PRODUIT,
+                demande.getJustification() != null ? demande.getJustification() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_CORRECTIVE,
+                demande.getJustification() != null ? demande.getJustification() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_PREVENTIVE,
+                demande.getJustification() != null ? demande.getJustification() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_DATE_RS,
+                demande.getDateClotureRq() != null ? demande.getDateClotureRq() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_DATE_PILOTE,
+                demande.getDateVisaEmetteur() != null ? demande.getDateVisaEmetteur() : "");
+        parameterMap.put(ReportConstant.JASPER_PARAM_REFERENCE,
                 demande.getNumeroReference() != null ? demande.getNumeroReference() : "");
         return parameterMap;
     }

@@ -75,5 +75,6 @@ public class NonConformiteDto extends AuditEntityDto {
     private  String justificationPilote;
     private  String userImputId;
     private  String userImputFullName;
+    private  String userImputeEmail;
     private Set<String> participants=new HashSet<>();
 }

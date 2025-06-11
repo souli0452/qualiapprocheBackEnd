@@ -70,14 +70,14 @@ public class KcUserController {
         return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/users/change-status")
+    @PutMapping("/users/change-status")
     public ResponseEntity<Void> changeStatus(@RequestParam String userId, @RequestParam Boolean enabled) {
         log.debug("Request to reset password for user : {}", userId);
         kcUserService.changeUserStatus(userId, enabled);
         return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/verify-email")
+    @PutMapping("/verify-email")
     public ResponseEntity<Void> verifyEmail(@RequestParam String userId, @RequestParam String token) {
         kcUserService.emailVerification(userId, token);
         return ResponseEntity.ok().build();
@@ -94,13 +94,13 @@ public class KcUserController {
             return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/reinitialize-pwd")
+    @PutMapping("/reinitialize-pwd")
     public ResponseEntity<Void> reinitializePwd(@RequestParam String userId,@RequestParam String password, @RequestParam String token) {
         kcUserService.reinitializePwd(userId,password, token);
         return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/update-pwd")
+    @PutMapping("/update-pwd")
     public ResponseEntity<Object> updateTemporaryPassword(
             @RequestParam String username,
             @RequestParam(required = false) String  oldPassword,

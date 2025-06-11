@@ -9,9 +9,6 @@ public class ReportConstant {
     public static final String JASPER_PARAM_DATE_RS = "DATE_RS";
     public static final String JASPER_PARAM_REFERENCE = "REFERENCE";
     public static final String JASPER_PARAM_VERSION = "VERSION";
-    public static final String JASPER_PARAM_EMETTEUR = "EMETTEUR";
-    public static final String JASPER_PARAM_DATE_BUTOI = "DATE_BUTOI";
-    public static final String JASPER_PARAM_RESPONSABLE = "RESPONSABLE";
     public static final String JASPER_PARAM_PREVENTIVE = "PREVENTIVE";
     public static final String JASPER_PARAM_CORRECTIVE = "CORRECTIVE";
     public static final String JASPER_PARAM_DESCRIPTION = "DESCRIPTION";
@@ -23,8 +20,6 @@ public class ReportConstant {
     public static final String JASPER_PARAM_SERVICE_PRODUIT = "SERVICE_PRODUIT";
     public static final String JASPER_PARAM_DATE_SOUMISSION = "DATE_SOUMISSION";
     public static final String JASPER_PARAM_PARICIPANTS = "PARTICIPANTS";
-    public static final String JASPER_PARAM_SOLUTION_PROPOSER= "SOLUTION_PROPOSER";
-    public static final String JASPER_PARAM_ANALYSE_CAUSES = "ANALYSE_CAUSES";
     public static final String JASPER_PARAM_QRCODE = "QRCODE";
 
 }

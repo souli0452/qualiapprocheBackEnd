@@ -31,6 +31,7 @@
 		<spring-cloud.version>2023.0.3</spring-cloud.version>
 		<keycloak.version>23.0.7</keycloak.version>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -40,6 +41,8 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-rest</artifactId>
 		</dependency>
+
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-graphql</artifactId>
@@ -156,6 +159,12 @@
 			<artifactId>netty-resolver-dns-native-macos</artifactId>
 			<version>4.1.73.Final</version>
 			<classifier>osx-aarch_64</classifier>
+		</dependency>
+
+		<dependency>
+			<groupId>org.thymeleaf</groupId>
+			<artifactId>thymeleaf</artifactId>
+			<version>3.1.2.RELEASE</version>
 		</dependency>
 
 		<!-- security dependencies -->

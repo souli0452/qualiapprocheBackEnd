@@ -28,6 +28,7 @@ public class KcUserDto {
     private String lastName;
     private String email;
     private String password;
+    private String fonction;
     private String phoneNumber;
     private List<String> roles;
 

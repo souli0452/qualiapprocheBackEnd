@@ -13,6 +13,7 @@ import com.qualiapproche.enumeration.Status;
 import com.qualiapproche.enumeration.TypeDemande;
 import com.qualiapproche.repository.*;
 import com.qualiapproche.service.FichierService;
+import com.qualiapproche.service.SendMailService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.rest.webmvc.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -39,6 +40,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final ActionRepository actionRepository;
     private final NiveauNonConformiteRepository niveauNonConformiteRepository;
     private final FichierServiceImpl fichierServiceImpl;
+    private final SendMailService sendMailService;
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
      */
@@ -153,6 +155,11 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setNumeroFdac(dto.getNumeroFdac());
             if (dto.getEtatTraitement()==Etat.CLOTURE){
                 existingNonConformite.setDateSuivi(LocalDateTime.now());
+            }
+            if (dto.getEtatTraitement()==Etat.TRAITEMENT){
+                String subject = "Taitement d'une non comformité ";
+                String link = "http://localhost:4200/page/imputation";
+                sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject,link,"emailTemplate");
             }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
             if (dto.getEtatTraitement()==Etat.VALIDATION){
