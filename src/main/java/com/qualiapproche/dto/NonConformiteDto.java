@@ -82,7 +82,7 @@ public class NonConformiteDto extends AuditEntityDto {
     private  String userImputId;
     private  String userImputFullName;
     private  String userImputeEmail;
-    private Set<String> participants=new HashSet<>();
+    private  Set<String> participants=new HashSet<>();
     private  String originNonConformiteId;
     private  String originNonConformiteLibelle;
     private  String observationRejet;
