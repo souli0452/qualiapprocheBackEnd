@@ -24,18 +24,23 @@ import lombok.experimental.SuperBuilder;
 @JsonInclude(NON_NULL)
 @SuperBuilder
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-
+@Table(name = "quali_nc")
 public class NonConformite extends AuditEntity {
     private String numeroReference;
     private String version;
     private String origineId;
     private String nomProcessus;
     private String origineService;
+    private String origineServiceLibelleCourt;
     private String fonctionEmetteur;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
     private LocalDateTime dateVisaEmetteur;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
     private LocalDateTime dateSuivi;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
+    private LocalDateTime publicationDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
+    private LocalDateTime archivageDate;
     private String justification;
     private UUID efficaciteId;
     private  String userImputeEmail;
@@ -72,13 +77,17 @@ public class NonConformite extends AuditEntity {
     private  String justificationPilote;
     private  String userImputId;
     private  String userImputFullName;
+    private  String originNonConformiteId;
+    private  String originNonConformiteLibelle;
     private String numeroFdac;
     private String pertinanceRsSuivi;
+    private  String actionDsc;
+    private  String observationRejet;
     @OneToMany
     private List<Fichier> fichiers;
     //@OneToMany(mappedBy = "nonConformite", cascade = CascadeType.ALL, orphanRemoval = true)
     //private List<PlanAction> planActions;
-    @OneToMany(mappedBy = "nonConformite", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PlanAction> planActions = new ArrayList<>();
     @Embedded
     private Participants participants = new Participants();

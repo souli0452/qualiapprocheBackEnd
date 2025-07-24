@@ -41,8 +41,6 @@ public class KcSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
                                                    KcAuthenticationEntryPoint entryPoint,
                                                    KcAccessDenied accessDenied) throws Exception {
-        httpSecurity.csrf(csrf -> csrf.disable());
-        httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
         DelegatingJwtGrantedAuthoritiesConverter authoritiesConverter = new DelegatingJwtGrantedAuthoritiesConverter(
                 new JwtGrantedAuthoritiesConverter(),
                 new KcJwtRoleConverter(kcAuthProperties.getClientId()));
@@ -65,6 +63,8 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/webjars/**",
                             "/test/**",
+                            "/api/**",
+                            "/api/v1/**",
                             "/api/v1/quali-approche/login"
 
                     ).permitAll();
@@ -87,17 +87,15 @@ public class KcSecurityConfig {
     GrantedAuthorityDefaults grantedAuthorityDefaults() {
         return new GrantedAuthorityDefaults("");
     }
-
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:4200")); // Ou * pour tout autoriser (à éviter en prod)
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedOrigins(List.of("https://sgq.horeb.tech"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+        configuration.setAllowCredentials(true);
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true); // Autorise les cookies et headers comme Authorization
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/api/v1/**", configuration);
         return source;
     }
 }

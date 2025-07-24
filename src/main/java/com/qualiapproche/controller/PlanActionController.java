@@ -2,6 +2,7 @@ package com.qualiapproche.controller;
 
 import com.qualiapproche.dto.PlanActionDto;
 
+import com.qualiapproche.utils.StatutEnum;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,11 @@ public class PlanActionController {
         PlanActionDto planActionDto = planActionService.createPlanActionDto(dto);
         return new ResponseEntity<>(planActionDto, HttpStatus.OK);
     }
+    @PutMapping(UPDATE_PLAN_ACTION)
+    public ResponseEntity<PlanActionDto> update(@RequestBody PlanActionDto dto) throws IOException {
+        PlanActionDto planActionDto = planActionService.changeStatus(dto);
+        return new ResponseEntity<>(planActionDto, HttpStatus.OK);
+    }
 
     @GetMapping(GET_ALL_PLAN_ACTION)
     public ResponseEntity<List<PlanActionDto>> allActions() {
@@ -41,5 +47,16 @@ public class PlanActionController {
     @DeleteMapping(DELETE_PLAN_ACTION)
     public void deleteyId(@PathVariable UUID id) {
         planActionService.delete(id);
+    }
+
+    @GetMapping(GET_ALL_PLAN_ACTION_RESPONSABLE)
+    public ResponseEntity<List<PlanActionDto>> getAllActionsByResponsbale(@PathVariable String email, @PathVariable StatutEnum status) {
+        List<PlanActionDto> planActionDtos  = planActionService.planActionByResponsable(email,status);
+        return new ResponseEntity<>(planActionDtos, HttpStatus.OK);
+    }
+    @GetMapping(GET_ALL_PLAN_ACTION_ALL)
+    public ResponseEntity<List<PlanActionDto>> getAllActionsByResponsbaleAll(@PathVariable String email ) {
+        List<PlanActionDto> planActionDtos  = planActionService.planActionByResponsableAll(email);
+        return new ResponseEntity<>(planActionDtos, HttpStatus.OK);
     }
 }

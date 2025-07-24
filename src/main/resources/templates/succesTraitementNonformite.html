@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta name="viewport" content="width=device-width">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #e8f5e9;
+            font-family: 'Roboto', sans-serif;
+        }
+        h1 {
+            font-size: 24px;
+            color: #2e7d32;
+            margin-bottom: 15px;
+        }
+        .content {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+            padding: 30px;
+            text-align: left;
+        }
+        .logo img, .footer img {
+            height: 80px;
+        }
+        .contenu p {
+            font-size: 16px;
+            color: #333;
+            margin: 8px 0;
+        }
+        a {
+            color: #2e7d32;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .footer {
+            display: flex;
+            align-items: center;
+            margin-top: 40px;
+        }
+        .footer-content {
+            margin-left: 15px;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+        .footer-content span {
+            display: block;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .footer-content span:after {
+            content: "";
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 100px;
+            border-bottom: 1px dashed #aaa;
+        }
+    </style>
+</head>
+<body>
+<div class="content">
+    <div class="logo">
+        <img src="https://qualiapproche.com/wp-content/uploads/2025/06/cropped-dermiss-logo-fin-couleur-bleu-rouge.png" alt="Logo">
+    </div>
+    <div class="contenu">
+        <h1>✅ Non-conformité traitée avec succès</h1>
+        <p>Cher utilisateur,</p>
+        <p>Nous avons le plaisir de vous informer que votre demande de non-conformité a été traitée avec succès.</p>
+        <p>Les actions nécessaires ont été effectuées conformément aux standards définis.</p>
+        <p>Vous pouvez consulter le compte-rendu ou les détails via le lien suivant :</p>
+        <p><a th:href="${link}" target="_blank">Voir le traitement</a></p>
+        <br>
+        <p>Nous vous remercions pour votre collaboration et votre implication.</p>
+    </div>
+    <div class="footer">
+        <img src="https://qualiapproche.com/wp-content/uploads/2025/06/cropped-dermiss-logo-fin-couleur-bleu-rouge.png" alt="Footer Logo">
+        <div class="footer-content">
+            <span>Burkina Faso</span>
+            <span>Cabinet Conseil en Gestion de qualités</span>
+            <span>BURKINA FASO - Siège social : Ouagadougou</span>
+        </div>
+    </div>
+</div>
+</body>
+</html>

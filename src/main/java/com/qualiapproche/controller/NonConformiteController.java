@@ -5,7 +5,10 @@ import java.util.List;
 import java.util.UUID;
 
 import com.qualiapproche.dto.FichierDto;
+import com.qualiapproche.dto.NcStats;
+import com.qualiapproche.dto.RejectNonConformiteDto;
 import com.qualiapproche.enumeration.Etat;
+import com.qualiapproche.enumeration.Status;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -80,6 +83,11 @@ public class NonConformiteController {
         NonConformiteDto nonConformite = nonConformiteService.update(nonConformiteDto);
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
+    @PutMapping(REJECT_NON_CONFORMITE)
+    public ResponseEntity<NonConformiteDto> rejectNf(@RequestBody RejectNonConformiteDto rejectNonConformiteDto) {
+        NonConformiteDto nonConformite = nonConformiteService.rejectNonConformite(rejectNonConformiteDto);
+        return new ResponseEntity<>(nonConformite, HttpStatus.OK);
+    }
 
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de toutes les NonConformités              /
@@ -113,6 +121,37 @@ public class NonConformiteController {
     @DeleteMapping(DELETE_NON_CONFORMITE)
     public void deleteById(@PathVariable UUID id) {
         nonConformiteService.delete(id);
+    }
+
+    @GetMapping("/publish")
+    public ResponseEntity<List<NonConformiteDto>> getAllPublish(@RequestParam(required = false) Status status,@RequestParam(required = false) String id) {
+        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status,id);
+        return ResponseEntity.ok(nonConformiteDtos);
+    }
+    @GetMapping
+    public ResponseEntity<List<NonConformiteDto>> getAll(@RequestParam(required = false) Status status,@RequestParam(required = false) String id) {
+        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status,id);
+        return ResponseEntity.ok(nonConformiteDtos);
+    }
+    @PutMapping(path = "delete-multiple")
+    public ResponseEntity<Void> deleteMultiple(@RequestBody List<NonConformiteDto> nonConformiteDtos) {
+        nonConformiteService.deleteMultiple(nonConformiteDtos);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping(path = "/count-by-status/{id}")
+    public ResponseEntity<List<NcStats>> getCountByStatus(@PathVariable  String id) {
+        return ResponseEntity.ok(nonConformiteService.getNcStats(id));
+    }
+    @PatchMapping(path = "/change-status")
+    public ResponseEntity<Void> changeStatus(@RequestParam UUID id, @RequestParam Status status) {
+        nonConformiteService.changeStatus(id, status);
+        return ResponseEntity.ok().build();
+    }
+    @PatchMapping(path = "/change-many-status")
+    public ResponseEntity<Void> changeManyStatus(@RequestBody List<NonConformiteDto> actualityDtos, @RequestParam Status status) {
+        nonConformiteService.changeManyStatus(actualityDtos, status);
+        return ResponseEntity.ok().build();
     }
 
 }

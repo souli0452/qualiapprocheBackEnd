@@ -84,6 +84,13 @@ public class ApiUrls {
     public static final String DELETE_ACTIONS = "/delete/{id}";
     /* Niveau Non Conformités urls */
 
+
+    public static final String CG_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/config-global";
+    public static final String CREATE_CG = "/create";
+    public static final String GET_ALL_CG= "/all";
+    public static final String GET_CG_BY_ID = "/get/{id}";
+    public static final String UPDATE_CG = "/update/{id}";
+
     public static final String NIVEAU_NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/niveau/non-conformite";
     public static final String CREATE_NIVEAU_NON_CONFORMITE = "/create";
     public static final String GET_ALL_NIVEAU_NON_CONFORMITE = "/all";
@@ -127,6 +134,7 @@ public class ApiUrls {
     public static final String GET_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
+    public static final String REJECT_NON_CONFORMITE = "/reject";
     public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
     public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etapeTraitement}";
     public static final String GET_ALL_CONFORMITE_IMPUTED = "/imputed/{userId}/{etapeTraitement}";
@@ -193,8 +201,11 @@ public class ApiUrls {
 
     public static final String PLAN_ACTION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/plan-action";
     public static final String CREATE_PLAN_ACTION = "/create";
+    public static final String UPDATE_PLAN_ACTION = "/update";
     public static final String GET_PLAN_ACTION_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_PLAN_ACTION = "/all";
+    public static final String GET_ALL_PLAN_ACTION_RESPONSABLE= "/all/by-email/{email}/{status}";
+    public static final String GET_ALL_PLAN_ACTION_ALL= "/all/{email}";
     public static final String DELETE_PLAN_ACTION = "/delete" + "/{id}";
 
 

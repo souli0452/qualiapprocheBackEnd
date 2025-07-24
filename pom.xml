@@ -29,7 +29,7 @@
 	<properties>
 		<java.version>17</java.version>
 		<spring-cloud.version>2023.0.3</spring-cloud.version>
-		<keycloak.version>23.0.7</keycloak.version>
+		<keycloak.version>26.0.0</keycloak.version>
 	</properties>
 
 	<dependencies>
@@ -274,7 +274,7 @@
 			</resource>
 		</resources>
 
-		<finalName>sm-bank-gateway</finalName>
+		<finalName>quali-approche</finalName>
 	</build>
 
 </project>

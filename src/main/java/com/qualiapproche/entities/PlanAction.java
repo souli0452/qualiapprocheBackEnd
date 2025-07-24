@@ -43,12 +43,17 @@ public class PlanAction extends AuditEntity{
 
 package com.qualiapproche.entities;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.qualiapproche.utils.StatutEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+
+import java.time.LocalDate;
+import java.util.UUID;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
@@ -65,12 +70,17 @@ public class PlanAction extends AuditEntity {
     private String numeroOdre;
     private String causeIdentifiees;
     private String solutionRetenues;
-    private String responsable;
-    private String mail;
+    private String responsableNomComplet;
+    private String responsableId;
+    private String responsableEmail;
     private String numeroTelephone;
-    private String dateEcheance;
-
-    @ManyToOne
-    @JoinColumn(name = "non_conformite_id")
-    private NonConformite nonConformite;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+    private LocalDate dateEcheance;
+    @Enumerated(EnumType.STRING)
+    private StatutEnum status;
+    private String numeroNc;
+    private String procEmetteur;
+    private UUID nonConformeId;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+    private LocalDate dateTraitement;
 }

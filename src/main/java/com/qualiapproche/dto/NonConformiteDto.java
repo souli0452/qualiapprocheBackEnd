@@ -30,11 +30,16 @@ public class NonConformiteDto extends AuditEntityDto {
     private String numeroFdac;
     private String pertinanceRsSuivi;
     private String origineService;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
+    private String origineServiceLibelleCourt;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
+    private LocalDateTime publicationDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
+    private LocalDateTime archivageDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
     private LocalDateTime dateSuivi;
     private String origineId;
     private String fonctionEmetteur;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy HH:mm")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
     private LocalDateTime dateVisaEmetteur;
     private String justification;
     private String delaisMiseOeuvre;
@@ -59,6 +64,7 @@ public class NonConformiteDto extends AuditEntityDto {
     @Enumerated(EnumType.STRING)
     private TypeDemande typeDemande ;
     private String actionLibelle;
+    private  String actionDsc;
     private  String typeNonConformiteLibelle;
     private  String niveauNonConformiteLibelle;
     private  String efficaciteLibelle;
@@ -77,4 +83,7 @@ public class NonConformiteDto extends AuditEntityDto {
     private  String userImputFullName;
     private  String userImputeEmail;
     private Set<String> participants=new HashSet<>();
+    private  String originNonConformiteId;
+    private  String originNonConformiteLibelle;
+    private  String observationRejet;
 }
