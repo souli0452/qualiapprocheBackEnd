@@ -26,7 +26,7 @@ public class ConfigGlobalController {
     }
 
     @PutMapping(UPDATE_CG)
-    public ResponseEntity<ConfigGlobal> update(@RequestBody ConfigGlobal configGlobal,UUID id) {
+    public ResponseEntity<ConfigGlobal> update(@RequestBody ConfigGlobal configGlobal,@PathVariable String id) {
         ConfigGlobal c = configGlobalService.updateConfigGlobal(configGlobal,id);
         return new ResponseEntity<>(c, HttpStatus.OK);
     }

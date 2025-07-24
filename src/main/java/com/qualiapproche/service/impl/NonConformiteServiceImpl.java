@@ -192,6 +192,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"validationRq",configGlobal.get().getNomCompletRq(),dto.getNumeroReference(),"");
 
             }
+            if (dto.getEtatTraitement()==Etat.SUIVI_RQ){
+                String subject = "Suivi d'une non conformité ";
+                String link = "http://localhost:4200/page/suivi_rq";
+                sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"validationRq",configGlobal.get().getNomCompletRq(),dto.getNumeroReference(),"");
+
+            }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
             if (dto.getEtatTraitement()==Etat.VALIDATION){
                 String subject = "Validation de la non-conformité N°"+dto.getNumeroReference();

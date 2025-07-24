@@ -36,9 +36,8 @@ public class ConfigGlobalServiceImpl implements configGlobalService {
     }
 
     @Override
-    public ConfigGlobal updateConfigGlobal(ConfigGlobal c,UUID id) {
-        log.info("hh",id);
-        ConfigGlobal configGlobal = configGlobalRepository.findById(id).get();
+    public ConfigGlobal updateConfigGlobal(ConfigGlobal c,String id) {
+        ConfigGlobal configGlobal = configGlobalRepository.getReferenceById(UUID.fromString(id));
         configGlobal.setEmailRq(c.getEmailRq());
         configGlobal.setRappelEcheance(c.getRappelEcheance());
         configGlobal.setNomCompletRq(c.getNomCompletRq());
