@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.qualiapproche.entities.Structure;
+import com.qualiapproche.service.FichierService;
 import com.qualiapproche.service.SendMailService;
 import com.qualiapproche.utils.StatutEnum;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,7 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PlanActionRepository planActionRepository;
     private final NonConformiteRepository nonConformiteRepository;
     private  final SendMailService sendMailService;
+    private  final FichierServiceImpl fichierServiceImpl;
 
     @Override
     public void delete(UUID id) {
@@ -63,6 +65,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         return planActionMapper.toDtos(planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable,statut)).stream()
                 .peek(planActionDto -> {
 
+
                 }).toList();
     }
 
@@ -84,13 +87,18 @@ public class PlanActionServiceImpl implements PlanActionService {
     }
 
     @Override
-    public PlanActionDto changeStatus(PlanActionDto planActionDto) {
+    public PlanActionDto changeStatus(PlanActionDto planActionDto) throws IOException {
        PlanAction planAction=planActionRepository.getReferenceById(planActionDto.getId());
        planAction.setStatus(planActionDto.getStatus());
+       planAction.setObservation(planActionDto.getObservation());
        planAction.setCauseIdentifiees(planActionDto.getCauseIdentifiees());
        planAction.setSolutionRetenues(planActionDto.getSolutionRetenues());
        if (planActionDto.getStatus()==StatutEnum.TRAITER){
            planAction.setDateTraitement(LocalDate.now());
+       }
+       if (planActionDto.getFichiers() != null) {
+           planAction.setFichiers(fichierServiceImpl.convertBase64(planActionDto.getFichiers()));
+
        }
        return planActionMapper.toDto(planActionRepository.save(planAction));
     }

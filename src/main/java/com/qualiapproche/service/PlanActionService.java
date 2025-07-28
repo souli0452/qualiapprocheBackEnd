@@ -14,7 +14,7 @@ public interface PlanActionService {
     List<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut);
     PlanActionDto getPlanActionDtoById(UUID id);
     List<PlanActionDto> planActionByResponsableAll(String responsable);
-    PlanActionDto changeStatus(PlanActionDto dto);
+    PlanActionDto changeStatus(PlanActionDto dto) throws IOException ;
     void delete(UUID id);
 
 }

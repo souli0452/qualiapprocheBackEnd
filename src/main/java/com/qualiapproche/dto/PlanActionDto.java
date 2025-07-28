@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import lombok.experimental.SuperBuilder;
@@ -39,4 +40,6 @@ public class PlanActionDto extends AuditEntityDto {
     private LocalDate dateTraitement;
     private String procEmetteur;
     private  NonConformiteDto nonConformite;
+    private List<Fichier> fichiers;
+    private  String observation;
 }

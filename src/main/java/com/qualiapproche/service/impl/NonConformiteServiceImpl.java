@@ -165,6 +165,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
             existingNonConformite.setUserImputId(dto.getUserImputId());
+            existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
+            existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
             existingNonConformite.setStatus(dto.getStatus());
             existingNonConformite.setPertinanceRsSuivi(dto.getPertinanceRsSuivi());
@@ -225,6 +227,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                             planAction.setStatus(planActionDto.getStatus());
                             planAction.setNumeroOdre(planActionDto.getNumeroOdre());
                             planAction.setNumeroNc(dto.getNumeroReference());
+                            planAction.setSolutionRetenues(planActionDto.getSolutionRetenues());
+                            planAction.setCauseIdentifiees(planActionDto.getCauseIdentifiees());
                             planAction.setDateEcheance(planActionDto.getDateEcheance());
                             planAction.setDateEcheance(planActionDto.getDateEcheance());
                             planAction.setProcEmetteur(dto.getStructureSoumissionLibelle());
@@ -380,9 +384,17 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         log.debug("Request to get all Actualities");
 
         List<NonConformite> nonConformites;
+        List<NonConformite> nonConformitesOthers;
 
         if (Objects.nonNull(status)) {
-            nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,structureSoumissionId);
+            if (status == Status.PUBLISHED) {
+                nonConformitesOthers = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(Status.IN_PROGRESS,structureSoumissionId);
+                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,structureSoumissionId);
+                nonConformites.addAll(nonConformitesOthers);
+            }else {
+                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,structureSoumissionId);
+            }
+
         } else {
             nonConformites = nonConformiteRepository.findAll();
         }

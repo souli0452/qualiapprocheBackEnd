@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @SuperBuilder
 @Transactional
 public class NonConformiteDto extends AuditEntityDto {
-
     private String numeroReference;
     private String nomProcessus;
     private String numeroFdac;

@@ -53,6 +53,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
@@ -68,6 +69,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 public class PlanAction extends AuditEntity {
 
     private String numeroOdre;
+    private  String observation;
     private String causeIdentifiees;
     private String solutionRetenues;
     private String responsableNomComplet;
@@ -76,6 +78,8 @@ public class PlanAction extends AuditEntity {
     private String numeroTelephone;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private LocalDate dateEcheance;
+    @OneToMany
+    private List<Fichier> fichiers;
     @Enumerated(EnumType.STRING)
     private StatutEnum status;
     private String numeroNc;
