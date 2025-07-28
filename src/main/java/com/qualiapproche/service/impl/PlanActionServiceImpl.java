@@ -111,7 +111,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
         for (PlanAction action : planActions) {
             String subject = "Traitement du plan d'action N° ordre "+action.getNumeroOdre();
-            String link = "http://localhost:4200/traitement-action/non-traiter";
+            String link = "https://sgq-quali.horeb.tech/traitement-action/non-traiter";
 
             LocalDate echeance = action.getDateEcheance();
             long joursRestants = ChronoUnit.DAYS.between(today, echeance);
