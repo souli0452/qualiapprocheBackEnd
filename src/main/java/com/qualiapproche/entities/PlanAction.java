@@ -87,4 +87,10 @@ public class PlanAction extends AuditEntity {
     private UUID nonConformeId;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private LocalDate dateTraitement;
+    private  String observationRejet;
+    private  String actionCorrective;
+    @ManyToOne
+    private Fichier docRejet;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+    private LocalDate dateRejet;
 }

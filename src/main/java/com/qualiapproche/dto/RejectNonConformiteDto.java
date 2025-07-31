@@ -1,7 +1,10 @@
 package com.qualiapproche.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.qualiapproche.entities.Fichier;
 import com.qualiapproche.enumeration.Etat;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MappedSuperclass;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -24,4 +27,5 @@ public class RejectNonConformiteDto {
     private UUID id;
     private String rejectReason;
     private Etat etapeTraitement;
+    FichierDto docRejet;
 }

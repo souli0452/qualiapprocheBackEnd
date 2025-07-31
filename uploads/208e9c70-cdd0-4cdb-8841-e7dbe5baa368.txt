@@ -1,0 +1,137 @@
+CREATE OR REPLACE FUNCTION encrypt_identity_data()
+RETURNS trigger
+AS $$
+BEGIN
+    NEW.card_expiry_date = encrypt_data(NEW.card_expiry_date::TEXT);
+    NEW.card_issue_date = encrypt_data(NEW.card_issue_date::TEXT);
+    NEW.civil_status_document_number = encrypt_data(NEW.civil_status_document_number::TEXT);
+    NEW.civil_status_document_type = encrypt_data(NEW.civil_status_document_type::TEXT);
+    NEW.country_of_birth = encrypt_data(NEW.country_of_birth::TEXT);
+    NEW.date_of_birth = encrypt_data(NEW.date_of_birth::TEXT);
+    NEW.date_of_establishment_document_issue = encrypt_data(NEW.date_of_establishment_document_issue::TEXT);
+    NEW.department_of_birth = encrypt_data(NEW.department_of_birth::TEXT);
+    NEW.department_of_residence = encrypt_data(NEW.department_of_residence::TEXT);
+    NEW.foreign_city_of_birth = encrypt_data(NEW.foreign_city_of_birth::TEXT);
+    NEW.emergency_contact_person = encrypt_data(NEW.emergency_contact_person::TEXT);
+    NEW.emergency_contact_person_information = encrypt_data(NEW.emergency_contact_person_information::TEXT);
+    NEW.father_name = encrypt_data(NEW.father_name::TEXT);
+    NEW.first_name = encrypt_data(NEW.first_name::TEXT);
+    NEW.mother_name = encrypt_data(NEW.mother_name::TEXT);
+    NEW.name = encrypt_data(NEW.name::TEXT);
+    NEW.nickname = encrypt_data(NEW.nickname::TEXT);
+    NEW.particular_signs = encrypt_data(NEW.particular_signs::TEXT);
+    NEW.permanent_address = encrypt_data(NEW.permanent_address::TEXT);
+    NEW.place_of_card_issue = encrypt_data(NEW.place_of_card_issue::TEXT);
+    NEW.place_of_civil_status_document_issue = encrypt_data(NEW.place_of_civil_status_document_issue::TEXT);
+    NEW.profession = encrypt_data(NEW.profession::TEXT);
+    NEW.province_of_birth = encrypt_data(NEW.province_of_birth::TEXT);
+    NEW.province_of_residence = encrypt_data(NEW.province_of_residence::TEXT);
+    NEW.region_of_birth = encrypt_data(NEW.region_of_birth::TEXT);
+    NEW.region_of_residence = encrypt_data(NEW.region_of_residence::TEXT);
+    NEW.sector_of_residence = encrypt_data(NEW.sector_of_residence::TEXT);
+    NEW.sex = encrypt_data(NEW.sex::TEXT);
+    NEW.height = encrypt_data(NEW.height::TEXT);
+    NEW.unique_identification_number = encrypt_data(NEW.unique_identification_number::TEXT);
+    NEW.village_or_commune_of_birth = encrypt_data(NEW.village_or_commune_of_birth::TEXT);
+    NEW.village_or_commune_of_residence = encrypt_data(NEW.village_or_commune_of_residence::TEXT);
+    NEW.photo = encrypt_data(NEW.photo::TEXT);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+/* decrypt methode */
+
+CREATE OR REPLACE FUNCTION get_identity_by_card_number(
+    card_number VARCHAR,
+    p_decryption_password TEXT
+) 
+RETURNS TABLE (
+    card_expiry_date TEXT,
+    card_issue_date TEXT,
+    card_number VARCHAR,
+    card_status VARCHAR,
+    civil_status_document_number TEXT,
+    civil_status_document_type TEXT,
+    country_of_birth TEXT,
+    date_of_birth TEXT,
+    date_of_establishment_document_issue TEXT,
+    department_of_birth TEXT,
+    department_of_residence TEXT,
+    emergency_contact_person TEXT,
+    emergency_contact_person_information TEXT,
+    father_name TEXT,
+    first_name TEXT,
+    foreign_city_of_birth TEXT,
+    height TEXT,
+    mother_name TEXT,
+    name TEXT,
+    nickname TEXT,
+    particular_signs TEXT,
+    permanent_address TEXT,
+    place_of_card_issue TEXT,
+    place_of_civil_status_document_issue TEXT,
+    profession TEXT,
+    province_of_birth TEXT,
+    province_of_residence TEXT,
+    region_of_birth TEXT,
+    region_of_residence TEXT,
+    sector_of_residence TEXT,
+    sex TEXT,
+    unique_identification_number_hash TEXT,
+    unique_identification_number TEXT,
+    village_or_commune_of_birth TEXT,
+    village_or_commune_of_residence TEXT,
+    photo BYTEA
+) AS $$
+DECLARE
+    v_private_key BYTEA;
+BEGIN            
+    -- 1. Récupération de la clé privée
+    SELECT dearmor(convert_from(private_key, 'UTF8')) INTO v_private_key
+    FROM pgp_keys 
+    WHERE key_name = 'ONI_BD_ACCES';
+    
+    -- 2. Recherche et décryptage
+    RETURN QUERY
+    SELECT 
+        convert_from(pgp_pub_decrypt(i.card_expiry_date, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.card_issue_date, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        i.card_number, -- Non chiffré (VARCHAR)
+        i.card_status, -- Non chiffré (VARCHAR)
+        convert_from(pgp_pub_decrypt(i.civil_status_document_number, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.civil_status_document_type, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.country_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.date_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.date_of_establishment_document_issue, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.department_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.department_of_residence, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.emergency_contact_person, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.emergency_contact_person_information, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.father_name, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.first_name, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.foreign_city_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.height, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.mother_name, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.name, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.nickname, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.particular_signs, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.permanent_address, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.place_of_card_issue, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.place_of_civil_status_document_issue, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.profession, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.province_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.province_of_residence, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.region_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.region_of_residence, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.sector_of_residence, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.sex, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.unique_identification_number_hash, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.unique_identification_number, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.village_or_commune_of_birth, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        convert_from(pgp_pub_decrypt(i.village_or_commune_of_residence, v_private_key, p_decryption_password)::bytea, 'UTF8'),
+        pgp_pub_decrypt(i.photo, v_private_key, p_decryption_password) -- Photo en BYTEA
+    FROM identite i
+    WHERE i.card_number = card_number; -- Recherche par card_number (non chiffré)
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

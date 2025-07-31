@@ -2,9 +2,11 @@ package com.qualiapproche.service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.qualiapproche.dto.NcStats;
+import com.qualiapproche.dto.NonConformiteByStructDto;
 import com.qualiapproche.dto.NonConformiteDto;
 import com.qualiapproche.dto.RejectNonConformiteDto;
 import com.qualiapproche.enumeration.Etat;
@@ -30,5 +32,12 @@ public interface NonConformiteService {
     NonConformiteDto getNonConformiteById(UUID id);
     List<NonConformiteDto> findAll( Status status,String structureSoumissionId);
     void delete(UUID id);
-    NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) ;
+    NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) throws IOException;
+    Map<String, Long>  getNonConformiteStatsByStructure(int anne);
+    Map<String, Map<String, Long>> getStatsParAnnee(int annee);
+    Map<String, Map<String, Map<String, Long>>> getStatsDetailleesParAnnee(int annee);
+    NonConformiteDto getByNumeroRef(String numeroRef);
+    Map<String, Map<String, Long>>getStatsMensuellesParService(int annee, String origineServiceId);
+    Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId);
+
 }

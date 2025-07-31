@@ -2,15 +2,14 @@ package com.qualiapproche.controller;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-import com.qualiapproche.dto.FichierDto;
 import com.qualiapproche.dto.NcStats;
 import com.qualiapproche.dto.RejectNonConformiteDto;
 import com.qualiapproche.enumeration.Etat;
 import com.qualiapproche.enumeration.Status;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -84,7 +83,7 @@ public class NonConformiteController {
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
     @PutMapping(REJECT_NON_CONFORMITE)
-    public ResponseEntity<NonConformiteDto> rejectNf(@RequestBody RejectNonConformiteDto rejectNonConformiteDto) {
+    public ResponseEntity<NonConformiteDto> rejectNf(@RequestBody RejectNonConformiteDto rejectNonConformiteDto) throws IOException {
         NonConformiteDto nonConformite = nonConformiteService.rejectNonConformite(rejectNonConformiteDto);
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
@@ -153,5 +152,29 @@ public class NonConformiteController {
         nonConformiteService.changeManyStatus(actualityDtos, status);
         return ResponseEntity.ok().build();
     }
+    @GetMapping(path = "/stats/nf-struct/{annee}")
+    public ResponseEntity<Map<String, Long>> StatStruct(@PathVariable int annee) {
 
+        return ResponseEntity.ok(nonConformiteService.getNonConformiteStatsByStructure(annee));
+    }
+    @GetMapping(path = "/stats/nf/{annee}")
+    public ResponseEntity <Map<String, Map<String, Long>>> StatMensuel(@PathVariable int annee) {
+        return ResponseEntity.ok(nonConformiteService.getStatsParAnnee(annee));
+    }
+    @GetMapping(path = "/stats/nf/status/{annee}")
+    public ResponseEntity < Map<String, Map<String, Map<String, Long>>>> StatMensuelWithStatus(@PathVariable int annee) {
+        return ResponseEntity.ok(nonConformiteService.getStatsDetailleesParAnnee(annee));
+    }
+    @GetMapping(path = "/stats/nf/status/{annee}/service/{id}")
+    public ResponseEntity < Map<String, Map<String, Map<String, Long>>>> StatMensuelWithServiceStatus(@PathVariable int annee,@PathVariable String id) {
+        return ResponseEntity.ok(nonConformiteService.getStatsDetailleesServiceParAnnee(annee,id));
+    }
+    @GetMapping(path = "/stats/nf/status/{annee}/{id}")
+    public ResponseEntity < Map<String, Map<String, Long>>> statService(@PathVariable int annee,@PathVariable String id) {
+        return ResponseEntity.ok(nonConformiteService.getStatsMensuellesParService(annee,id));
+    }
+    @GetMapping("get/numero/{numero}")
+    public ResponseEntity<NonConformiteDto> getNonConformiteByNumeroRef( @PathVariable String numero)  {
+        return ResponseEntity.ok(nonConformiteService.getByNumeroRef( numero));
+    }
 }

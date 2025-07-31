@@ -83,6 +83,8 @@ public class NonConformite extends AuditEntity {
     private String pertinanceRsSuivi;
     private  String actionDsc;
     private  String observationRejet;
+    @ManyToOne
+    private Fichier docRejet;
     @OneToMany
     private List<Fichier> fichiers;
     //@OneToMany(mappedBy = "nonConformite", cascade = CascadeType.ALL, orphanRemoval = true)

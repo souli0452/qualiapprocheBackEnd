@@ -217,6 +217,8 @@ public class FichierServiceImpl implements FichierService {
                 String url = saveBase64FichierAndReturnUrl(f.getFichierBase64(), String.valueOf(fichierRootPath), f.getTypeFichier().replace(" ", ""));
                 Fichier fichier = new Fichier();
                 fichier.setUrlFichier(url);
+                fichier.setNomFichier(f.getNomFichier());
+                fichier.setFichierBase64(f.getFichierBase64());
                 fichiersUrls.add(fichierRepository.save(fichier));
             } catch (IOException e) {
                 throw new RuntimeException(e);

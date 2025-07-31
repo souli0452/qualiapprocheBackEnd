@@ -51,7 +51,11 @@ public class KcUserService {
     private final KcRoleService kcRoleService;
     @Value("${frontend.url}")
     private String frontendUrl;
-
+    private static String getAttributeValue(Map<String, List<String>> attributes, String key) {
+        return (attributes != null && attributes.containsKey(key) && attributes.get(key) != null && !attributes.get(key).isEmpty())
+                ? attributes.get(key).get(0)
+                : null;
+    }
     public ResponseEntity<Object> login(KcLoginRequestDto loginRequest, HttpServletResponse response) {
         log.info("Start to verify user conditions before login");
 
@@ -95,11 +99,14 @@ public class KcUserService {
 
     private static Map<String, Object> getResponseData(UserRepresentation user, KcTokenDto kcTokenDto, List<KcRoleDto> userRoles) {
         Map<String, String> userData = new HashMap<>();
+        Map<String, List<String>> attributes = user.getAttributes();
+
         userData.put("userId", user.getId());
         userData.put("email", user.getEmail());
         userData.put("username", user.getUsername());
         userData.put("firstName", user.getFirstName());
         userData.put("lastName", user.getLastName());
+
 
         List<String> roles = userRoles.stream()
                 .map(KcRoleDto::getName)
@@ -114,6 +121,8 @@ public class KcUserService {
         responseData.put("token_type", kcTokenDto.getTokenType());
         responseData.put("scope", kcTokenDto.getScope());
         responseData.put("user", userData);
+        responseData.put("fonction",getAttributeValue(attributes, "fonction"));
+
         return responseData;
     }
 
@@ -212,11 +221,7 @@ public class KcUserService {
         }
         return kcUserDto;
     }
-    private String getAttributeValue(Map<String, List<String>> attributes, String key) {
-        return (attributes != null && attributes.containsKey(key) && attributes.get(key) != null && !attributes.get(key).isEmpty())
-                ? attributes.get(key).get(0)
-                : null;
-    }
+
     public List<KcUserDto> getAllUsersByStructure(String structureId) {
         List<UserRepresentation> users;
         if (structureId != null) {

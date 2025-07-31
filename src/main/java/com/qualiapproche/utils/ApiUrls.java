@@ -202,6 +202,7 @@ public class ApiUrls {
     public static final String PLAN_ACTION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/plan-action";
     public static final String CREATE_PLAN_ACTION = "/create";
     public static final String UPDATE_PLAN_ACTION = "/update";
+    public static final String REJET_PLAN_ACTION = "/rejet";
     public static final String GET_PLAN_ACTION_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_PLAN_ACTION = "/all";
     public static final String GET_ALL_PLAN_ACTION_RESPONSABLE= "/all/by-email/{email}/{status}";

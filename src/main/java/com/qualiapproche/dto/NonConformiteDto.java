@@ -85,4 +85,5 @@ public class NonConformiteDto extends AuditEntityDto {
     private  String originNonConformiteId;
     private  String originNonConformiteLibelle;
     private  String observationRejet;
+    private Fichier docRejet;
 }

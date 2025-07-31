@@ -34,7 +34,6 @@ public class PlanActionDto extends AuditEntityDto {
     private String numeroTelephone;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private LocalDate dateEcheance;
-    private UUID nonConformiteID;
     private String numeroNc;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private LocalDate dateTraitement;
@@ -42,4 +41,10 @@ public class PlanActionDto extends AuditEntityDto {
     private  NonConformiteDto nonConformite;
     private List<Fichier> fichiers;
     private  String observation;
+    private UUID nonConformeId;
+    private  String observationRejet;
+    private  String actionCorrective;
+    private Fichier docRejet;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+    private LocalDate dateRejet;
 }

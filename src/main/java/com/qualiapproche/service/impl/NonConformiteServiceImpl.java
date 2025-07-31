@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.qualiapproche.dto.NcStats;
+import com.qualiapproche.dto.NonConformiteByStructDto;
 import com.qualiapproche.dto.RejectNonConformiteDto;
 import com.qualiapproche.entities.*;
 import com.qualiapproche.entities.mappers.*;
@@ -39,6 +40,7 @@ import static com.qualiapproche.utils.UtilsClass.generateNumeroReferences;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional
 public class NonConformiteServiceImpl implements NonConformiteService {
 
     private final NonConformiteRepository nonConformiteRepository;
@@ -53,6 +55,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final SendMailService sendMailService;
     private  final  StructureRepository structureRepository;
     private  final ConfigGlobalRepository configGlobalRepository;
+    private  final  FichierMapper fichierMapper;
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
      */
@@ -134,6 +137,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                         PlanAction planAction = planActionMapper.toEntity(planActionDto);
                         planAction.setDateEcheance(planActionDto.getDateEcheance());
                         planAction.setStatus(planActionDto.getStatus());
+                        planAction.setActionCorrective(planActionDto.getActionCorrective());
                         planAction.setNumeroOdre(planActionDto.getNumeroOdre());
                         planAction.setNonConformeId(dto.getId()); // Associer la NonConformité persistée
                         return planAction;
@@ -205,10 +209,11 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 String subject = "Validation de la non-conformité N°"+dto.getNumeroReference();
                 String link = "https://sgq-quali.horeb.tech/page/validation";
                 sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationNonConformite",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getObservationRejet());
-
-                dto.getParticipants().forEach(participant -> {
-                existingNonConformite.getParticipants().getFullNames().add(participant);
-            });
+                if (!dto.getParticipants().isEmpty()){
+                    dto.getParticipants().forEach(participant -> {
+                        existingNonConformite.getParticipants().getFullNames().add(participant);
+                    });
+                }
             }
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
             if (dto.getPlanActions() != null && !dto.getPlanActions().isEmpty()) {
@@ -223,7 +228,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                         .map(planActionDto -> {
 
                             PlanAction planAction = planActionMapper.toEntity(planActionDto);
-                            planAction.setNonConformeId(dto.getId());
+                            planAction.setNonConformeId(existingNonConformite.getId());
                             planAction.setStatus(planActionDto.getStatus());
                             planAction.setNumeroOdre(planActionDto.getNumeroOdre());
                             planAction.setNumeroNc(dto.getNumeroReference());
@@ -234,7 +239,10 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                             planAction.setProcEmetteur(dto.getStructureSoumissionLibelle());
                             String subject = "Taitement d'une plan d'action ";
                             String link = "https://sgq-quali.horeb.tech/traitement-action/non-traiter";
-                            sendMailService.sendMailToUserAfterDemandImputed(planActionDto.getResponsableEmail(), subject,link,"emailPlanAction",planActionDto.getResponsableNomComplet(),dto.getNumeroReference(),"");
+                            if (dto.getEtatTraitement()==Etat.TRAITEMENT){
+                                sendMailService.sendMailToUserAfterDemandImputed(planActionDto.getResponsableEmail(), subject,link,"emailPlanAction",planActionDto.getResponsableNomComplet(),dto.getNumeroReference(),"");
+                            }
+
                             return planAction;
                         })
                         .forEach(existingPlanActions::add);
@@ -258,9 +266,13 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> allNonConformites() {
-        return  nonConformiteMapper.toDtos(nonConformiteRepository.findAll()) ;
-    }
+        List<NonConformite> allNonConformites = nonConformiteRepository.findAll();
+        List<NonConformite> filteredNonConformites = allNonConformites.stream()
+                .filter(nc -> nc.getStatus() !=Status.DRAFT)
+                .collect(Collectors.toList());
 
+        return nonConformiteMapper.toDtos(filteredNonConformites);
+    }
     @Override
     public List<NonConformiteDto> findImupted(String userId,Etat etat) {
         return  nonConformiteMapper.toDtos(nonConformiteRepository.findByUserImputIdAndEtatTraitement(userId,etat)) ;
@@ -300,11 +312,18 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     }
 
     @Override
-    public NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) {
+    public NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) throws IOException {
         NonConformite nonConformite = nonConformiteRepository.getReferenceById(rejectNonConformiteDto.getId());
         nonConformite.setEtatTraitement(rejectNonConformiteDto.getEtapeTraitement());
         nonConformite.setObservationRejet(rejectNonConformiteDto.getRejectReason());
         nonConformite.setStatus(Status.REJECTED);
+        List<Fichier> fichiers=new ArrayList<>();
+        if (rejectNonConformiteDto.getDocRejet() != null) {
+            Fichier fichier=fichierMapper.toEntity(rejectNonConformiteDto.getDocRejet());
+               fichiers.add(fichier);
+            nonConformite.setDocRejet(fichierServiceImpl.convertBase64(fichiers).stream().findFirst().get());
+
+        }
         String subject = "Taitement d'une non conformité N°" + nonConformite.getNumeroReference();
 
         Optional<ConfigGlobal> configGlobal=configGlobalRepository.findAll().stream().findFirst();
@@ -419,5 +438,210 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         String numeroFormate = String.format("%05d", nouveauNumero);
         return String.format("%s-%s-%d-%s", prefix, origineService.toUpperCase(), annee, numeroFormate);
     }
+    @Override
+    public Map<String, Long> getNonConformiteStatsByStructure(int annee) {
+        LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
+        LocalDateTime finAnnee = LocalDateTime.of(annee, 12, 31, 23, 59, 59, 999999999);
 
+        // 2. Appel du repository avec les dates précises
+        return nonConformiteRepository
+                .getNonConformiteStatsByStructureAndPeriod(debutAnnee, finAnnee)
+                .stream()
+                .collect(Collectors.toMap(
+                        NonConformiteByStructDto::getOrigineServiceLibelleCourt,
+                        NonConformiteByStructDto::getCount
+                ));
+    }
+    @Override
+    public Map<String, Map<String, Long>> getStatsParAnnee(int annee) {
+        Map<String, Long> stats = new LinkedHashMap<>();
+
+        // Initialiser tous les mois à 0
+        List<String> mois = Arrays.asList(
+                "janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+        );
+        mois.forEach(m -> stats.put(m, 0L));
+
+        // Remplir avec les données de la base
+        nonConformiteRepository.countByMonth(annee).forEach(row -> {
+            int moisIndex = ((Number)row[0]).intValue() - 1;
+            long count = ((Number)row[1]).longValue();
+            stats.put(mois.get(moisIndex), count);
+        });
+
+        return Map.of(String.valueOf(annee), stats);
+    }
+    public Map<String, Map<String, Map<String, Long>>> getStatsDetailleesParAnnee(int annee) {
+        // 1. Plage temporelle
+        LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
+        LocalDateTime finAnnee = LocalDateTime.of(annee, 12, 31, 23, 59, 59, 999_999_999);
+
+        // 2. Debug: Vérifier les données existantes
+        log.debug("Vérification des statuts en base:");
+        nonConformiteRepository.countStatusForDebug(debutAnnee, finAnnee)
+                .forEach(row -> log.debug("Statut: {}, Count: {}", row[0], row[1]));
+
+        // 3. Statuts à inclure (convertir les enums en String)
+        List<String> statutsFiltres = Arrays.stream(Status.values())
+                .filter(s -> Set.of(
+                        Status.APPROVED,
+                        Status.REJECTED,
+                        Status.IN_PROGRESS
+                ).contains(s))
+                .map(Enum::name)
+                .collect(Collectors.toList());
+
+        // 4. Initialisation de la structure de réponse
+        Map<String, Map<String, Long>> statsMensuelles = new LinkedHashMap<>();
+        List<String> nomsMois = List.of("janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre");
+
+        nomsMois.forEach(mois -> {
+            Map<String, Long> stats = new LinkedHashMap<>();
+            statutsFiltres.forEach(statut -> stats.put(statut, 0L));
+            statsMensuelles.put(mois, stats);
+        });
+
+        // 5. Récupération des données
+        List<Object[]> resultats = nonConformiteRepository.countByMonthAndStatus(
+                debutAnnee,
+                finAnnee,
+                statutsFiltres
+        );
+
+        log.debug("Résultats de la requête:");
+        resultats.forEach(row -> log.debug("Mois: {}, Statut: {}, Count: {}", row[0], row[1], row[2]));
+
+        // 6. Traitement des résultats
+        resultats.forEach(row -> {
+            try {
+                int moisIndex = ((Number) row[0]).intValue() - 1;
+                String statut = ((String) row[1]).toUpperCase();
+                long count = ((Number) row[2]).longValue();
+
+                if (moisIndex >= 0 && moisIndex < nomsMois.size()) {
+                    String mois = nomsMois.get(moisIndex);
+                    statsMensuelles.get(mois).put(statut, count);
+                }
+            } catch (Exception e) {
+                log.error("Erreur traitement ligne: {}", Arrays.toString(row), e);
+            }
+        });
+
+        return Map.of(String.valueOf(annee), statsMensuelles);
+    }
+    @Override
+    public NonConformiteDto getByNumeroRef(String numeroRef) {
+        return nonConformiteMapper.toDto(nonConformiteRepository.getNonConformiteByNumeroReference(numeroRef));
+    }
+
+    private static final List<String> STATUTS = Arrays.asList(
+            "APPROVED", "REJECTED", "IN_PROGRESS"
+    );
+
+    private static final List<String> MOIS = Arrays.asList(
+            "janvier", "février", "mars", "avril", "mai", "juin",
+            "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+    );
+    @Override
+    public Map<String, Map<String, Long>> getStatsMensuellesParService(int annee, String origineServiceId) {
+        // 1. Définir la plage temporelle exacte pour l'année
+        LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
+        LocalDateTime finAnnee = LocalDateTime.of(annee, 12, 31, 23, 59, 59, 999_999_999);
+
+        // 2. Récupérer les données
+        List<Object[]> resultats = nonConformiteRepository.countByMonthAndService(
+                debutAnnee,
+                finAnnee,
+                origineServiceId
+        );
+
+        // 3. Initialiser la structure de réponse
+        Map<String, Long> statsParMois = new LinkedHashMap<>();
+        List<String> nomsMois = List.of(
+                "janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+        );
+
+        // Initialiser tous les mois à 0
+        nomsMois.forEach(mois -> statsParMois.put(mois, 0L));
+
+        // 4. Peupler les résultats
+        resultats.forEach(row -> {
+            try {
+                int moisIndex = ((Number) row[0]).intValue() - 1; // Conversion 1-12 → 0-11
+                long count = ((Number) row[1]).longValue();
+
+                if (moisIndex >= 0 && moisIndex < nomsMois.size()) {
+                    statsParMois.put(nomsMois.get(moisIndex), count);
+                }
+            } catch (Exception e) {
+                log.error("Erreur traitement ligne statistiques: {}", Arrays.toString(row), e);
+            }
+        });
+
+        // 5. Structurer la réponse finale
+        return Collections.singletonMap(String.valueOf(annee), statsParMois);
+    }
+    @Override
+    public Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId) {
+        // 1. Plage temporelle
+        LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
+        LocalDateTime finAnnee = LocalDateTime.of(annee, 12, 31, 23, 59, 59, 999_999_999);
+
+        // 2. Debug: Vérifier les données existantes
+        log.debug("Vérification des statuts en base:");
+        nonConformiteRepository.countStatusForDebug(debutAnnee, finAnnee)
+                .forEach(row -> log.debug("Statut: {}, Count: {}", row[0], row[1]));
+
+        // 3. Statuts à inclure (convertir les enums en String)
+        List<String> statutsFiltres = Arrays.stream(Status.values())
+                .filter(s -> Set.of(
+                        Status.APPROVED,
+                        Status.REJECTED,
+                        Status.IN_PROGRESS
+                ).contains(s))
+                .map(Enum::name)
+                .collect(Collectors.toList());
+
+        // 4. Initialisation de la structure de réponse
+        Map<String, Map<String, Long>> statsMensuelles = new LinkedHashMap<>();
+        List<String> nomsMois = List.of("janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre");
+
+        nomsMois.forEach(mois -> {
+            Map<String, Long> stats = new LinkedHashMap<>();
+            statutsFiltres.forEach(statut -> stats.put(statut, 0L));
+            statsMensuelles.put(mois, stats);
+        });
+
+        // 5. Récupération des données
+        List<Object[]> resultats = nonConformiteRepository.countByMonthAndStatus(
+                debutAnnee,
+                finAnnee,
+                statutsFiltres
+        );
+
+        log.debug("Résultats de la requête:");
+        resultats.forEach(row -> log.debug("Mois: {}, Statut: {}, Count: {}", row[0], row[1], row[2]));
+
+        // 6. Traitement des résultats
+        resultats.forEach(row -> {
+            try {
+                int moisIndex = ((Number) row[0]).intValue() - 1;
+                String statut = ((String) row[1]).toUpperCase();
+                long count = ((Number) row[2]).longValue();
+
+                if (moisIndex >= 0 && moisIndex < nomsMois.size()) {
+                    String mois = nomsMois.get(moisIndex);
+                    statsMensuelles.get(mois).put(statut, count);
+                }
+            } catch (Exception e) {
+                log.error("Erreur traitement ligne: {}", Arrays.toString(row), e);
+            }
+        });
+
+        return Map.of(String.valueOf(annee), statsMensuelles);
+    }
 }

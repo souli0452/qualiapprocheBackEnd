@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.qualiapproche.service.PlanActionService;
@@ -59,4 +60,14 @@ public class PlanActionController {
         List<PlanActionDto> planActionDtos  = planActionService.planActionByResponsableAll(email);
         return new ResponseEntity<>(planActionDtos, HttpStatus.OK);
     }
+    @PutMapping(REJET_PLAN_ACTION)
+    public ResponseEntity<PlanActionDto> rejet(@RequestBody PlanActionDto dto) throws IOException {
+        PlanActionDto planActionDto = planActionService.rejet(dto);
+        return new ResponseEntity<>(planActionDto, HttpStatus.OK);
+    }
+    @GetMapping(path = "/stats/status/{annee}")
+    public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> statService(@PathVariable int annee) {
+        return ResponseEntity.ok(planActionService.getFrequenceTraitementParMois(annee));
+    }
+
 }

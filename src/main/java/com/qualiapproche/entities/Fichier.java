@@ -4,10 +4,7 @@ package com.qualiapproche.entities;
 
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import jakarta.persistence.Entity;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
@@ -30,6 +27,8 @@ public class Fichier extends AuditEntity {
     private String typeFichier;
     private int versionFichier;
     private String urlFichier;
+    @Lob // Large Object
+    @Column(columnDefinition = "TEXT")
     private String fichierBase64;
     @OneToMany
     private List<Archivage> archivages;
