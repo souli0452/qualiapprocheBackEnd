@@ -27,6 +27,7 @@ public interface NonConformiteService {
     // Méthode pour récupérer les non-conformités par état
     List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat);
     List<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid);
+    List<NonConformiteDto> getNonConformitesByStructure( String uuid);
     List<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid);
     void changeManyStatus(List<NonConformiteDto> nonConformiteDtos, Status status);
     NonConformiteDto getNonConformiteById(UUID id);

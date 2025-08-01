@@ -118,7 +118,7 @@ public class PlanActionServiceImpl implements PlanActionService {
             planAction.setFichiers(fichierServiceImpl.convertBase64(planActionDto.getFichiers()));
         }
         PlanAction savedPlanAction = planActionRepository.save(planAction);
-        sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), object,linkPlan,"emailRqPlan",configGlobal.get().getNomCompletRq(),nonConformite.getNumeroReference(), planAction.getResponsableNomComplet());
+        //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), object,linkPlan,"emailRqPlan",configGlobal.get().getNomCompletRq(),nonConformite.getNumeroReference(), planAction.getResponsableNomComplet());
         sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), object,linkPlan,"emailRqPlan",structure.getAutoriteSignataire(),nonConformite.getNumeroReference(), "");
 
         List<PlanAction> allPlans = planActionRepository.findPlanActionsByNonConformeId(nonConformite.getId());
@@ -212,6 +212,7 @@ public class PlanActionServiceImpl implements PlanActionService {
             } else if (joursRestants == 0) {
                 sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject,link,"alerteLastDay",action.getResponsableNomComplet(),action.getNumeroNc(), String.valueOf(joursRestants));
             } else {
+
                 sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject,link,"alerteEpuise",action.getResponsableNomComplet(),action.getNumeroNc(), String.valueOf(joursRestants));
             }
         }

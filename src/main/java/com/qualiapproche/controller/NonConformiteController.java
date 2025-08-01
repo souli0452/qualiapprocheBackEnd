@@ -177,4 +177,9 @@ public class NonConformiteController {
     public ResponseEntity<NonConformiteDto> getNonConformiteByNumeroRef( @PathVariable String numero)  {
         return ResponseEntity.ok(nonConformiteService.getByNumeroRef( numero));
     }
+    @GetMapping("structure/{id}")
+    public ResponseEntity<List<NonConformiteDto>> getAllByStructure(@PathVariable String id) {
+        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.getNonConformitesByStructure(id);
+        return ResponseEntity.ok(nonConformiteDtos);
+    }
 }

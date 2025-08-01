@@ -11,5 +11,6 @@ public class EmailMessage {
 	private String to_address;
 	private String subject;
 	private String body;
+	private String cc_address;
 
 }
