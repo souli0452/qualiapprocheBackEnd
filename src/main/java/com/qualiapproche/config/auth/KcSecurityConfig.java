@@ -22,9 +22,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
@@ -41,6 +39,8 @@ public class KcSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
                                                    KcAuthenticationEntryPoint entryPoint,
                                                    KcAccessDenied accessDenied) throws Exception {
+        httpSecurity.csrf(csrf -> csrf.disable());
+        httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
         DelegatingJwtGrantedAuthoritiesConverter authoritiesConverter = new DelegatingJwtGrantedAuthoritiesConverter(
                 new JwtGrantedAuthoritiesConverter(),
                 new KcJwtRoleConverter(kcAuthProperties.getClientId()));
@@ -63,8 +63,6 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/webjars/**",
                             "/test/**",
-                            "/api/**",
-                            "/api/v1/**",
                             "/api/v1/quali-approche/login"
 
                     ).permitAll();
@@ -87,15 +85,17 @@ public class KcSecurityConfig {
     GrantedAuthorityDefaults grantedAuthorityDefaults() {
         return new GrantedAuthorityDefaults("");
     }
+
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("https://sgq.horeb.tech"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
-        configuration.setAllowCredentials(true);
+        configuration.setAllowedOrigins(List.of("http://localhost:4200")); // Ou * pour tout autoriser (à éviter en prod)
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true); // Autorise les cookies et headers comme Authorization
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/v1/**", configuration);
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }
