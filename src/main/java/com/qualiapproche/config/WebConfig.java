@@ -19,7 +19,7 @@ public class WebConfig {
             @Override
             public void addCorsMappings(final CorsRegistry registry) {
                 registry
-                        .addMapping("/api/**")
+                        .addMapping("/api/v1/**")
                         .allowedOrigins("*")
                         .allowedHeaders("*")
                         .allowedMethods("GET", "PUT", "POST", "PATCH", "DELETE", "OPTIONS");
