@@ -1,0 +1,23 @@
+package com.qualiapproche.service;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.qualiapproche.dto.PlanActionDto;
+import com.qualiapproche.utils.StatutEnum;
+
+public interface PlanActionService {
+    PlanActionDto createPlanActionDto(PlanActionDto dto) throws IOException;
+
+    List<PlanActionDto> allPlanActions();
+    List<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut);
+    PlanActionDto getPlanActionDtoById(UUID id);
+    List<PlanActionDto> planActionByResponsableAll(String responsable);
+    PlanActionDto changeStatus(PlanActionDto dto) throws IOException ;
+    PlanActionDto rejet(PlanActionDto dto) throws IOException ;
+    void delete(UUID id);
+    Map<String, Map<String, Map<String, Long>>> getFrequenceTraitementParMois(int annee);
+
+}
