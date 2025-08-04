@@ -29,7 +29,7 @@
 	<properties>
 		<java.version>17</java.version>
 		<spring-cloud.version>2023.0.3</spring-cloud.version>
-		<keycloak.version>26.0.0</keycloak.version>
+		<keycloak.version>23.0.7</keycloak.version>
 	</properties>
 
 	<dependencies>
@@ -180,10 +180,6 @@
 			<groupId>org.keycloak</groupId>
 			<artifactId>keycloak-admin-client</artifactId>
 			<version>${keycloak.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-webflux</artifactId>
 		</dependency>
 
 	</dependencies>
