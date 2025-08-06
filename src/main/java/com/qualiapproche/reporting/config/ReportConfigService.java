@@ -48,7 +48,7 @@ public class ReportConfigService {
      * @throws IOException
      * @throws JRException
      */
-    public ReportingResponseDto buildReport(
+    public ReportingResponseDto buildReportNf(
             final ReportingInputDto inputDto, final Object dto,
             final HashMap<String, ? super Object> parameterMap) throws IOException, JRException {
         // recuperation du fichier jasper

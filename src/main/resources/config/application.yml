@@ -22,7 +22,7 @@ spring:
       matching-strategy: ANT_PATH_MATCHER
 
   profiles:
-    active: @spring.profiles.active@
+    active: dev
 
   jpa:
     defer-datasource-initialization: true

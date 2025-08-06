@@ -259,11 +259,10 @@
 				</configuration>
 			</plugin>
 		</plugins>
-
 		<resources>
 			<resource>
 				<directory>src/main/resources</directory>
-				<filtering>true</filtering>
+				<filtering>false</filtering>
 				<excludes>
 					<exclude>**/i18n/*</exclude>
 				</excludes>
