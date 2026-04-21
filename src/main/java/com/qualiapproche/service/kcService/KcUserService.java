@@ -169,90 +169,70 @@ public class KcUserService {
                 .build());
     }
 
+    private KcUserDto enrichUserWithRoles(UserRepresentation user) {
+        KcUserDto dto = kcUserMapper.toDto(user);
+        
+        // Extraction manuelle des attributs (Hot-Reload safe sans re-génération MapStruct)
+        Map<String, List<String>> attributes = user.getAttributes();
+        if (attributes != null) {
+            if (attributes.containsKey("structure") && !attributes.get("structure").isEmpty()) {
+                dto.setStructure(attributes.get("structure").get(0));
+            }
+            if (attributes.containsKey("fonction") && !attributes.get("fonction").isEmpty()) {
+                dto.setFonction(attributes.get("fonction").get(0));
+            }
+            if (attributes.containsKey("phoneNumber") && !attributes.get("phoneNumber").isEmpty()) {
+                dto.setPhoneNumber(attributes.get("phoneNumber").get(0));
+            }
+        }
+
+        try {
+            List<KcRoleDto> userRoles = kcRoleService.getRolesForUser(user.getId());
+            if (userRoles != null) {
+                dto.setRoles(userRoles.stream().map(KcRoleDto::getName).collect(Collectors.toList()));
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch roles for user {}", user.getId());
+        }
+        return dto;
+    }
+
     public List<KcUserDto> getAllUsers() {
-        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-
-                    Map<String, List<String>> attributes = user.getAttributes();
-
-                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-
-                    return kcUserDto;
-                })
-                .collect(Collectors.toList());
+        return keycloak.realm(kcAuthProperties.getRealm()).users().list()
+                .stream().map(this::enrichUserWithRoles).collect(Collectors.toList());
     }
+
     public List<KcUserDto> getUsersByStructure(String structure) {
-
-        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
-
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-                    Map<String, List<String>> attributes = user.getAttributes();
-
-                    // Récupère les attributs
-                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-
-                    return kcUserDto;
-                })
-                // Filtre les utilisateurs dont la structure correspond
-                .filter(kcUserDto -> kcUserDto.getStructure() != null && kcUserDto.getStructure().equals(structure))
+        return keycloak.realm(kcAuthProperties.getRealm()).users().list()
+                .stream()
+                .map(this::enrichUserWithRoles)
+                .filter(dto -> dto.getStructure() != null && dto.getStructure().equals(structure))
                 .collect(Collectors.toList());
     }
+
     public KcUserDto getUserById(String userId) {
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-
+                .users().get(userId).toRepresentation();
         if (user == null) {
             throw new RuntimeException("User not found: " + userId);
         }
-        KcUserDto kcUserDto = kcUserMapper.toDto(user);
-        if (user.getAttributes() != null && user.getAttributes().containsKey("phoneNumber")) {
-            kcUserDto.setPhoneNumber(user.getAttributes().get("phoneNumber").get(0));
-        }
-        if (user.getAttributes() != null && user.getAttributes().containsKey("structure")) {
-            kcUserDto.setStructure(user.getAttributes().get("structure").get(0));
-        }
-        return kcUserDto;
+        return enrichUserWithRoles(user);
     }
 
     public List<KcUserDto> getAllUsersByStructure(String structureId) {
         List<UserRepresentation> users;
         if (structureId != null) {
             GroupRepresentation group = keycloak.realm(kcAuthProperties.getRealm())
-                    .groups()
-                    .groups()
-                    .stream()
+                    .groups().groups().stream()
                     .filter(g -> structureId.equals(g.getName()))
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Group not found: " + structureId));
-
             users = keycloak.realm(kcAuthProperties.getRealm())
-                    .groups()
-                    .group(group.getId())
-                    .members();
+                    .groups().group(group.getId()).members();
         } else {
             users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
         }
-
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-
-                    Map<String, List<String>> attributes = user.getAttributes();
-
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-
-
-                    return kcUserDto;
-                })
-                .collect(Collectors.toList());
+        return users.stream().map(this::enrichUserWithRoles).collect(Collectors.toList());
     }
 
 
@@ -268,6 +248,10 @@ public class KcUserService {
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
         if (response.getStatus() == Response.Status.CREATED.getStatusCode()) {
             String userId = mapToUser(response).getId();
+
+            if (kcUserDto.getRoles() != null && !kcUserDto.getRoles().isEmpty()) {
+                kcRoleService.assignRoles(userId, kcUserDto.getRoles());
+            }
 
             String recipientEmail = kcUserDto.getEmail();
             String firstName = kcUserDto.getFirstName();
@@ -293,6 +277,9 @@ public class KcUserService {
         }
 
         keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(kcUserMapper.toEntity(kcUserDto));
+        if (kcUserDto.getRoles() != null) {
+            kcRoleService.assignRoles(userId, kcUserDto.getRoles());
+        }
     }
 
     /*public void updateUser(final KcUserDto kcUserDto) {
