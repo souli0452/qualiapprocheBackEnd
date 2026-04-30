@@ -6,8 +6,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/quali
-          jwk-set-uri: http://localhost:8080/realms/quali/protocol/openid-connect/certs
+          issuer-uri: https://keycloak.horeb.tech/realms/quali
+          jwk-set-uri: https://keycloak.horeb.tech/realms/quali/protocol/openid-connect/certs
 
   graphql:
     graphiql:
@@ -53,17 +53,31 @@ frontend:
   url: http://localhost:4200
 
 
+#kc:
+#  auth:
+#    realm: quali
+#    client-id: dev_quali
+#    client-secret: TsCLTqQhJHqCIaqo2GVw3O96hP9qgjxo
+#    scope: openid,offline_access,profile
+#    token-uri: https://keycloak.horeb.tech/realms/quali/protocol/openid-connect/token
+#    issuer-uri: https://keycloak.horeb.tech/realms/quali
+#    server-url: https://keycloak.horeb.tech/
+#    admin-username: Horeb
+#    admin-password: horeb_password
+
+#UTILISER EN PRODUCTION#######
 kc:
   auth:
     realm: quali
     client-id: qualiApproche
-    client-secret: ZnpPjx5aBGHHbcu9F4xbQlTiWmwq4iDm
+    client-secret: U2VSU8hANgcg4lqZq9IFzYU2IMlx8Jgs
     scope: openid,offline_access,profile
-    token-uri: http://localhost:8080/realms/quali/protocol/openid-connect/token
-    issuer-uri: http://localhost:8080/realms/quali
-    server-url: http://localhost:8080
-    admin-username: admin
-    admin-password: admin
+    token-uri: https://keycloak.horeb.tech/realms/quali/protocol/openid-connect/token
+    issuer-uri: https://keycloak.horeb.tech/realms/quali
+    server-url: https://keycloak.horeb.tech/
+    admin-username: Horeb
+    admin-password: horeb_password
+#UTILISER EN PRODUCTION#######
 
 logging:
   level:

@@ -27,7 +27,7 @@ public class Fichier extends AuditEntity {
     private String typeFichier;
     private int versionFichier;
     private String urlFichier;
-    @Lob // Large Object
+   // @Lob // Large Object
     @Column(columnDefinition = "TEXT")
     private String fichierBase64;
     @OneToMany

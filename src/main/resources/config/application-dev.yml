@@ -1,9 +1,16 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/bd_qualiapproche
+    url: jdbc:postgresql://144.126.135.120:5432/bd_dev_qualiapproche
     driver-class-name: org.postgresql.Driver
-    username: postgres
-    password: root
+    username: user_dev
+    password: user_dev_password
+
+#UTILISER EN PRODUCTION
+#    url: jdbc:postgresql://144.126.135.120:5432/bd_qualiapproche
+#    driver-class-name: org.postgresql.Driver
+#    username: super_admin
+#    password: super_admin_password
+#UTILISER EN PRODUCTION
 
   jpa:
     show-sql: true
