@@ -5,7 +5,7 @@ spring:
   application:
     name: evaluation-service
   datasource:
-    url: jdbc:postgresql://localhost:5433/qualiapproche_evaluation
+    url: jdbc:postgresql://localhost:5432/bd_quali_sira_evaluation
     username: postgres
     password: root
   jpa:

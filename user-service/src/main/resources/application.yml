@@ -1,11 +1,11 @@
 server:
-  port: 8081
+  port: 8090
 
 spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:postgresql://localhost:5433/qualiapproche_user
+    url: jdbc:postgresql://localhost:5432/bd_quali_sira_user
     username: postgres
     password: root
   jpa:
@@ -39,11 +39,11 @@ frontend:
   url: http://localhost:4200
 
 keycloak:
-  realm: quali
+  realm: quali-approche
   serverUrl: http://localhost:8080
-  clientId: quali-approche
+  clientId: quali-sira
   clientSecret: EGBtXZ6hO13LHY8BfFwjkUgdINNtAXeu
-  issuerUri: http://localhost:8080/realms/quali
-  tokenUri: http://localhost:8080/realms/quali/protocol/openid-connect/token
+  issuerUri: http://localhost:8080/realms/quali-approche
+  tokenUri: http://localhost:8080/realms/quali-approche/protocol/openid-connect/token
   adminUsername: admin
   adminPassword: admin

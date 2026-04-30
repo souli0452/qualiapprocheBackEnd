@@ -31,3 +31,19 @@ build/
 
 ### VS Code ###
 .vscode/
+
+###################################
+# CONFIGURATION LOCALE (SPRING)
+###################################
+
+# Fichiers application.yml locaux par microservice (NE PAS PUSH)
+amelioration-service/src/main/resources/application.yml
+api-gateway/src/main/resources/application.yml
+contexte-service/src/main/resources/application.yml
+evaluation-service/src/main/resources/application.yml
+planification-service/src/main/resources/application.yml
+realisation-service/src/main/resources/application.yml
+referentiel-service/src/main/resources/application.yml
+support-service/src/main/resources/application.yml
+user-service/src/main/resources/application.yml
+``
