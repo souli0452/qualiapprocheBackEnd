@@ -10,6 +10,8 @@ import com.qualiapproche.common.dto.RejectNonConformiteDto;
 import com.qualiapproche.common.dto.ValidatePlanActionDto;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +25,7 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
 @RequiredArgsConstructor
-
+@Tag(name = "Non-Conformités", description = "Gestion des non-conformités, de leur création à leur validation")
 public class NonConformiteController {
     private final   NonConformiteService nonConformiteService;
 
@@ -33,6 +35,7 @@ public class NonConformiteController {
      * @param dto Objet contenant les informations de la non-conformité
      * @return NonConformiteDto contenant les informations de la non-conformité créée
      */
+    @Operation(summary = "Créer une non-conformité", description = "Initialise une nouvelle non-conformité dans le système")
     @PostMapping(CREATE_NON_CONFORMITE_PROCESSUS)
     public ResponseEntity<NonConformiteDto> createNonConformite(@RequestBody NonConformiteDto dto) throws IOException {
         NonConformiteDto createdNonConformite = nonConformiteService.createNonConformite(dto);
@@ -43,6 +46,7 @@ public class NonConformiteController {
     /               Méthode de modification d'une non conformité             /
     /-----------------------------------------------------------------------*/
 
+    @Operation(summary = "Modifier une non-conformité", description = "Met à jour les informations d'une non-conformité existante par son ID")
     @PutMapping(UPDATE_NON_CONFORMITE_PROCESSUS)
     public ResponseEntity<NonConformiteDto> updateNonConformite(@PathVariable UUID id, @RequestBody NonConformiteDto dto) throws IOException {
         return ResponseEntity.ok(nonConformiteService.updateNonConformite(id, dto));
@@ -92,6 +96,7 @@ public class NonConformiteController {
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de toutes les NonConformités              /
     /-----------------------------------------------------------------------*/
+    @Operation(summary = "Lister toutes les non-conformités", description = "Récupère la liste complète des non-conformités enregistrées")
     @GetMapping(GET_ALL_NON_CONFORMITE)
     public ResponseEntity<List<NonConformiteDto>> allNonConformites() {
         List<NonConformiteDto> nonConformite = nonConformiteService.allNonConformites();

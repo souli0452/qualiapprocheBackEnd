@@ -9,7 +9,7 @@
     </parent>
     <artifactId>realisation-service</artifactId>
     <name>realisation-service</name>
-    <description>Realisation Service for QualiApproche</description>
+    <description>Realisation Service for quali-sira</description>
 
     <dependencies>
         <dependency>

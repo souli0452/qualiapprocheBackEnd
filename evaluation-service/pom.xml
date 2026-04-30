@@ -9,7 +9,7 @@
     </parent>
     <artifactId>evaluation-service</artifactId>
     <name>evaluation-service</name>
-    <description>Evaluation Service for QualiApproche</description>
+    <description>Evaluation Service for quali-sira</description>
 
     <dependencies>
         <dependency>

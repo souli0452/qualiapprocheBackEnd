@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,9 +18,11 @@ import java.util.List;
 @RequestMapping("/api/v1")
 @CrossOrigin("*")
 @RequiredArgsConstructor
+@Tag(name = "Gestion des Utilisateurs", description = "Endpoints pour l'authentification et la gestion des utilisateurs Keycloak")
 public class KcUserController {
     private final KcUserService kcUserService;
 
+    @Operation(summary = "Authentification utilisateur", description = "Permet de se connecter et de recevoir un jeton JWT")
     @PostMapping("/login")
     public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest, HttpServletResponse response) {
         return kcUserService.login(loginRequest, response);

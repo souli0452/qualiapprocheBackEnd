@@ -2,6 +2,8 @@ package com.qualiapproche.amelioration.controller;
 
 import com.qualiapproche.common.dto.TypeNonConformiteDto;
 import com.qualiapproche.amelioration.service.TypeNonConformiteService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +17,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(TYPE_NON_CONFORMITE_ROOT_URL)
+@Tag(name = "Types de Non-Conformité", description = "Paramétrage des catégories de non-conformité")
 public class TypeNonConformiteController {
 
     private final TypeNonConformiteService typeNonConformiteService;
 
+    @Operation(summary = "Créer un type de NC", description = "Définit une nouvelle catégorie de non-conformité")
     @PostMapping(CREATE_TYPE_NON_CONFORMITE)
     public ResponseEntity<TypeNonConformiteDto> create(@RequestBody TypeNonConformiteDto typeNonConformiteDto) {
         TypeNonConformiteDto typeNonConformiteDto1 = typeNonConformiteService.create(typeNonConformiteDto);

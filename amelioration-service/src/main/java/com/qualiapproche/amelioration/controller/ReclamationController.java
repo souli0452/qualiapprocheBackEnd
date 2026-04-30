@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,6 +16,7 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 
 @RequestMapping(RECLAMATION_ROOT_URL)
 @RestController
+@Tag(name = "Réclamations", description = "Gestion des réclamations clients et internes")
 public class ReclamationController {
 
     @Autowired
@@ -22,6 +25,7 @@ public class ReclamationController {
     /*-----------------------------------------------------------------------/
     /               Méthode de création d'une Reclamation               /
     /-----------------------------------------------------------------------*/
+    @Operation(summary = "Créer une réclamation", description = "Enregistre une nouvelle réclamation dans le système")
     @PostMapping(CREATE_RECLAMATION)
     public ResponseEntity<ReclamationDto> create(@RequestBody ReclamationDto reclamationDto) {
         ReclamationDto reclamation = reclamationService.create(reclamationDto);

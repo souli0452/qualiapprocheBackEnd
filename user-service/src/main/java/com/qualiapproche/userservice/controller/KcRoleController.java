@@ -6,16 +6,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
+@Tag(name = "Rôles", description = "Gestion des rôles et des habilitations Keycloak")
 public class KcRoleController {
 
     private final KcRoleService kcRoleService;
 
+    @Operation(summary = "Lister les rôles", description = "Récupère tous les rôles définis dans Keycloak")
     @GetMapping
     public ResponseEntity<List<KcRoleDto>> getAllRoles() {
         return ResponseEntity.ok(kcRoleService.getAllRoles());

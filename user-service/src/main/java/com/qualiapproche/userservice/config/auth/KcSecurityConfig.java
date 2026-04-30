@@ -60,6 +60,7 @@ public class KcSecurityConfig {
                             "/images/**",
                             "/i18n/**",
                             "/swagger-ui/**",
+                            "/v3/api-docs/**",
                             "/webjars/**",
                             "/test/**",
                             "/api/v1/login",

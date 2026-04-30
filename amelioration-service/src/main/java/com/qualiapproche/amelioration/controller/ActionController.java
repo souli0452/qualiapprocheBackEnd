@@ -3,6 +3,8 @@ package com.qualiapproche.amelioration.controller;
 import com.qualiapproche.common.dto.ActionDto;
 import com.qualiapproche.amelioration.service.ActionService;
 import com.qualiapproche.amelioration.service.EfficaciteService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +18,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(ACTIONS_ROOT_URL)
+@Tag(name = "Actions", description = "Gestion des actions correctives et préventives")
 public class ActionController {
 
     private final ActionService actionService;
 
+    @Operation(summary = "Créer une action", description = "Enregistre une nouvelle action dans le référentiel")
     @PostMapping(CREATE_ACTIONS)
     public ResponseEntity<ActionDto> create(@RequestBody ActionDto actionDto) {
         ActionDto actionDto1 = actionService.create(actionDto);

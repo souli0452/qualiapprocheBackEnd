@@ -7,6 +7,8 @@ import com.qualiapproche.common.enumeration.TypeStructure;
 import com.qualiapproche.referentiel.service.StructureService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,8 +17,10 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 
 @RestController
 @RequestMapping(ROOT_STRUCTURE_API)
+@Tag(name = "Structures", description = "Gestion des structures organisationnelles (Directions, Services, etc.)")
 public record StructureController(StructureService structureService) {
 
+    @Operation(summary = "Créer une structure", description = "Ajoute une nouvelle entité organisationnelle au référentiel")
     @PostMapping(CREATE_STRUCTURE)
     public ResponseEntity<StructureDto> saveStructure(@RequestBody StructureDto structureDto) {
         return ResponseEntity.ok(structureService.saveStructure(structureDto));

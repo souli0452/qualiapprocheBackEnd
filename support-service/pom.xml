@@ -9,7 +9,7 @@
     </parent>
     <artifactId>support-service</artifactId>
     <name>support-service</name>
-    <description>Support Service for QualiApproche</description>
+    <description>Support Service for quali-sira</description>
 
     <dependencies>
         <dependency>

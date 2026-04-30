@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import com.qualiapproche.common.dto.RisqueDto;
 import com.qualiapproche.amelioration.service.RisqueService;
@@ -26,6 +28,7 @@ import static com.qualiapproche.common.utils.ApiUrls.UPDATE_RISQUE;
 
 @RestController
 @RequestMapping(RISQUE_ROOT_URL)
+@Tag(name = "Risques", description = "Identification et évaluation des risques")
 public class RisqueController {
 
     @Autowired
@@ -34,6 +37,7 @@ public class RisqueController {
     /*-----------------------------------------------------------------------/
     /                     Méthode de création d'un RISQUE                    /
     /-----------------------------------------------------------------------*/
+    @Operation(summary = "Créer un risque", description = "Identifie un nouveau risque dans le système")
     @PostMapping(CREATE_RISQUE)
     public ResponseEntity<RisqueDto> create(@RequestBody RisqueDto risqueDto) {
         RisqueDto risque = risqueService.create(risqueDto);

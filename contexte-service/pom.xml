@@ -9,7 +9,7 @@
     </parent>
     <artifactId>contexte-service</artifactId>
     <name>contexte-service</name>
-    <description>Contexte Service for QualiApproche</description>
+    <description>Contexte Service for quali-sira</description>
 
     <dependencies>
         <dependency>
