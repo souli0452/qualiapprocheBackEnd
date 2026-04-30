@@ -1,0 +1,93 @@
+server:
+  port: 8088
+
+spring:
+  main:
+    web-application-type: reactive
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - PreserveHostHeader
+      routes:
+        - id: user-service
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/user-service/**
+          filters:
+            - RewritePath=/user-service/(?<segment>.*), /${segment}
+            
+        - id: referentiel-service
+          uri: lb://REFERENTIEL-SERVICE
+          predicates:
+            - Path=/referentiel-service/**
+          filters:
+            - RewritePath=/referentiel-service/(?<segment>.*), /${segment}
+            
+        - id: amelioration-service
+          uri: lb://AMELIORATION-SERVICE
+          predicates:
+            - Path=/amelioration-service/**
+          filters:
+            - RewritePath=/amelioration-service/(?<segment>.*), /${segment}
+
+        - id: support-service
+          uri: lb://SUPPORT-SERVICE
+          predicates:
+            - Path=/support-service/**
+          filters:
+            - RewritePath=/support-service/(?<segment>.*), /${segment}
+
+        - id: evaluation-service
+          uri: lb://EVALUATION-SERVICE
+          predicates:
+            - Path=/evaluation-service/**
+          filters:
+            - RewritePath=/evaluation-service/(?<segment>.*), /${segment}
+
+        - id: realisation-service
+          uri: lb://REALISATION-SERVICE
+          predicates:
+            - Path=/realisation-service/**
+          filters:
+            - RewritePath=/realisation-service/(?<segment>.*), /${segment}
+
+        - id: planification-service
+          uri: lb://PLANIFICATION-SERVICE
+          predicates:
+            - Path=/planification-service/**
+          filters:
+            - RewritePath=/planification-service/(?<segment>.*), /${segment}
+
+        - id: contexte-service
+          uri: lb://CONTEXTE-SERVICE
+          predicates:
+            - Path=/contexte-service/**
+          filters:
+            - RewritePath=/contexte-service/(?<segment>.*), /${segment}
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: referentiel-service
+        url: /referentiel-service/v3/api-docs
+      - name: user-service
+        url: /user-service/v3/api-docs
+      - name: amelioration-service
+        url: /amelioration-service/v3/api-docs
+      - name: support-service
+        url: /support-service/v3/api-docs
+      - name: evaluation-service
+        url: /evaluation-service/v3/api-docs
+      - name: realisation-service
+        url: /realisation-service/v3/api-docs
+      - name: planification-service
+        url: /planification-service/v3/api-docs
+      - name: contexte-service
+        url: /contexte-service/v3/api-docs
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
