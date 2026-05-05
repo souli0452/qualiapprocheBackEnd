@@ -204,4 +204,10 @@ public class NonConformiteController {
         List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByStructure(id);
         return ResponseEntity.ok(nonConformiteDtos);
     }
+
+    @GetMapping("/initiateur/{id}")
+    public ResponseEntity<List<NonConformiteDto>> getAllByInitiator(@PathVariable String id) {
+        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByInitiator(id);
+        return ResponseEntity.ok(nonConformiteDtos);
+    }
 }
