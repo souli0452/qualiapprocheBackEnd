@@ -1,4 +1,5 @@
 package com.qualiapproche.common.dto;
+
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.MappedSuperclass;
@@ -11,8 +12,6 @@ import lombok.experimental.SuperBuilder;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
-
- 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
@@ -21,10 +20,8 @@ import com.qualiapproche.common.enumeration.TypeDemande;
 import java.time.LocalDateTime;
 import java.util.*;
 
-
-
-
 import org.springframework.transaction.annotation.Transactional;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -70,30 +67,30 @@ public class NonConformiteDto extends AuditEntityDto {
     private UUID typeNonConformiteId;
     private UUID typeProcessusId;
     @Enumerated(EnumType.STRING)
-    private TypeDemande typeDemande ;
+    private TypeDemande typeDemande;
     private String actionLibelle;
-    private  String actionDsc;
-    private  String typeNonConformiteLibelle;
-    private  String niveauNonConformiteLibelle;
-    private  String efficaciteLibelle;
-    private  String typeProcessusLibelle;
+    private String actionDsc;
+    private String typeNonConformiteLibelle;
+    private String niveauNonConformiteLibelle;
+    private String efficaciteLibelle;
+    private String typeProcessusLibelle;
     private String version;
     private List<PieceJointeDTO> fichiers;
     private List<PlanActionDto> planActions;
     private String structureResponsableId;
     private String structureResponsableSigle;
     private String structureResponsableLibelle;
-    private  String pertinanceRs;
-    private  String justificationRs;
-    private  String pertinancePilote;
-    private  String justificationPilote;
-    private  String userImputId;
-    private  String userImputFullName;
-    private  String userImputeEmail;
-    private  Set<String> participants=new HashSet<>();
-    private  String originNonConformiteId;
-    private  String originNonConformiteLibelle;
-    private  String observationRejet;
+    private String pertinanceRs;
+    private String justificationRs;
+    private String pertinancePilote;
+    private String justificationPilote;
+    private String userImputId;
+    private String userImputFullName;
+    private String userImputeEmail;
+    private Set<String> participants = new HashSet<>();
+    private String originNonConformiteId;
+    private String originNonConformiteLibelle;
+    private String observationRejet;
     private PieceJointeDTO docRejet;
-    private  String actionPreventive;
+    private String actionPreventive;
 }

@@ -25,9 +25,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 
-
-
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -47,6 +44,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @org.springframework.beans.factory.annotation.Value("${frontend.url}")
     private String frontendUrl;
+
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
      */
@@ -71,18 +69,18 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     }
 
     private NonConformiteDto populateAttachments(NonConformiteDto dto) {
-        if (dto == null) return null;
+        if (dto == null)
+            return null;
         dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
         if (dto.getPlanActions() != null) {
-            dto.getPlanActions().forEach(plan -> 
-                plan.setFichiers(fichierService.getPjByEntityId(plan.getId()))
-            );
+            dto.getPlanActions().forEach(plan -> plan.setFichiers(fichierService.getPjByEntityId(plan.getId())));
         }
         return dto;
     }
 
     /**
      * Crée une nouvelle NonConformité après validation.
+     * 
      * @param dto Les données de la NonConformité.
      * @return Le NonConformiteDto correspondant.
      */
@@ -103,7 +101,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
         NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
-        fichierService.savePj(dto.getFichiers(),savedNonConformite.getId());
+        fichierService.savePj(dto.getFichiers(), savedNonConformite.getId());
 
         return populateAttachments(nonConformiteMapper.toDto(savedNonConformite));
     }
@@ -126,7 +124,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         if (dto.getFichiers() != null) {
             fichierService.deleteAllByEntityId(id);
             nonConformiteRepository.flush();
-      fichierService.savePj(dto.getFichiers(),id);
+            fichierService.savePj(dto.getFichiers(), id);
         }
         if (dto.getPlanActions() != null && !dto.getPlanActions().isEmpty()) {
 
@@ -150,12 +148,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         return populateAttachments(nonConformiteMapper.toDto(updatedNonConformite));
     }
 
-
     @Override
     public List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException {
-        dtos.forEach(dto ->{
+        dtos.forEach(dto -> {
             NonConformite existingNonConformite = nonConformiteRepository.findById(dto.getId())
-                    .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " +dto.getId()));
+                    .orElseThrow(
+                            () -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + dto.getId()));
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
             existingNonConformite.setJustificationPilote(dto.getJustificationPilote());
             existingNonConformite.setPertinancePilote(dto.getPertinancePilote());
@@ -181,57 +179,72 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
             StructureDto structureSoumission = null;
             if (dto.getStructureSoumissionId() != null) {
-                structureSoumission = referentielClient.getStructureById(UUID.fromString(dto.getStructureSoumissionId()));
+                structureSoumission = referentielClient
+                        .getStructureById(UUID.fromString(dto.getStructureSoumissionId()));
             }
             if (dto.getFichiers() != null) {
                 fichierService.deleteAllByEntityId(dto.getId());
                 nonConformiteRepository.flush();
-                fichierService.savePj(dto.getFichiers(),dto.getId());
+                fichierService.savePj(dto.getFichiers(), dto.getId());
             }
-            if (dto.getEtatTraitement()==Etat.CLOTURE){
+            if (dto.getEtatTraitement() == Etat.CLOTURE) {
                 existingNonConformite.setDateSuivi(LocalDateTime.now());
             }
-            if (dto.getEtatTraitement()==Etat.TRAITEMENT){
+            if (dto.getEtatTraitement() == Etat.TRAITEMENT) {
                 String subject = "Taitement d'une non conformité ";
                 String link = frontendUrl + "/page/traitement";
-                sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject,link,"emailTemplate",dto.getUserImputFullName(),dto.getNumeroReference(),dto.getObservationRejet());
+                sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject, link,
+                        "emailTemplate", dto.getUserImputFullName(), dto.getNumeroReference(),
+                        dto.getObservationRejet());
 
             }
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
                 String subject = "Non-conformité signalée – Action attendue de votre part ";
                 String link = frontendUrl + "/page/imputation";
                 if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                            "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
+                            dto.getStructureSoumissionLibelle());
                 }
             }
-            /*if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
-                String subject = "Non-conformité signalée – Action attendue de votre part ";
-                String link = frontendUrl + "/page/validation-plan";
-                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getCurrentUserfullName());
-
-            }*/
+            /*
+             * if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
+             * String subject = "Non-conformité signalée – Action attendue de votre part ";
+             * String link = frontendUrl + "/page/validation-plan";
+             * sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(),
+             * subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.
+             * getNumeroReference(),dto.getCurrentUserfullName());
+             * 
+             * }
+             */
             if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
                 String subject = "Validation d'une non conformité ";
                 String link = frontendUrl + "/page/validation_rs";
                 if (configGlobal != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
+                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
+                            "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
                 }
             }
             if (dto.getEtatTraitement() == Etat.SUIVI_RQ) {
                 String subject = "Suivi d'une non conformité ";
                 String link = frontendUrl + "/page/suivi_rq";
                 if (configGlobal != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
+                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
+                            "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
                 }
             }
             if (dto.getEtatTraitement() == Etat.CLOTURE) {
                 String subject = "Cloture  non conformité ";
                 String link = frontendUrl + "/page/consultation";
                 if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                            "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(),
+                            dto.getStructureSoumissionLibelle());
                 }
                 if (structureSoumission != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structureSoumission.getEmail(), subject, link, "traitementReussi", structureSoumission.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                    sendMailService.sendMailToUserAfterDemandImputed(structureSoumission.getEmail(), subject, link,
+                            "traitementReussi", structureSoumission.getAutoriteSignataire(), dto.getNumeroReference(),
+                            dto.getStructureSoumissionLibelle());
                 }
             }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
@@ -239,7 +252,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 String subject = "Validation de la non-conformité N°" + dto.getNumeroReference();
                 String link = frontendUrl + "/page/validation";
                 if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getObservationRejet());
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                            "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(),
+                            dto.getObservationRejet());
                 }
                 if (!dto.getParticipants().isEmpty()) {
                     dto.getParticipants().forEach(participant -> {
@@ -270,7 +285,6 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                             planAction.setDateEcheance(planActionDto.getDateEcheance());
                             planAction.setProcEmetteur(dto.getStructureSoumissionLibelle());
 
-
                             return planAction;
                         })
                         .forEach(existingPlanActions::add);
@@ -279,8 +293,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                     existingNonConformite.getPlanActions().clear();
                 }
             }
-             nonConformiteRepository.save(existingNonConformite);
-        } );
+            nonConformiteRepository.save(existingNonConformite);
+        });
         return dtos.stream().map(this::populateAttachments).toList();
     }
 
@@ -296,34 +310,41 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     public List<NonConformiteDto> allNonConformites() {
         List<NonConformite> allNonConformites = nonConformiteRepository.findAll();
         List<NonConformite> filteredNonConformites = allNonConformites.stream()
-                .filter(nc -> nc.getStatus() !=Status.DRAFT)
+                .filter(nc -> nc.getStatus() != Status.DRAFT)
                 .collect(Collectors.toList());
 
         return nonConformiteMapper.toDtos(filteredNonConformites).stream().map(this::populateAttachments).toList();
     }
+
     @Override
-    public List<NonConformiteDto> findImupted(String userId,Etat etat) {
-        return  nonConformiteMapper.toDtos(nonConformiteRepository.findByUserImputIdAndEtatTraitement(userId,etat)).stream().map(this::populateAttachments).toList() ;
+    public List<NonConformiteDto> findImupted(String userId, Etat etat) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findByUserImputIdAndEtatTraitement(userId, etat))
+                .stream().map(this::populateAttachments).toList();
     }
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findByEtatTraitement(etat)).stream().map(this::populateAttachments).toList();
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findByEtatTraitement(etat)).stream()
+                .map(this::populateAttachments).toList();
     }
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtatTraitementAndStructureSoumissionId(etat, uuid)).stream().map(this::populateAttachments).toList();
+        return nonConformiteMapper
+                .toDtos(nonConformiteRepository.findAllByEtatTraitementAndStructureSoumissionId(etat, uuid)).stream()
+                .map(this::populateAttachments).toList();
     }
 
     @Override
     public List<NonConformiteDto> getNonConformitesByStructure(String uuid) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByOrigineId(uuid)).stream().map(this::populateAttachments).toList();
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByOrigineId(uuid)).stream()
+                .map(this::populateAttachments).toList();
     }
 
     @Override
     public List<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtatTraitementAndOrigineId(etat, uuid)).stream().map(this::populateAttachments).toList();
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByEtatTraitementAndOrigineId(etat, uuid))
+                .stream().map(this::populateAttachments).toList();
     }
 
     @Override
@@ -350,13 +371,16 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setEtatTraitement(rejectNonConformiteDto.getEtapeTraitement());
         nonConformite.setObservationRejet(rejectNonConformiteDto.getRejectReason());
         nonConformite.setStatus(Status.REJECTED);
-     /*   List<Fichier> fichiers=new ArrayList<>();
-        if (rejectNonConformiteDto.getDocRejet() != null) {
-            Fichier fichier=fichierMapper.toEntity(rejectNonConformiteDto.getDocRejet());
-               fichiers.add(fichier);
-            nonConformite.setDocRejet(fichierService.convertBase64(fichiers).stream().findFirst().get());
-
-        }*/
+        /*
+         * List<Fichier> fichiers=new ArrayList<>();
+         * if (rejectNonConformiteDto.getDocRejet() != null) {
+         * Fichier fichier=fichierMapper.toEntity(rejectNonConformiteDto.getDocRejet());
+         * fichiers.add(fichier);
+         * nonConformite.setDocRejet(fichierService.convertBase64(fichiers).stream().
+         * findFirst().get());
+         * 
+         * }
+         */
         String subject = "Taitement d'une non conformité N°" + nonConformite.getNumeroReference();
 
         ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
@@ -364,42 +388,53 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             String link = frontendUrl + "/page/reception";
             try {
                 if (nonConformite.getStructureSoumissionId() != null) {
-                    StructureDto structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
+                    StructureDto structure = referentielClient
+                            .getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
                     if (structure != null) {
-                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "rejectNonConformite", structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), nonConformite.getObservationRejet());
+                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                                "rejectNonConformite", structure.getAutoriteSignataire(),
+                                nonConformite.getNumeroReference(), nonConformite.getObservationRejet());
                     }
                 }
             } catch (Exception e) {
                 log.error("Erreur envoi mail rejet : {}", e.getMessage());
             }
         }
-        if (rejectNonConformiteDto.getEtapeTraitement()==Etat.TRAITEMENT){
+        if (rejectNonConformiteDto.getEtapeTraitement() == Etat.TRAITEMENT) {
             String link = frontendUrl;
-            sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject,link,"rejectNonConformite",nonConformite.getUserImputFullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
+            sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject, link,
+                    "rejectNonConformite", nonConformite.getUserImputFullName(), nonConformite.getNumeroReference(),
+                    nonConformite.getObservationRejet());
         }
         String link = frontendUrl;
-        sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link, "rejectNonConformite",nonConformite.getCurrentUserfullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
+        sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link,
+                "rejectNonConformite", nonConformite.getCurrentUserfullName(), nonConformite.getNumeroReference(),
+                nonConformite.getObservationRejet());
         return populateAttachments(nonConformiteMapper.toDto((nonConformite)));
     }
 
     public void deleteMultiple(List<NonConformiteDto> nonConformiteDtos) {
         nonConformiteDtos.forEach(actualityDto -> {
             if (!nonConformiteRepository.existsById(actualityDto.getId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Actualité invalide, impossible de supprimer.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Actualité invalide, impossible de supprimer.");
             }
             nonConformiteRepository.deleteById(actualityDto.getId());
-            //fichierServiceImpl.removePjByEntity(actualityDto.getId(), this.pjDirectory);
+            // fichierServiceImpl.removePjByEntity(actualityDto.getId(), this.pjDirectory);
         });
 
     }
+
     @Transactional(readOnly = true)
     public List<NcStats> getNcStats(String structureSoumissionId) {
         return nonConformiteRepository.countByStatusForStructure(structureSoumissionId);
     }
+
     public void changeStatus(UUID id, Status status) {
         log.debug("Request to change status of Actuality : {}", id);
         if (!nonConformiteRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Actualité invalide, impossible de changer le statut.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Actualité invalide, impossible de changer le statut.");
         }
         NonConformite nc = nonConformiteRepository.getReferenceById(id);
         if (nc.getStatus() == Status.DRAFT) {
@@ -408,9 +443,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             String subject = "Taitement d'une non conformité N°" + nc.getNumeroReference();
             try {
                 if (nc.getStructureSoumissionId() != null) {
-                    StructureDto structure = referentielClient.getStructureById(UUID.fromString(nc.getStructureSoumissionId()));
+                    StructureDto structure = referentielClient
+                            .getStructureById(UUID.fromString(nc.getStructureSoumissionId()));
                     if (structure != null) {
-                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, "", "validationNonConformite", structure.getAutoriteSignataire(), nc.getNumeroReference(), nc.getObservationRejet());
+                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, "",
+                                "validationNonConformite", structure.getAutoriteSignataire(), nc.getNumeroReference(),
+                                nc.getObservationRejet());
                     }
                 }
             } catch (Exception e) {
@@ -424,11 +462,11 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformiteRepository.save(nc);
     }
 
-
     public void changeManyStatus(List<NonConformiteDto> nonConformiteDtos, Status status) {
         nonConformiteDtos.forEach(act -> {
             if (!nonConformiteRepository.existsById(act.getId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Actualité invalide, impossible de changer le statut.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Actualité invalide, impossible de changer le statut.");
             }
             NonConformite nc = nonConformiteRepository.getReferenceById(act.getId());
             if (nc.getStatus() == Status.DRAFT) {
@@ -446,7 +484,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     }
 
     @Transactional(readOnly = true)
-    public List<NonConformiteDto> findAll(final Status status, final  String structureSoumissionId) {
+    public List<NonConformiteDto> findAll(final Status status, final String structureSoumissionId) {
         log.debug("Request to get all Actualities");
 
         List<NonConformite> nonConformites;
@@ -454,11 +492,14 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         if (Objects.nonNull(status)) {
             if (status == Status.PUBLISHED) {
-                nonConformitesOthers = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(Status.IN_PROGRESS,structureSoumissionId);
-                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,structureSoumissionId);
+                nonConformitesOthers = nonConformiteRepository
+                        .findAllByStatusAndStructureSoumissionId(Status.IN_PROGRESS, structureSoumissionId);
+                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,
+                        structureSoumissionId);
                 nonConformites.addAll(nonConformitesOthers);
-            }else {
-                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,structureSoumissionId);
+            } else {
+                nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,
+                        structureSoumissionId);
             }
 
         } else {
@@ -473,8 +514,10 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> findAllByStructure(String structureSoumissionId) {
-        List<NonConformite> nonConformites=nonConformiteRepository.findAllByOrigineIdAndStatusIsNot(structureSoumissionId,Status.DRAFT);
-        List<NonConformite> nonConformitesS=nonConformiteRepository.findAllByStructureSoumissionIdAndStatusIsNot(structureSoumissionId,Status.DRAFT);
+        List<NonConformite> nonConformites = nonConformiteRepository
+                .findAllByOrigineIdAndStatusIsNot(structureSoumissionId, Status.DRAFT);
+        List<NonConformite> nonConformitesS = nonConformiteRepository
+                .findAllByStructureSoumissionIdAndStatusIsNot(structureSoumissionId, Status.DRAFT);
         List<NonConformite> all = new ArrayList<>();
         all.addAll(nonConformites);
         all.addAll(nonConformitesS);
@@ -491,6 +534,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         String numeroFormate = String.format("%05d", nouveauNumero);
         return String.format("%s-%s-%d-%s", prefix, origineService.toUpperCase(), annee, numeroFormate);
     }
+
     @Override
     public Map<String, Long> getNonConformiteStatsByStructure(int annee) {
         LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
@@ -502,9 +546,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .stream()
                 .collect(Collectors.toMap(
                         NonConformiteByStructDto::getOrigineServiceLibelleCourt,
-                        NonConformiteByStructDto::getCount
-                ));
+                        NonConformiteByStructDto::getCount));
     }
+
     @Override
     public Map<String, Map<String, Long>> getStatsParAnnee(int annee) {
         Map<String, Long> stats = new LinkedHashMap<>();
@@ -512,19 +556,19 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         // Initialiser tous les mois à 0
         List<String> mois = Arrays.asList(
                 "janvier", "février", "mars", "avril", "mai", "juin",
-                "juillet", "août", "septembre", "octobre", "novembre", "décembre"
-        );
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre");
         mois.forEach(m -> stats.put(m, 0L));
 
         // Remplir avec les données de la base
         nonConformiteRepository.countByMonth(annee).forEach(row -> {
-            int moisIndex = ((Number)row[0]).intValue() - 1;
-            long count = ((Number)row[1]).longValue();
+            int moisIndex = ((Number) row[0]).intValue() - 1;
+            long count = ((Number) row[1]).longValue();
             stats.put(mois.get(moisIndex), count);
         });
 
         return Map.of(String.valueOf(annee), stats);
     }
+
     public Map<String, Map<String, Map<String, Long>>> getStatsDetailleesParAnnee(int annee) {
         // 1. Plage temporelle
         LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
@@ -540,8 +584,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .filter(s -> Set.of(
                         Status.APPROVED,
                         Status.REJECTED,
-                        Status.IN_PROGRESS
-                ).contains(s))
+                        Status.IN_PROGRESS).contains(s))
                 .map(Enum::name)
                 .collect(Collectors.toList());
 
@@ -560,8 +603,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         List<Object[]> resultats = nonConformiteRepository.countByMonthAndStatus(
                 debutAnnee,
                 finAnnee,
-                statutsFiltres
-        );
+                statutsFiltres);
 
         log.debug("Résultats de la requête:");
         resultats.forEach(row -> log.debug("Mois: {}, Statut: {}, Count: {}", row[0], row[1], row[2]));
@@ -584,19 +626,20 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         return Map.of(String.valueOf(annee), statsMensuelles);
     }
+
     @Override
     public NonConformiteDto getByNumeroRef(String numeroRef) {
-        return populateAttachments(nonConformiteMapper.toDto(nonConformiteRepository.getNonConformiteByNumeroReference(numeroRef)));
+        return populateAttachments(
+                nonConformiteMapper.toDto(nonConformiteRepository.getNonConformiteByNumeroReference(numeroRef)));
     }
 
     private static final List<String> STATUTS = Arrays.asList(
-            "APPROVED", "REJECTED", "IN_PROGRESS"
-    );
+            "APPROVED", "REJECTED", "IN_PROGRESS");
 
     private static final List<String> MOIS = Arrays.asList(
             "janvier", "février", "mars", "avril", "mai", "juin",
-            "juillet", "août", "septembre", "octobre", "novembre", "décembre"
-    );
+            "juillet", "août", "septembre", "octobre", "novembre", "décembre");
+
     @Override
     public Map<String, Map<String, Long>> getStatsMensuellesParService(int annee, String origineServiceId) {
         // 1. Définir la plage temporelle exacte pour l'année
@@ -607,15 +650,13 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         List<Object[]> resultats = nonConformiteRepository.countByMonthAndService(
                 debutAnnee,
                 finAnnee,
-                origineServiceId
-        );
+                origineServiceId);
 
         // 3. Initialiser la structure de réponse
         Map<String, Long> statsParMois = new LinkedHashMap<>();
         List<String> nomsMois = List.of(
                 "janvier", "février", "mars", "avril", "mai", "juin",
-                "juillet", "août", "septembre", "octobre", "novembre", "décembre"
-        );
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre");
 
         // Initialiser tous les mois à 0
         nomsMois.forEach(mois -> statsParMois.put(mois, 0L));
@@ -637,8 +678,10 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         // 5. Structurer la réponse finale
         return Collections.singletonMap(String.valueOf(annee), statsParMois);
     }
+
     @Override
-    public Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId) {
+    public Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee,
+            String origineServiceId) {
         // 1. Plage temporelle
         LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
         LocalDateTime finAnnee = LocalDateTime.of(annee, 12, 31, 23, 59, 59, 999_999_999);
@@ -653,8 +696,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .filter(s -> Set.of(
                         Status.APPROVED,
                         Status.REJECTED,
-                        Status.IN_PROGRESS
-                ).contains(s))
+                        Status.IN_PROGRESS).contains(s))
                 .map(Enum::name)
                 .collect(Collectors.toList());
 
@@ -673,8 +715,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         List<Object[]> resultats = nonConformiteRepository.countByMonthAndStatus(
                 debutAnnee,
                 finAnnee,
-                statutsFiltres
-        );
+                statutsFiltres);
 
         log.debug("Résultats de la requête:");
         resultats.forEach(row -> log.debug("Mois: {}, Statut: {}, Count: {}", row[0], row[1], row[2]));
@@ -727,6 +768,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         return validatePlanActionDto;
     }
+
     @Override
     public Map<String, Map<String, Map<String, Long>>> getStatsNiveauParAnnee(int annee, String origineServiceId) {
         LocalDateTime debutAnnee = LocalDateTime.of(annee, 1, 1, 0, 0, 0);
@@ -751,8 +793,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         List<Object[]> resultats = nonConformiteRepository.countByMonthAndNiveau(
                 debutAnnee,
                 finAnnee,
-                origineServiceId
-        );
+                origineServiceId);
 
         // 5. Traitement des résultats
         resultats.forEach(row -> {
@@ -772,5 +813,13 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         return Map.of(String.valueOf(annee), statsMensuelles);
 
+    }
+
+    @Override
+    public List<NonConformiteDto> findAllByInitiator(String userId) {
+        return nonConformiteRepository.findAllByCreatedById(userId).stream()
+                .map(nonConformiteMapper::toDto)
+                .map(this::populateAttachments)
+                .collect(Collectors.toList());
     }
 }

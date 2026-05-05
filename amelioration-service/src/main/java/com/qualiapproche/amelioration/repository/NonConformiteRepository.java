@@ -113,4 +113,6 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
             @Param("debut") LocalDateTime debut,
             @Param("fin") LocalDateTime fin,
             @Param("origineServiceId") String origineServiceId);
+
+    List<NonConformite> findAllByCreatedById(String userId);
 }

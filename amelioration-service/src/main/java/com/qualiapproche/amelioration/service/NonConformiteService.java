@@ -40,5 +40,5 @@ public interface NonConformiteService {
     Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId);
     ValidatePlanActionDto validatePlan(ValidatePlanActionDto validatePlanActionDto);
     Map<String, Map<String, Map<String, Long>>> getStatsNiveauParAnnee(int annee, String origineServiceId);
-
+    List<NonConformiteDto> findAllByInitiator(String userId);
 }

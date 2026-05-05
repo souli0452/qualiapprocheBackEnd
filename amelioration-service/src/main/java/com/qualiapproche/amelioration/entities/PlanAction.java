@@ -72,29 +72,33 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class PlanAction extends AuditEntity {
 
-    private String numeroOdre;
-    private String observation;
-    private String causeIdentifiees;
-    private String solutionRetenues;
-    private String responsableNomComplet;
-    private String responsableId;
-    private String responsableEmail;
-    private String numeroTelephone;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate dateEcheance;
-   /* @OneToMany
-    private List<Fichier> fichiers;*/
-    @Enumerated(EnumType.STRING)
-    private StatutEnum status;
-    private String numeroNc;
-    private String procEmetteur;
-    private UUID nonConformeId;
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate dateTraitement;
-    private String observationRejet;
-    private String actionCorrective;
-  /*  @ManyToOne
-    private Fichier docRejet;*/
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
-    private LocalDate dateRejet;
+  private String numeroOdre;
+  private String observation;
+  private String causeIdentifiees;
+  private String solutionRetenues;
+  private String responsableNomComplet;
+  private String responsableId;
+  private String responsableEmail;
+  private String numeroTelephone;
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+  private LocalDate dateEcheance;
+  /*
+   * @OneToMany
+   * private List<Fichier> fichiers;
+   */
+  @Enumerated(EnumType.STRING)
+  private StatutEnum status;
+  private String numeroNc;
+  private String procEmetteur;
+  private UUID nonConformeId;
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+  private LocalDate dateTraitement;
+  private String observationRejet;
+  private String actionCorrective;
+  /*
+   * @ManyToOne
+   * private Fichier docRejet;
+   */
+  @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
+  private LocalDate dateRejet;
 }
