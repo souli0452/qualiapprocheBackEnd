@@ -17,6 +17,7 @@ public class PlanActionDto {
     private String solutionRetenues;
     private String dateEcheance;
     private String responsable;
+    private String critereEfficacite;
    ;
     public PlanActionDto(PlanAction planAction){
         this.responsable=planAction.getResponsableNomComplet();
@@ -24,5 +25,6 @@ public class PlanActionDto {
         this.numeroOdre=planAction.getNumeroOdre();
         this.causeIdentifiees=planAction.getCauseIdentifiees();
         this.solutionRetenues=planAction.getSolutionRetenues();
+        this.critereEfficacite=planAction.getCritereEfficacite();
     }
 }

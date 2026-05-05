@@ -90,9 +90,13 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
         nonConformite.setOriginNonConformiteLibelle(dto.getOriginNonConformiteLibelle());
-        nonConformite.setNumeroReference(genererNumeroReference(dto.getOrigineServiceLibelleCourt()));
+        nonConformite.setNumeroReference(genererNumeroReference(dto.getStructureSoumissionLibelle()));
+        nonConformite.setStructureSoumissionId(dto.getStructureSoumissionId());
+        nonConformite.setStructureSoumissionLibelle(dto.getStructureSoumissionLibelle());
+        nonConformite.setOrigineId(null);
+        nonConformite.setOrigineService(null);
+        nonConformite.setOrigineServiceLibelleCourt(null);
         nonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
-        nonConformite.setActionId(findActionById(dto.getActionId()));
         nonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         nonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
         nonConformite.setEtatTraitement(Etat.SOUMISSION);
@@ -118,6 +122,17 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
         existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
+        if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
+            if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
+            }
+        }
+        existingNonConformite.setCircuit(dto.getCircuit());
+        existingNonConformite.setOrigineId(dto.getOrigineId());
+        existingNonConformite.setOrigineService(dto.getOrigineService());
+        existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
+        existingNonConformite.setActionLibelle(dto.getActionLibelle());
+
         existingNonConformite.setUserImputId(dto.getUserImputId());
         existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
         // Mettre à jour les fichiers s'ils sont fournis
@@ -164,6 +179,16 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
+            if (dto.getEtatTraitement() == Etat.IMPUTATION) {
+                if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
+                }
+            }
+            existingNonConformite.setCircuit(dto.getCircuit());
+            existingNonConformite.setOrigineId(dto.getOrigineId());
+            existingNonConformite.setOrigineService(dto.getOrigineService());
+            existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
+            existingNonConformite.setActionLibelle(dto.getActionLibelle());
             existingNonConformite.setUserImputId(dto.getUserImputId());
             existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
@@ -199,12 +224,18 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
             }
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-                String subject = "Non-conformité signalée – Action attendue de votre part ";
-                String link = frontendUrl + "/page/imputation";
-                if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
-                            "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
-                            dto.getStructureSoumissionLibelle());
+                if (dto.getCircuit() == com.qualiapproche.common.enumeration.Circuit.A) {
+                    dto.setEtatTraitement(Etat.CLOTURE);
+                    existingNonConformite.setEtatTraitement(Etat.CLOTURE);
+                    existingNonConformite.setDateSuivi(LocalDateTime.now());
+                } else {
+                    String subject = "Non-conformité signalée – Action attendue de votre part ";
+                    String link = frontendUrl + "/page/imputation";
+                    if (structure != null) {
+                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                                "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
+                                dto.getStructureSoumissionLibelle());
+                    }
                 }
             }
             /*
