@@ -20,4 +20,7 @@ public interface StructureService {
     void deleteStructure(UUID id) ;
 
     StructureDto findStructureByLibelle(String libelle);
+    StructureDto getDirection();
+
+    java.util.Map<String, Object> getStructureLicenseStatus(java.util.UUID structureId);
 }

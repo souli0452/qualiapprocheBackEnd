@@ -68,4 +68,14 @@ public record StructureController(StructureService structureService) {
     public ResponseEntity<StructureDto> getStructureByLibelle(@PathVariable String libelle)  {
         return ResponseEntity.ok(structureService.findStructureByLibelle(libelle));
     }
+
+    @GetMapping("/direction")
+    public ResponseEntity<StructureDto> getDirection() {
+        return ResponseEntity.ok(structureService.getDirection());
+    }
+
+    @GetMapping("/{id}/license-status")
+    public ResponseEntity<java.util.Map<String, Object>> getStructureLicenseStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(structureService.getStructureLicenseStatus(id));
+    }
 }

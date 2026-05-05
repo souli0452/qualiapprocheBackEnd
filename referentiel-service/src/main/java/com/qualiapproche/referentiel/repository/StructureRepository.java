@@ -20,5 +20,8 @@ public interface StructureRepository extends JpaRepository<Structure, UUID> {
     List<Structure> findAllByDirectionId(UUID id);
     List<Structure> findAllByDirectionIdAndTypeStructure(UUID id, TypeStructure typeStructure);
 
+    boolean existsByTypeStructure(TypeStructure typeStructure);
+    boolean existsByTypeStructureAndIdNot(TypeStructure typeStructure, UUID id);
+
 
 }

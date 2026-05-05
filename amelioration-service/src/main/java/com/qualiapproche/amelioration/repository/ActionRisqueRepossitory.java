@@ -1,7 +1,6 @@
 package com.qualiapproche.amelioration.repository;
 
 import com.qualiapproche.amelioration.entities.ActionRisque;
-import com.qualiapproche.referentiel.entities.Archivage;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
