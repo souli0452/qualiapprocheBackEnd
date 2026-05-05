@@ -41,12 +41,16 @@ public class AuditEntity {
     @Column(name = "current_user_structure")
     private String currentUserStructure;
 
+    @Column(name = "direction_id")
+    private UUID directionId;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         this.createdById = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
         this.currentUserfullName = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
         this.currentUserEmail = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserEmail();
+        this.directionId = com.qualiapproche.common.utils.SecurityUtils.getCurrentDirectionId();
     }
 
     @PreUpdate

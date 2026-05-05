@@ -24,8 +24,11 @@ public class KcUserController {
 
     @Operation(summary = "Authentification utilisateur", description = "Permet de se connecter et de recevoir un jeton JWT")
     @PostMapping("/login")
-    public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest, HttpServletResponse response) {
-        return kcUserService.login(loginRequest, response);
+    public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest) {
+        return ResponseEntity.ok(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
+                .status("SUCCESS")
+                .data(kcUserService.login(loginRequest))
+                .build());
     }
 
     @PostMapping("/refresh")

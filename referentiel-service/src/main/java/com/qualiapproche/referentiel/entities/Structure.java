@@ -37,5 +37,8 @@ public class Structure extends AuditEntity {
     @Enumerated(EnumType.STRING)
     private TypeStructure typeStructure;
     @jakarta.persistence.ManyToOne
+    @jakarta.persistence.JoinColumn(name = "parent_direction_id")
     private Structure direction;
+
+    private Boolean licenceActive;
 }

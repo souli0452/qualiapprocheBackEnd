@@ -4,7 +4,7 @@ import com.qualiapproche.common.base.AuditEntity;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.qualiapproche.common.utils.StatutEnum;
-import com.qualiapproche.referentiel.entities.Exigence;
+
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;

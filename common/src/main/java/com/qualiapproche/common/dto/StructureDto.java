@@ -38,4 +38,9 @@ public class StructureDto extends AuditEntityDto {
   private String autoriteSignataire;
   private String titreHonorifiqueSignataire;
   private String titreSignataire;
+  private java.time.LocalDateTime dateDebutLicence;
+  private java.time.LocalDateTime dateFinLicence;
+  private Boolean licenceActive;
+  private Long licenseDaysRemaining;
+  private java.util.List<String> modulesSubscribed;
 }

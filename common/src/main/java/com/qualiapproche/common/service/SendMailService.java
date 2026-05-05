@@ -5,4 +5,5 @@ public interface SendMailService {
     void sendReinitializePasswordEmail(String recipientEmail, String resetUrl);
     void sendResetPasswordEmail(String recipientEmail, String temporaryPassword, String url);
     void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName, String numeroNc, String observation);
+    void sendMail(String recipientEmail, String subject, String message, boolean isHtml);
 }

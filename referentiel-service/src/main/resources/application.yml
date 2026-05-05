@@ -12,11 +12,35 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: http://localhost:8080/realms/quali
+      client:
+        registration:
+          keycloak:
+            client-id: quali-approche
+            client-secret: EGBtXZ6hO13LHY8BfFwjkUgdINNtAXeu
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://localhost:8080/realms/quali/protocol/openid-connect/token
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: tachquali@gmail.com
+    password: qpkcnamwhjfkundy
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 # ===============================
 # Gestion des documents (PJ)
 # ===============================

@@ -13,11 +13,7 @@ import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
 import com.qualiapproche.amelioration.repository.*;
-import com.qualiapproche.referentiel.entities.ConfigGlobal;
-import com.qualiapproche.referentiel.entities.Structure;
-import com.qualiapproche.referentiel.repository.ConfigGlobalRepository;
-import com.qualiapproche.referentiel.repository.StructureRepository;
-import com.qualiapproche.referentiel.repository.TypeProcessusRepository;
+import com.qualiapproche.amelioration.client.ReferentielClient;
 import com.qualiapproche.common.utils.StatutEnum;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.persistence.EntityNotFoundException;
@@ -37,48 +33,38 @@ import lombok.RequiredArgsConstructor;
 @Slf4j
 @Transactional
 public class NonConformiteServiceImpl implements NonConformiteService {
-
     private final NonConformiteRepository nonConformiteRepository;
     private final NonConformiteMapper nonConformiteMapper;
     private final PlanActionMapper planActionMapper;
     private final TypeNonConformiteRepository typeNonConformiteRepository;
-    private final TypeProcessusRepository typeProcessusRepository;
+    private final ReferentielClient referentielClient;
     private final EfficaciteRepository efficaciteRepository;
     private final ActionRepository actionRepository;
     private final NiveauNonConformiteRepository niveauNonConformiteRepository;
     private final PieceJointeService fichierService;
     private final SendMailService sendMailService;
-    private  final StructureRepository structureRepository;
-    private  final ConfigGlobalRepository configGlobalRepository;
-    //private  final FichierMapper fichierMapper;
     private final PlanActionRepository planActionRepository;
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
      */
     private UUID findEfficaciteById(UUID id) {
-        return id != null ? efficaciteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Efficacité non trouvée avec l'ID : " + id)).getId()
-                : null;
+        return id;
     }
 
     private UUID findNiveauNonConformiteById(UUID id) {
-        return id != null ? niveauNonConformiteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Niveau de non-conformité non trouvé avec l'ID : " + id)).getId() : null;
+        return id;
     }
 
     private UUID findActionById(UUID id) {
-        return id != null ? actionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Action non trouvée avec l'ID : " + id)).getId() : null;
+        return id;
     }
 
     private UUID findTypeNonConformiteById(UUID id) {
-        return id != null ? typeNonConformiteRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Type de non-conformité non trouvé avec l'ID : " + id)).getId() : null;
+        return id;
     }
 
     private UUID findTypeProcessusById(UUID id) {
-        return id != null ? typeProcessusRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Type de processus non trouvé avec l'ID : " + id)).getId() : null;
+        return id;
     }
 
     private NonConformiteDto populateAttachments(NonConformiteDto dto) {
@@ -185,9 +171,15 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setActionPreventive(dto.getActionPreventive());
             existingNonConformite.setPertinanceRsSuivi(dto.getPertinanceRsSuivi());
             existingNonConformite.setNumeroFdac(dto.getNumeroFdac());
-            Optional<ConfigGlobal> configGlobal=configGlobalRepository.findAll().stream().findFirst();
-            Structure structure = structureRepository.getReferenceById(UUID.fromString(dto.getOrigineId()));
-            Structure structureSoumission = structureRepository.getReferenceById(UUID.fromString(dto.getStructureSoumissionId()));
+            ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
+            StructureDto structure = null;
+            if (dto.getOrigineId() != null) {
+                structure = referentielClient.getStructureById(UUID.fromString(dto.getOrigineId()));
+            }
+            StructureDto structureSoumission = null;
+            if (dto.getStructureSoumissionId() != null) {
+                structureSoumission = referentielClient.getStructureById(UUID.fromString(dto.getStructureSoumissionId()));
+            }
             if (dto.getFichiers() != null) {
                 fichierService.deleteAllByEntityId(dto.getId());
                 nonConformiteRepository.flush();
@@ -202,11 +194,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject,link,"emailTemplate",dto.getUserImputFullName(),dto.getNumeroReference(),dto.getObservationRejet());
 
             }
-            if (dto.getEtatTraitement()==Etat.IMPUTATION){
+            if (dto.getEtatTraitement() == Etat.IMPUTATION) {
                 String subject = "Non-conformité signalée – Action attendue de votre part ";
                 String link = "https://sgq-quali.horeb.tech/page/imputation";
-                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"structureToStructure",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getStructureSoumissionLibelle());
-
+                if (structure != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                }
             }
             /*if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
                 String subject = "Non-conformité signalée – Action attendue de votre part ";
@@ -214,31 +207,38 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getCurrentUserfullName());
 
             }*/
-            if (dto.getEtatTraitement()==Etat.VALIDATION_RS){
+            if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
                 String subject = "Validation d'une non conformité ";
                 String link = "https://sgq-quali.horeb.tech/page/validation_rs";
-                sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"validationRq",configGlobal.get().getNomCompletRq(),dto.getNumeroReference(),"");
-
+                if (configGlobal != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
+                }
             }
-            if (dto.getEtatTraitement()==Etat.SUIVI_RQ){
+            if (dto.getEtatTraitement() == Etat.SUIVI_RQ) {
                 String subject = "Suivi d'une non conformité ";
                 String link = "https://sgq-quali.horeb.tech/page/suivi_rq";
-                sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"validationRq",configGlobal.get().getNomCompletRq(),dto.getNumeroReference(),"");
-
+                if (configGlobal != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
+                }
             }
-            if (dto.getEtatTraitement()==Etat.CLOTURE){
+            if (dto.getEtatTraitement() == Etat.CLOTURE) {
                 String subject = "Cloture  non conformité ";
                 String link = "https://sgq-quali.horeb.tech/page/consultation";
-                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"traitementReussi",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getStructureSoumissionLibelle());
-                sendMailService.sendMailToUserAfterDemandImputed(structureSoumission.getEmail(), subject,link,"traitementReussi",structureSoumission.getAutoriteSignataire(),dto.getNumeroReference(),dto.getStructureSoumissionLibelle());
-
+                if (structure != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                }
+                if (structureSoumission != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(structureSoumission.getEmail(), subject, link, "traitementReussi", structureSoumission.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
+                }
             }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
-            if (dto.getEtatTraitement()==Etat.VALIDATION){
-                String subject = "Validation de la non-conformité N°"+dto.getNumeroReference();
+            if (dto.getEtatTraitement() == Etat.VALIDATION) {
+                String subject = "Validation de la non-conformité N°" + dto.getNumeroReference();
                 String link = "https://sgq-quali.horeb.tech/page/validation";
-                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationNonConformite",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getObservationRejet());
-                if (!dto.getParticipants().isEmpty()){
+                if (structure != null) {
+                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getObservationRejet());
+                }
+                if (!dto.getParticipants().isEmpty()) {
                     dto.getParticipants().forEach(participant -> {
                         existingNonConformite.getParticipants().getFullNames().add(participant);
                     });
@@ -356,22 +356,26 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         }*/
         String subject = "Taitement d'une non conformité N°" + nonConformite.getNumeroReference();
 
-        Optional<ConfigGlobal> configGlobal=configGlobalRepository.findAll().stream().findFirst();
-        if (rejectNonConformiteDto.getEtapeTraitement()==Etat.SOUMISSION){
+        ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
+        if (rejectNonConformiteDto.getEtapeTraitement() == Etat.SOUMISSION) {
             String link = "https://sgq-quali.horeb.tech/page/reception";
-            Structure structure = structureRepository.getReferenceById(UUID.fromString(nonConformite.getStructureSoumissionId()));
-            sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"rejectNonConformite",structure.getAutoriteSignataire(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
-            //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"rejectNonConformite",configGlobal.get().getNomCompletRq(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
+            try {
+                if (nonConformite.getStructureSoumissionId() != null) {
+                    StructureDto structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
+                    if (structure != null) {
+                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "rejectNonConformite", structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), nonConformite.getObservationRejet());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Erreur envoi mail rejet : {}", e.getMessage());
+            }
         }
         if (rejectNonConformiteDto.getEtapeTraitement()==Etat.TRAITEMENT){
             String link = "https://sgq-quali.horeb.tech";
             sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject,link,"rejectNonConformite",nonConformite.getUserImputFullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
-            //sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject,link,"rejectNonConformite",nonConformite.getUserImputFullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
-           // sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"rejectNonConformite",configGlobal.get().getNomCompletRq(), nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
         }
         String link = "https://sgq-quali.horeb.tech";
         sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link, "rejectNonConformite",nonConformite.getCurrentUserfullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
-        //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), subject,link,"rejectNonConformite",configGlobal.get().getNomCompletRq(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
         return populateAttachments(nonConformiteMapper.toDto((nonConformite)));
     }
 
@@ -399,9 +403,16 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             nc.setPublicationDate(LocalDateTime.now());
             nc.setEtatTraitement(Etat.RECEPTION);
             String subject = "Taitement d'une non conformité N°" + nc.getNumeroReference();
-            String link = "https://sgq-quali.horeb.tech/page/reception";
-            Structure structure = structureRepository.getReferenceById(UUID.fromString(nc.getStructureSoumissionId()));
-            sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationNonConformite",structure.getAutoriteSignataire(),nc.getNumeroReference(),nc.getObservationRejet());
+            try {
+                if (nc.getStructureSoumissionId() != null) {
+                    StructureDto structure = referentielClient.getStructureById(UUID.fromString(nc.getStructureSoumissionId()));
+                    if (structure != null) {
+                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, "", "validationNonConformite", structure.getAutoriteSignataire(), nc.getNumeroReference(), nc.getObservationRejet());
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Erreur lors de l'envoi du mail de changement de statut : {}", e.getMessage());
+            }
         }
         if (nc.getStatus() == Status.PUBLISHED) {
             nc.setArchivageDate(LocalDateTime.now());

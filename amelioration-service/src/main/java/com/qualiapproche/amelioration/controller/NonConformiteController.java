@@ -36,7 +36,7 @@ public class NonConformiteController {
      * @return NonConformiteDto contenant les informations de la non-conformité créée
      */
     @Operation(summary = "Créer une non-conformité", description = "Initialise une nouvelle non-conformité dans le système")
-    @PostMapping(CREATE_NON_CONFORMITE_PROCESSUS)
+    @PostMapping("/create")
     public ResponseEntity<NonConformiteDto> createNonConformite(@RequestBody NonConformiteDto dto) throws IOException {
         NonConformiteDto createdNonConformite = nonConformiteService.createNonConformite(dto);
         return ResponseEntity.ok(createdNonConformite);

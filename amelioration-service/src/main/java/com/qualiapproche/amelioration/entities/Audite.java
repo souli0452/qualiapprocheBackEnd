@@ -1,7 +1,4 @@
 package com.qualiapproche.amelioration.entities;
-import com.qualiapproche.referentiel.entities.Produit;
-import com.qualiapproche.referentiel.entities.Departement;
-import com.qualiapproche.referentiel.entities.Exigence;
 import com.qualiapproche.common.base.AuditEntity;
 
 
