@@ -5,6 +5,7 @@ import com.qualiapproche.common.base.AuditEntity;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
+import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.common.base.Participants;
 import jakarta.persistence.*;
 import lombok.*;
@@ -88,6 +89,8 @@ public class NonConformite extends AuditEntity {
   private String actionDsc;
   private String observationRejet;
   private String actionPreventive;
+  @Enumerated(EnumType.STRING)
+  private Circuit circuit;
   @ManyToOne
   private PieceJointe docRejet;
   @OneToMany

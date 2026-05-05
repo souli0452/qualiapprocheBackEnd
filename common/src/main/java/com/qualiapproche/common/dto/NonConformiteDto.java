@@ -16,6 +16,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
+import com.qualiapproche.common.enumeration.Circuit;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -92,5 +93,7 @@ public class NonConformiteDto extends AuditEntityDto {
     private String originNonConformiteLibelle;
     private String observationRejet;
     private PieceJointeDTO docRejet;
+    @Enumerated(EnumType.STRING)
+    private Circuit circuit;
     private String actionPreventive;
 }

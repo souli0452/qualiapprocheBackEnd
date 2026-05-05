@@ -47,4 +47,5 @@ public class PlanActionDto extends AuditEntityDto {
     private PieceJointeDTO docRejet;
 
     private LocalDate dateRejet;
+    private String critereEfficacite;
 }

@@ -101,4 +101,6 @@ public class PlanAction extends AuditEntity {
    */
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
   private LocalDate dateRejet;
+  @Column(columnDefinition = "TEXT")
+  private String critereEfficacite;
 }
