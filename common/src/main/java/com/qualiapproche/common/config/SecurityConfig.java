@@ -1,6 +1,5 @@
 package com.qualiapproche.common.config;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,10 +13,13 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final KeycloakRoleConverter keycloakRoleConverter;
+
+    public SecurityConfig(KeycloakRoleConverter keycloakRoleConverter) {
+        this.keycloakRoleConverter = keycloakRoleConverter;
+    }
 
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
@@ -26,7 +28,7 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/v1/quali-approche/login").permitAll()
+                .requestMatchers("/api/v1/login", "/api/v1/structures/direction").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

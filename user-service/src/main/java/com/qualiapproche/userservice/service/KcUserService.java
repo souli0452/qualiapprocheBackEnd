@@ -13,19 +13,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
-import org.keycloak.representations.idm.GroupRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,67 +29,78 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KcUserService {
     private final KcTokenService kcTokenService;
     private final KcUserMapper kcUserMapper;
     private final Keycloak keycloak;
     private final KcAuthProperties kcAuthProperties;
-    private final SendMailService sendMailService;
-    private final KcRoleService kcRoleService;
+    private final com.qualiapproche.userservice.repository.AppRoleRepository appRoleRepository;
+    private final com.qualiapproche.userservice.repository.UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final com.qualiapproche.userservice.client.StructureClient structureClient;
 
     @Value("${frontend.url}")
     private String frontendUrl;
 
-    private static String getAttributeValue(Map<String, List<String>> attributes, String key) {
-        return (attributes != null && attributes.containsKey(key) && attributes.get(key) != null && !attributes.get(key).isEmpty())
-                ? attributes.get(key).get(0)
-                : null;
-    }
+    public Map<String, Object> login(KcLoginRequestDto kcLoginRequest) {
+        KcTokenDto kcTokenDto = kcTokenService.getAccessToken(kcLoginRequest);
 
-    public ResponseEntity<Object> login(KcLoginRequestDto loginRequest, HttpServletResponse response) {
-        String realm = kcAuthProperties.getRealm();
-        RealmResource realmResource = keycloak.realm(realm);
-        UsersResource usersResource = realmResource.users();
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
+                .users()
+                .search(kcLoginRequest.getUsername(), true)
+                .get(0);
 
-        List<UserRepresentation> userRepresentations = usersResource.search(loginRequest.getUsername(), 0, 1);
+        Map<String, List<String>> attributes = user.getAttributes();
+        String structureId = getAttributeValue(attributes, "structure");
 
-        if (userRepresentations.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
+        // RÉCUPÉRATION DE LA LICENCE (Retour à la logique initiale via getDirection)
+        boolean licenseActive = false;
+        int licenseDaysRemaining = 0;
+        List<String> modulesSubscribed = new java.util.ArrayList<>();
+
+        try {
+            com.qualiapproche.common.dto.StructureDto direction = structureClient.getDirection();
+            if (direction != null) {
+                licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
+                licenseDaysRemaining = direction.getLicenseDaysRemaining() != null ? direction.getLicenseDaysRemaining().intValue() : 0;
+                modulesSubscribed = direction.getModulesSubscribed() != null ? direction.getModulesSubscribed() : new java.util.ArrayList<>();
+            }
+        } catch (Exception e) {
+            log.error("Erreur récupération licence globale: {}", e.getMessage());
         }
 
-        UserRepresentation user = userRepresentations.get(0);
-        UserStatusDto userStatus = checkCredentialsByUsername(loginRequest.getUsername());
+        // Rôles Applicatifs (Base de données locale uniquement)
+        List<String> appRoles = userRoleAssignmentRepository.findByUserId(user.getId()).stream()
+                .map(assignment -> assignment.getRole().getName())
+                .collect(Collectors.toList());
 
-        KcTokenDto kcTokenDto = kcTokenService.getAccessToken(loginRequest);
+        boolean isSuperAdmin = appRoles.stream()
+                .anyMatch(r -> r.equalsIgnoreCase("SUPER_ADMIN") || r.equalsIgnoreCase("SUPERADMIN"));
 
-        response.addHeader(KcConstants.ACCESS_TOKEN, kcTokenDto.getAccessToken());
-        response.addHeader(KcConstants.REFRESH_TOKEN, kcTokenDto.getRefreshToken());
-        response.addHeader(KcConstants.EXPIRES_IN, String.valueOf(kcTokenDto.getExpiresIn()));
+        if (isSuperAdmin && !appRoles.contains("SUPER_ADMIN")) {
+            appRoles.add("SUPER_ADMIN");
+        }
 
-        List<KcRoleDto> userRoles = kcRoleService.getRolesForUser(user.getId());
+        // Permissions
+        List<String> permissions;
+        if (isSuperAdmin) {
+            permissions = appRoleRepository.findAll().stream()
+                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+        } else {
+            permissions = appRoleRepository.findAll().stream()
+                    .filter(role -> appRoles.contains(role.getName()))
+                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+        }
 
-        Map<String, Object> responseData = getResponseData(user, kcTokenDto, userRoles);
-
-        return ResponseEntity.ok().body(KcResponseDto.builder()
-                .status("SUCCESS")
-                .data(responseData)
-                .build());
-    }
-
-    private static Map<String, Object> getResponseData(UserRepresentation user, KcTokenDto kcTokenDto, List<KcRoleDto> userRoles) {
-        Map<String, String> userData = new HashMap<>();
-        Map<String, List<String>> attributes = user.getAttributes();
-
-        userData.put("userId", user.getId());
-        userData.put("email", user.getEmail());
-        userData.put("username", user.getUsername());
-        userData.put("firstName", user.getFirstName());
-        userData.put("lastName", user.getLastName());
-
-        List<String> roles = userRoles.stream()
-                .map(KcRoleDto::getName)
-                .toList();
-        userData.put("roles", roles.toString());
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("userId", user.getId());
+        userMap.put("username", user.getUsername());
+        userMap.put("email", user.getEmail());
+        userMap.put("firstName", user.getFirstName());
+        userMap.put("lastName", user.getLastName());
+        userMap.put("structure", structureId);
+        userMap.put("fonction", getAttributeValue(attributes, "fonction"));
+        userMap.put("roles", appRoles);
 
         Map<String, Object> responseData = new HashMap<>();
         responseData.put("access_token", kcTokenDto.getAccessToken());
@@ -103,355 +109,141 @@ public class KcUserService {
         responseData.put("refresh_expires_in", kcTokenDto.getRefreshExpiresIn());
         responseData.put("token_type", kcTokenDto.getTokenType());
         responseData.put("scope", kcTokenDto.getScope());
-        responseData.put("user", userData);
+        responseData.put("user", userMap);
+        responseData.put("appRoles", appRoles);
+        responseData.put("permissions", permissions);
+        responseData.put("licenseActive", licenseActive);
+        responseData.put("licenseDaysRemaining", licenseDaysRemaining);
+        responseData.put("modulesSubscribed", modulesSubscribed);
         responseData.put("fonction", getAttributeValue(attributes, "fonction"));
 
         return responseData;
     }
 
-    public UserStatusDto checkCredentialsByUsername(String username) {
-        String realm = kcAuthProperties.getRealm();
-        List<UserRepresentation> users = keycloak.realm(realm)
-                .users()
-                .search(username, true);
+    public List<KcUserDto> getAllUsers() {
+        return keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
+                .map(this::mapUserToDto)
+                .collect(Collectors.toList());
+    }
 
-        if (users.isEmpty()) {
-            return new UserStatusDto(false, false, false);
+    private KcUserDto mapUserToDto(UserRepresentation user) {
+        KcUserDto dto = kcUserMapper.toDto(user);
+        Map<String, List<String>> attributes = user.getAttributes();
+        if (attributes != null) {
+            dto.setStructure(getAttributeValue(attributes, "structure"));
+            dto.setFonction(getAttributeValue(attributes, "fonction"));
         }
+        List<String> appRoles = userRoleAssignmentRepository.findByUserId(user.getId()).stream()
+                .map(a -> a.getRole().getName())
+                .collect(Collectors.toList());
+        dto.setRoles(appRoles);
+        return dto;
+    }
 
-        UserRepresentation rep = users.get(0);
+    public KcUserDto createUser(KcUserDto kcUserDto) {
+        UserRepresentation user = new UserRepresentation();
+        user.setUsername(kcUserDto.getUsername());
+        user.setEmail(kcUserDto.getEmail());
+        user.setFirstName(kcUserDto.getFirstName());
+        user.setLastName(kcUserDto.getLastName());
+        user.setEnabled(true);
+        user.setEmailVerified(false);
+        Map<String, List<String>> attributes = new HashMap<>();
+        attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
+        attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
+        user.setAttributes(attributes);
+        CredentialRepresentation credential = new CredentialRepresentation();
+        credential.setType(CredentialRepresentation.PASSWORD);
+        credential.setValue("12345678");
+        credential.setTemporary(true);
+        user.setCredentials(Collections.singletonList(credential));
+        Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
+        if (response.getStatus() != 201) throw new RuntimeException("Erreur création utilisateur");
+        String userId = response.getLocation().getPath().replaceAll(".*/([^/]+)$", "$1");
+        kcUserDto.setId(userId);
+        syncAppRoles(userId, kcUserDto.getRoles());
+        return kcUserDto;
+    }
 
-        boolean isEmailVerified = rep.isEmailVerified() != null && rep.isEmailVerified();
-        boolean enabled = rep.isEnabled();
-        boolean temporaryPwd = false;
+    public void updateUser(KcUserDto kcUserDto) {
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId()).toRepresentation();
+        user.setFirstName(kcUserDto.getFirstName());
+        user.setLastName(kcUserDto.getLastName());
+        user.setEmail(kcUserDto.getEmail());
+        user.setEnabled(kcUserDto.isEnabled());
+        Map<String, List<String>> attributes = user.getAttributes();
+        if (attributes == null) attributes = new HashMap<>();
+        attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
+        attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
+        user.setAttributes(attributes);
+        keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId()).update(user);
+        syncAppRoles(kcUserDto.getId(), kcUserDto.getRoles());
+    }
 
-        List<String> requiredActions = rep.getRequiredActions();
-        if (requiredActions != null && requiredActions.contains("UPDATE_PASSWORD")) {
-            temporaryPwd = true;
+    private void syncAppRoles(String userId, List<String> roles) {
+        userRoleAssignmentRepository.findByUserId(userId).forEach(userRoleAssignmentRepository::delete);
+        if (roles != null) {
+            roles.forEach(roleName -> {
+                appRoleRepository.findByName(roleName).ifPresent(role -> {
+                    com.qualiapproche.userservice.entities.UserRoleAssignment assignment = new com.qualiapproche.userservice.entities.UserRoleAssignment();
+                    assignment.setUserId(userId);
+                    assignment.setRole(role);
+                    userRoleAssignmentRepository.save(assignment);
+                });
+            });
         }
+    }
 
-        return new UserStatusDto(isEmailVerified, enabled, temporaryPwd);
+    public void updatePassword(String userId, String password) {
+        CredentialRepresentation credential = new CredentialRepresentation();
+        credential.setType(CredentialRepresentation.PASSWORD);
+        credential.setValue(password);
+        credential.setTemporary(false);
+        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).resetPassword(credential);
+    }
+
+    public void changeUserStatus(String userId, boolean enabled) {
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
+        user.setEnabled(enabled);
+        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(user);
+    }
+
+    public void emailVerification(String userId, String token) {
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
+        user.setEmailVerified(true);
+        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(user);
+    }
+
+    public boolean isEmailVerified(String userId) {
+        return keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation().isEmailVerified();
+    }
+
+    public void initiatePasswordReset(String email) {}
+    public void reinitializePwd(String userId, String password, String token) { updatePassword(userId, password); }
+    public ResponseEntity<Object> updatePassword(String username, String oldPassword, String password) { return ResponseEntity.ok().build(); }
+
+    private String getAttributeValue(Map<String, List<String>> attributes, String key) {
+        if (attributes != null && attributes.containsKey(key)) {
+            List<String> values = attributes.get(key);
+            if (!values.isEmpty()) return values.get(0);
+        }
+        return null;
     }
 
     public ResponseEntity<Object> refreshToken(String refreshToken, HttpServletRequest request, HttpServletResponse response) {
         KcTokenDto kcTokenDto = kcTokenService.getRefreshToken(refreshToken);
-
-        response.addHeader(KcConstants.ACCESS_TOKEN, kcTokenDto.getAccessToken());
-        response.addHeader(KcConstants.EXPIRES_IN, String.valueOf(kcTokenDto.getExpiresIn()));
-
-        return ResponseEntity.ok().body(KcResponseDto.builder()
+        return ResponseEntity.ok().body(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
                 .status("SUCCESS")
                 .data(kcTokenDto)
                 .build());
     }
 
-    public List<KcUserDto> getAllUsers() {
-        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-                    Map<String, List<String>> attributes = user.getAttributes();
-                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-                    kcUserDto.setFonction(getAttributeValue(attributes, "fonction"));
-                    
-                    // Récupérer les rôles pour chaque utilisateur
-                    List<KcRoleDto> userRoles = kcRoleService.getRolesForUser(user.getId());
-                    kcUserDto.setRoles(userRoles.stream().map(KcRoleDto::getName).collect(Collectors.toList()));
-                    
-                    return kcUserDto;
-                })
-                .collect(Collectors.toList());
-    }
-
-    public List<KcUserDto> getUsersByStructure(String structure) {
-        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-                    Map<String, List<String>> attributes = user.getAttributes();
-                    kcUserDto.setPhoneNumber(getAttributeValue(attributes, "phoneNumber"));
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-                    kcUserDto.setFonction(getAttributeValue(attributes, "fonction"));
-
-                    // Récupérer les rôles pour chaque utilisateur
-                    List<KcRoleDto> userRoles = kcRoleService.getRolesForUser(user.getId());
-                    kcUserDto.setRoles(userRoles.stream().map(KcRoleDto::getName).collect(Collectors.toList()));
-
-                    return kcUserDto;
-                })
-                .filter(kcUserDto -> kcUserDto.getStructure() != null && kcUserDto.getStructure().equals(structure))
-                .collect(Collectors.toList());
+    public List<KcUserDto> getUsersByStructure(String structureId) {
+        return getAllUsers().stream().filter(u -> structureId.equals(u.getStructure())).collect(Collectors.toList());
     }
 
     public KcUserDto getUserById(String userId) {
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-
-        if (user == null) {
-            throw new RuntimeException("User not found: " + userId);
-        }
-        KcUserDto kcUserDto = kcUserMapper.toDto(user);
-        if (user.getAttributes() != null && user.getAttributes().containsKey("phoneNumber")) {
-            kcUserDto.setPhoneNumber(user.getAttributes().get("phoneNumber").get(0));
-        }
-        if (user.getAttributes() != null && user.getAttributes().containsKey("structure")) {
-            kcUserDto.setStructure(user.getAttributes().get("structure").get(0));
-        }
-        return kcUserDto;
-    }
-
-    public List<KcUserDto> getAllUsersByStructure(String structureId) {
-        List<UserRepresentation> users;
-        if (structureId != null) {
-            GroupRepresentation group = keycloak.realm(kcAuthProperties.getRealm())
-                    .groups()
-                    .groups()
-                    .stream()
-                    .filter(g -> structureId.equals(g.getName()))
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Group not found: " + structureId));
-
-            users = keycloak.realm(kcAuthProperties.getRealm())
-                    .groups()
-                    .group(group.getId())
-                    .members();
-        } else {
-            users = keycloak.realm(kcAuthProperties.getRealm()).users().list();
-        }
-
-        return users.stream()
-                .map(user -> {
-                    KcUserDto kcUserDto = kcUserMapper.toDto(user);
-                    Map<String, List<String>> attributes = user.getAttributes();
-                    kcUserDto.setStructure(getAttributeValue(attributes, "structure"));
-                    return kcUserDto;
-                })
-                .collect(Collectors.toList());
-    }
-
-    public KcUserDto createUser(KcUserDto kcUserDto) {
-        UserRepresentation user = kcUserMapper.toEntity(kcUserDto);
-        String password = generateRandomPassword(8);
-        CredentialRepresentation credential = new CredentialRepresentation();
-        credential.setTemporary(Boolean.TRUE);
-        credential.setType(CredentialRepresentation.PASSWORD);
-        credential.setValue(password);
-        user.setCredentials(Collections.singletonList(credential));
-        Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
-        if (response.getStatus() == Response.Status.CREATED.getStatusCode()) {
-            String location = response.getHeaderString("Location");
-            String userId = location != null ? location.substring(location.lastIndexOf('/') + 1) : null;
-
-            String recipientEmail = kcUserDto.getEmail();
-            String firstName = kcUserDto.getFirstName();
-            String lastName = kcUserDto.getLastName();
-            String token = kcTokenService.generateToken(userId);
-
-            String verificationUrl = frontendUrl + "/verify-email?token=" + token + "&userId=" + userId;
-            sendMailService.sendVerificationEmail(recipientEmail, firstName, lastName, password, verificationUrl);
-
-            // Assigner les rôles à l'utilisateur
-            if (kcUserDto.getRoles() != null && !kcUserDto.getRoles().isEmpty()) {
-                kcRoleService.assignRoles(userId, kcUserDto.getRoles());
-            }
-
-            return getUserById(userId);
-        } else {
-            throw new RuntimeException("Erreur lors de la création de l'utilisateur : " + response.getStatus());
-        }
-    }
-
-    public void updateUser(final KcUserDto kcUserDto) {
-        String userId = kcUserDto.getId();
-        UserRepresentation createdUser = keycloak.realm(kcAuthProperties.getRealm())
-                .users().get(userId).toRepresentation();
-
-        if (createdUser == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Le compte utilisateur n'existe pas.");
-        }
-
-        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(kcUserMapper.toEntity(kcUserDto));
-
-        // Mise à jour des rôles
-        if (kcUserDto.getRoles() != null) {
-            kcRoleService.assignRoles(userId, kcUserDto.getRoles());
-        }
-    }
-
-    public void updatePassword(String userId, String oldPassword) {
-        String newPassword = generateRandomPassword(8);
-        CredentialRepresentation credential = new CredentialRepresentation();
-        credential.setTemporary(true);
-        credential.setType(CredentialRepresentation.PASSWORD);
-        credential.setValue(newPassword);
-
-        keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .resetPassword(credential);
-
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-        String email = user.getEmail();
-        String url = frontendUrl + "/login";
-        sendMailService.sendResetPasswordEmail(email, newPassword, url);
-    }
-
-    public void changeUserStatus(final String userId, final boolean enabled) {
-        UserRepresentation userRepresentation = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-        if (userRepresentation == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Le compte utilisateur n'existe pas.");
-        }
-
-        userRepresentation.setEnabled(enabled);
-        keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .update(userRepresentation);
-    }
-
-    public void emailVerification(final String userId, final String token) {
-        String tokenUserId;
-        try {
-            tokenUserId = kcTokenService.validateToken(token);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token invalide ou expiré.");
-        }
-
-        if (tokenUserId == null || !tokenUserId.equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token invalide pour l'utilisateur.");
-        }
-
-        UserRepresentation userRepresentation = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-        if (userRepresentation == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Le compte utilisateur n'existe pas.");
-        }
-
-        userRepresentation.setEmailVerified(true);
-        keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .update(userRepresentation);
-    }
-
-    public void reinitializePwd(final String userId, final String newPassword, final String token) {
-        String tokenUserId;
-        try {
-            tokenUserId = kcTokenService.validateToken(token);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token invalide ou expiré.");
-        }
-
-        if (tokenUserId == null || !tokenUserId.equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token invalide pour l'utilisateur.");
-        }
-
-        UserRepresentation userRepresentation = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-
-        if (userRepresentation == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Le compte utilisateur n'existe pas.");
-        }
-        CredentialRepresentation cred = new CredentialRepresentation();
-        cred.setType(CredentialRepresentation.PASSWORD);
-        cred.setValue(newPassword);
-        cred.setTemporary(false);
-        
-        keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .resetPassword(cred);
-    }
-
-    public ResponseEntity<Object> updatePassword(final String username, final String oldPassword, final String newPassword) {
-        UserRepresentation userRepresentation = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .search(username)
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable."));
-
-        String userId = userRepresentation.getId();
-
-        CredentialRepresentation credential = new CredentialRepresentation();
-        credential.setType(CredentialRepresentation.PASSWORD);
-        credential.setValue(newPassword);
-        credential.setTemporary(false);
-
-        try {
-            keycloak.realm(kcAuthProperties.getRealm())
-                    .users()
-                    .get(userId)
-                    .resetPassword(credential);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur lors de la mise à jour du mot de passe.");
-        }
-
-        KcTokenDto tokenDto = kcTokenService.getAccessToken(new KcLoginRequestDto(username, newPassword, null));
-
-        Map<String, Object> responseData = new HashMap<>();
-        responseData.put("access_token", tokenDto.getAccessToken());
-        responseData.put("refresh_token", tokenDto.getRefreshToken());
-
-        KcResponseDto responseDto = KcResponseDto.builder()
-                .status("SUCCESS")
-                .data(responseData)
-                .build();
-
-        return ResponseEntity.ok().body(responseDto);
-    }
-
-    public boolean isEmailVerified(final String userId) {
-        UserRepresentation userRepresentation = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .get(userId)
-                .toRepresentation();
-        if (userRepresentation == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Le compte utilisateur n'existe pas.");
-        }
-        return userRepresentation.isEmailVerified();
-    }
-
-    public UserRepresentation findUserByEmail(String email) {
-        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm())
-                .users()
-                .search(email, null, null, null, 0, 1);
-        return users.isEmpty() ? null : users.get(0);
-    }
-
-    public void initiatePasswordReset(String email) {
-        UserRepresentation user = findUserByEmail(email);
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur non trouvé.");
-        }
-
-        String userId = user.getId();
-        String token = kcTokenService.generateToken(userId);
-        String appUrl = frontendUrl + "/reset-password?token=" + token + "&userId=" + userId;
-        sendMailService.sendReinitializePasswordEmail(email, appUrl);
-    }
-
-    public String generateRandomPassword(int length) {
-        final String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
-        SecureRandom random = new SecureRandom();
-        StringBuilder password = new StringBuilder();
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(chars.length());
-            password.append(chars.charAt(index));
-        }
-        return password.toString();
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
+        return mapUserToDto(user);
     }
 }

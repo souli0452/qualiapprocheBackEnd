@@ -120,4 +120,18 @@ public class SendMailServiceImpl implements SendMailService {
             throw new RuntimeException(e);
         }
     }
+
+    @Override
+    public void sendMail(String recipientEmail, String subject, String message, boolean isHtml) {
+        try {
+            MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            helper.setTo(recipientEmail);
+            helper.setSubject(subject);
+            helper.setText(message, isHtml);
+            javaMailSender.send(mimeMessage);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Erreur lors de l'envoi de l'email", e);
+        }
+    }
 }

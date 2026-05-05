@@ -5,7 +5,6 @@ import com.qualiapproche.amelioration.entities.ActionCorrectivePreventive;
 import com.qualiapproche.amelioration.entities.ActionExisgence;
 import com.qualiapproche.amelioration.entities.ActionRisque;
 import com.qualiapproche.amelioration.entities.Risque;
-import com.qualiapproche.referentiel.entities.Exigence;
 import com.qualiapproche.amelioration.entities.mappers.ActionCorrectivePreventiveMapper;
 import com.qualiapproche.amelioration.repository.ActionCorrectivePreventiveRepository;
 import com.qualiapproche.amelioration.repository.ActionExigenceRepository;
@@ -50,8 +49,7 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
             actionCorrectivePreventiveDto.getExigences().forEach(exigence -> {
                 ActionExisgence actionexigence = new ActionExisgence();
                 actionexigence.setAction(savedAction);
-                Exigence exigenceEntity = new Exigence();
-                exigenceEntity.setId(exigence.getId());
+                actionexigence.setExigenceId(exigence.getId());
                 actionExigenceRepository.save(actionexigence);
             });
         }
@@ -83,9 +81,7 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
                 actionCorrectivePreventiveDto.getExigences().forEach(exigence -> {
                     ActionExisgence actionexigence = new ActionExisgence();
                     actionexigence.setAction(finalActionCorrectivePreventive1);
-                    Exigence exigenceEntity = new Exigence();
-                    exigenceEntity.setId(exigence.getId());
-                   // actionexigence.setExigence(exigenceEntity);
+                    actionexigence.setExigenceId(exigence.getId());
                     actionExigenceRepository.save(actionexigence);
                 });
             }

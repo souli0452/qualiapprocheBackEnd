@@ -2,7 +2,7 @@ package com.qualiapproche.common.utils;
 public class ApiUrls {
 
     /* Base urls */
-    public static final String QUALI_APPROCHE_ROOT_URL="api/v1";
+    public static final String QUALI_APPROCHE_ROOT_URL="/api/v1";
 
     public static final String URL_ROLES =QUALI_APPROCHE_ROOT_URL+"/roles";
 
@@ -125,7 +125,7 @@ public class ApiUrls {
 
     /* Non conformité urls */
 
-    public static final String NON_CONFORMITE_ROOT_URL = "api/v1/quali-approche/non-conformite";
+    public static final String NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     //public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String CREATE_NON_CONFORMITE_PROCESSUS = "/create";
     public static final String UPDATE_NON_CONFORMITE_PROCESSUS = "/update/{id}";
@@ -219,6 +219,6 @@ public class ApiUrls {
     public static final String STRUCTURE_BY_LIBELLE_URL = "/by-libelle/{libelle}";
 
     /* reporting */
-    public static final String CREATE_REPORTING_ROOT_URL = "api/v1/quali-approche/reports/reporting";
+    public static final String CREATE_REPORTING_ROOT_URL = "api/v1/reports/reporting";
 
 }

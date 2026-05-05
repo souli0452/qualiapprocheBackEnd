@@ -1,6 +1,5 @@
 package com.qualiapproche.amelioration.entities;
 
-import com.qualiapproche.referentiel.entities.Exigence;
 import com.qualiapproche.common.base.AuditEntity;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
