@@ -44,6 +44,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final PieceJointeService fichierService;
     private final SendMailService sendMailService;
     private final PlanActionRepository planActionRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    private String frontendUrl;
     /**
      * Recherche les entités en base et renvoie une exception si l'ID est invalide.
      */
@@ -190,40 +193,40 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
             if (dto.getEtatTraitement()==Etat.TRAITEMENT){
                 String subject = "Taitement d'une non conformité ";
-                String link = "https://sgq-quali.horeb.tech/page/traitement";
+                String link = frontendUrl + "/page/traitement";
                 sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject,link,"emailTemplate",dto.getUserImputFullName(),dto.getNumeroReference(),dto.getObservationRejet());
 
             }
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
                 String subject = "Non-conformité signalée – Action attendue de votre part ";
-                String link = "https://sgq-quali.horeb.tech/page/imputation";
+                String link = frontendUrl + "/page/imputation";
                 if (structure != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
                 }
             }
             /*if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
                 String subject = "Non-conformité signalée – Action attendue de votre part ";
-                String link = "https://sgq-quali.horeb.tech/page/validation-plan";
+                String link = frontendUrl + "/page/validation-plan";
                 sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.getNumeroReference(),dto.getCurrentUserfullName());
 
             }*/
             if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
                 String subject = "Validation d'une non conformité ";
-                String link = "https://sgq-quali.horeb.tech/page/validation_rs";
+                String link = frontendUrl + "/page/validation_rs";
                 if (configGlobal != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
                 }
             }
             if (dto.getEtatTraitement() == Etat.SUIVI_RQ) {
                 String subject = "Suivi d'une non conformité ";
-                String link = "https://sgq-quali.horeb.tech/page/suivi_rq";
+                String link = frontendUrl + "/page/suivi_rq";
                 if (configGlobal != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link, "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
                 }
             }
             if (dto.getEtatTraitement() == Etat.CLOTURE) {
                 String subject = "Cloture  non conformité ";
-                String link = "https://sgq-quali.horeb.tech/page/consultation";
+                String link = frontendUrl + "/page/consultation";
                 if (structure != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getStructureSoumissionLibelle());
                 }
@@ -234,7 +237,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
             if (dto.getEtatTraitement() == Etat.VALIDATION) {
                 String subject = "Validation de la non-conformité N°" + dto.getNumeroReference();
-                String link = "https://sgq-quali.horeb.tech/page/validation";
+                String link = frontendUrl + "/page/validation";
                 if (structure != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(), dto.getObservationRejet());
                 }
@@ -358,7 +361,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
         if (rejectNonConformiteDto.getEtapeTraitement() == Etat.SOUMISSION) {
-            String link = "https://sgq-quali.horeb.tech/page/reception";
+            String link = frontendUrl + "/page/reception";
             try {
                 if (nonConformite.getStructureSoumissionId() != null) {
                     StructureDto structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
@@ -371,10 +374,10 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
         }
         if (rejectNonConformiteDto.getEtapeTraitement()==Etat.TRAITEMENT){
-            String link = "https://sgq-quali.horeb.tech";
+            String link = frontendUrl;
             sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject,link,"rejectNonConformite",nonConformite.getUserImputFullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
         }
-        String link = "https://sgq-quali.horeb.tech";
+        String link = frontendUrl;
         sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link, "rejectNonConformite",nonConformite.getCurrentUserfullName(),nonConformite.getNumeroReference(),nonConformite.getObservationRejet());
         return populateAttachments(nonConformiteMapper.toDto((nonConformite)));
     }
@@ -707,7 +710,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             planAction.setStatus(StatutEnum.NON_TRAITER);
 
             String subject = "Traitement d'un plan d'action";
-            String link = "https://sgq-quali.horeb.tech/traitement-action/non-traiter";
+            String link = frontendUrl + "/traitement-action/non-traiter";
 
             sendMailService.sendMailToUserAfterDemandImputed(
                     planAction.getResponsableEmail(),
