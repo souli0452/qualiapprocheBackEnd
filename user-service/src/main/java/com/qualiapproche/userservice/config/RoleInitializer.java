@@ -33,19 +33,6 @@ public class RoleInitializer implements CommandLineRunner {
                 "RQ_NC", "CONSULTATION_NC", "TRAITEMENT_PLAN", "MANAGE_USER", "ROLE_MANAGE", "STRUCT_MANAGE"
         ));
 
-        // 2. Rôles spécifiques pour le Workflow Non-Conformité (utilisés dans isUserInRoles du Frontend)
-        syncRole("RECEPTION_NC", "Analyse initiale du pilote NC", Arrays.asList("TRAITEMENT_DEMANDES", "RECEPTION_NC", "NC_READ"));
-        syncRole("VALIDATION_RQ", "Validation par Responsable Qualité NC", Arrays.asList("TRAITEMENT_DEMANDES", "VALIDATION_RQ", "NC_READ"));
-        syncRole("IMPUTATION_NC", "Affectation des responsables NC", Arrays.asList("TRAITEMENT_DEMANDES", "IMPUTATION_NC", "NC_READ"));
-        syncRole("TRAITEMENT_NC", "Proposition d'actions correctives NC", Arrays.asList("TRAITEMENT_DEMANDES", "TRAITEMENT_NC", "NC_READ"));
-        syncRole("VALIDATION_CHEF", "Validation des actions par le Chef", Arrays.asList("TRAITEMENT_DEMANDES", "VALIDATION_CHEF", "NC_READ"));
-        syncRole("RQ_NC", "Suivi final par Responsable Qualité NC", Arrays.asList("TRAITEMENT_DEMANDES", "RQ_NC", "NC_READ"));
-        syncRole("CONSULTATION_NC", "Consultation des non-conformités", Arrays.asList("TRAITEMENT_DEMANDES", "CONSULTATION_NC", "NC_READ"));
-        syncRole("TRAITEMENT_PLAN", "Traitement des plans d'actions", Arrays.asList("TRAITEMENT_DEMANDES", "TRAITEMENT_PLAN"));
-
-        // 3. Rôles de gestion administrative
-        syncRole("MANAGE_USER", "Gestion des utilisateurs et rôles", Arrays.asList("MANAGE_USER", "ROLE_MANAGE"));
-
         log.info("Synchronisation des rôles terminée.");
     }
 

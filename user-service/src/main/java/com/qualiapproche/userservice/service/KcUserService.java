@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,7 +39,7 @@ public class KcUserService {
     private final com.qualiapproche.userservice.repository.AppRoleRepository appRoleRepository;
     private final com.qualiapproche.userservice.repository.UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final com.qualiapproche.userservice.client.StructureClient structureClient;
-
+    private final SendMailService sendMailService;
     @Value("${frontend.url}")
     private String frontendUrl;
 
@@ -62,8 +63,11 @@ public class KcUserService {
             com.qualiapproche.common.dto.StructureDto direction = structureClient.getDirection();
             if (direction != null) {
                 licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
-                licenseDaysRemaining = direction.getLicenseDaysRemaining() != null ? direction.getLicenseDaysRemaining().intValue() : 0;
-                modulesSubscribed = direction.getModulesSubscribed() != null ? direction.getModulesSubscribed() : new java.util.ArrayList<>();
+                licenseDaysRemaining = direction.getLicenseDaysRemaining() != null
+                        ? direction.getLicenseDaysRemaining().intValue()
+                        : 0;
+                modulesSubscribed = direction.getModulesSubscribed() != null ? direction.getModulesSubscribed()
+                        : new java.util.ArrayList<>();
             }
         } catch (Exception e) {
             log.error("Erreur récupération licence globale: {}", e.getMessage());
@@ -147,32 +151,52 @@ public class KcUserService {
         user.setFirstName(kcUserDto.getFirstName());
         user.setLastName(kcUserDto.getLastName());
         user.setEnabled(true);
-        user.setEmailVerified(false);
+        user.setEmailVerified(kcUserDto.isEmailVerified());
         Map<String, List<String>> attributes = new HashMap<>();
         attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
         attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
         user.setAttributes(attributes);
+        String password = generateRandomPassword(8);
         CredentialRepresentation credential = new CredentialRepresentation();
         credential.setType(CredentialRepresentation.PASSWORD);
-        credential.setValue("12345678");
-        credential.setTemporary(true);
+        credential.setValue(password);
+        credential.setTemporary(!kcUserDto.isEmailVerified());
         user.setCredentials(Collections.singletonList(credential));
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
-        if (response.getStatus() != 201) throw new RuntimeException("Erreur création utilisateur");
+        if (response.getStatus() != 201)
+            throw new RuntimeException("Erreur création utilisateur");
         String userId = response.getLocation().getPath().replaceAll(".*/([^/]+)$", "$1");
         kcUserDto.setId(userId);
         syncAppRoles(userId, kcUserDto.getRoles());
+
+        // Envoi de l'email de vérification avec le mot de passe temporaire
+        try {
+            String token = java.util.UUID.randomUUID().toString();
+            String verificationUrl = frontendUrl + "/verify-email?token=" + token + "&userId=" + userId;
+            sendMailService.sendVerificationEmail(
+                kcUserDto.getEmail(),
+                kcUserDto.getFirstName(),
+                kcUserDto.getLastName(),
+                password,
+                verificationUrl
+            );
+        } catch (Exception e) {
+            log.error("Erreur lors de l'envoi de l'email de vérification: {}", e.getMessage());
+        }
+
         return kcUserDto;
     }
 
     public void updateUser(KcUserDto kcUserDto) {
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId()).toRepresentation();
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId())
+                .toRepresentation();
         user.setFirstName(kcUserDto.getFirstName());
         user.setLastName(kcUserDto.getLastName());
         user.setEmail(kcUserDto.getEmail());
         user.setEnabled(kcUserDto.isEnabled());
         Map<String, List<String>> attributes = user.getAttributes();
-        if (attributes == null) attributes = new HashMap<>();
+        if (attributes == null)
+            attributes = new HashMap<>();
         attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
         attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
         user.setAttributes(attributes);
@@ -209,28 +233,79 @@ public class KcUserService {
     }
 
     public void emailVerification(String userId, String token) {
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
+        UserResource userResource = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId);
+        UserRepresentation user = userResource.toRepresentation();
+        
         user.setEmailVerified(true);
-        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(user);
+        user.setRequiredActions(Collections.emptyList());
+        userResource.update(user);
+
+        // Rendre le mot de passe permanent pour permettre la connexion directe
+        userResource.credentials().forEach(credential -> {
+            if (CredentialRepresentation.PASSWORD.equals(credential.getType())) {
+                credential.setTemporary(false);
+                // On pourrait techniquement modifier l'entité, mais le plus sûr est de s'assurer 
+                // qu'aucune action UPDATE_PASSWORD ne reste dans Keycloak.
+            }
+        });
     }
 
     public boolean isEmailVerified(String userId) {
         return keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation().isEmailVerified();
     }
 
-    public void initiatePasswordReset(String email) {}
-    public void reinitializePwd(String userId, String password, String token) { updatePassword(userId, password); }
-    public ResponseEntity<Object> updatePassword(String username, String oldPassword, String password) { return ResponseEntity.ok().build(); }
+    public void initiatePasswordReset(String email) {
+    }
+
+    public void reinitializePwd(String userId, String password, String token) {
+        updatePassword(userId, password);
+    }
+
+    public ResponseEntity<Object> updatePassword(String username, String oldPassword, String password) {
+        try {
+            // 1. Vérification de l'ancien mot de passe via une tentative de login
+            kcTokenService.getAccessToken(KcLoginRequestDto.builder()
+                    .username(username)
+                    .password(oldPassword)
+                    .build());
+
+            // 2. Recherche de l'utilisateur par son username
+            List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm())
+                    .users()
+                    .search(username, true);
+
+            if (users.isEmpty()) {
+                throw new RuntimeException("Utilisateur non trouvé");
+            }
+
+            // 3. Mise à jour du mot de passe
+            updatePassword(users.get(0).getId(), password);
+
+            return ResponseEntity.ok(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
+                    .status("SUCCESS")
+                    .message("Votre mot de passe a été mis à jour avec succès.")
+                    .build());
+        } catch (Exception e) {
+            log.error("Erreur lors de la mise à jour du mot de passe: {}", e.getMessage());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
+                            .status("ERROR")
+                            .message("Ancien mot de passe incorrect.")
+                            .build());
+        }
+    }
 
     private String getAttributeValue(Map<String, List<String>> attributes, String key) {
         if (attributes != null && attributes.containsKey(key)) {
             List<String> values = attributes.get(key);
-            if (!values.isEmpty()) return values.get(0);
+            if (!values.isEmpty())
+                return values.get(0);
         }
         return null;
     }
 
-    public ResponseEntity<Object> refreshToken(String refreshToken, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Object> refreshToken(String refreshToken, HttpServletRequest request,
+            HttpServletResponse response) {
         KcTokenDto kcTokenDto = kcTokenService.getRefreshToken(refreshToken);
         return ResponseEntity.ok().body(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
                 .status("SUCCESS")
@@ -245,5 +320,15 @@ public class KcUserService {
     public KcUserDto getUserById(String userId) {
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
         return mapUserToDto(user);
+    }
+
+    private String generateRandomPassword(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 }

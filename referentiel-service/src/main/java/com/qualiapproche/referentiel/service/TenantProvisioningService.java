@@ -63,6 +63,16 @@ public class TenantProvisioningService implements CommandLineRunner {
             log.info("Direction {} already exists, updating license if necessary.", libelleLong);
             Structure existingDirection = structureRepository.findByLibelleLong(libelleLong).get();
             updateLicenseForExistingDirection(existingDirection, node);
+            
+            // Tenter de provisionner l'admin même si la direction existe
+            JsonNode adminNode = node.get("superAdmin");
+            if (adminNode != null) {
+                try {
+                    provisionSuperAdmin(existingDirection, adminNode);
+                } catch (Exception e) {
+                    log.warn("Non-critical error during Super Admin provisioning: {}.", e.getMessage());
+                }
+            }
             return;
         }
 

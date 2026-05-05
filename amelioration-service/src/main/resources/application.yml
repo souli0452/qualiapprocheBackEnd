@@ -5,9 +5,9 @@ spring:
   application:
     name: amelioration-service
   datasource:
-    url: jdbc:postgresql://localhost:5433/qualiapproche_amelioration
-    username: postgres
-    password: root
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/qualiapproche_amelioration}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,13 +19,30 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/quali
+          issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:tachquali@gmail.com}
+    password: ${MAIL_PASSWORD:qpkcnamwhjfkundy}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
 
 docs:
   pj:
     directory: ${DOCS_PJ_DIRECTORY:${user.home}/PIECES_JOINTES}
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:4200}
+

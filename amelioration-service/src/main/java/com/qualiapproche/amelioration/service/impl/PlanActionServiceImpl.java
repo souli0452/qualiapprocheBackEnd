@@ -44,6 +44,9 @@ public class PlanActionServiceImpl implements PlanActionService {
     private  final StructureRepository structureRepository;
     private  final ConfigGlobalRepository configGlobalRepository;
     private final PieceJointeService fichierService;
+
+    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    private String frontendUrl;
     @Override
     public void delete(UUID id) {
         PlanAction planAction=planActionRepository.getReferenceById(id);
@@ -107,8 +110,8 @@ public class PlanActionServiceImpl implements PlanActionService {
         Structure structure=structureRepository.getReferenceById(UUID.fromString(nonConformite.getOrigineId()));
         String subject = "Traitement terminé – Non-conformité N°"+nonConformite.getNumeroReference()+" prête à être validée ";
         String object="Suivi qualité – Plan d’action réalisé par l’agent " +planAction.getResponsableNomComplet();
-        String link = "https://sgq-quali.horeb.tech/page/validation";
-        String linkPlan = "https://sgq-quali.horeb.tech/traitement-action/non-traiter";
+        String link = frontendUrl + "/page/validation";
+        String linkPlan = frontendUrl + "/traitement-action/non-traiter";
         planAction.setStatus(planActionDto.getStatus());
         planAction.setObservation(planActionDto.getObservation());
         planAction.setCauseIdentifiees(planActionDto.getCauseIdentifiees());
@@ -144,7 +147,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         planAction.setStatus(StatutEnum.REJECTED);
         planAction.setObservationRejet(dto.getObservationRejet());
         planAction.setDateRejet(dto.getDateRejet());
-        String link = "https://sgq-quali.horeb.tech/page/traitement-actions/rejeter";
+        String link = frontendUrl + "/page/traitement-actions/rejeter";
         String object = " Rejet de l’évaluation d’efficacité – Non-conformité "+planAction.getNumeroNc();
       List<PieceJointeDTO> fichiers=new ArrayList<>();
         if (dto.getDocRejet() != null) {
@@ -205,7 +208,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
         for (PlanAction action : planActions) {
             String subject = "Traitement du plan d'action N° ordre "+action.getNumeroOdre();
-            String link = "https://sgq-quali.horeb.tech/traitement-action/non-traiter";
+            String link = frontendUrl + "/traitement-action/non-traiter";
 
             LocalDate echeance = action.getDateEcheance();
             long joursRestants = ChronoUnit.DAYS.between(today, echeance);
