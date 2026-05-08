@@ -115,4 +115,21 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
             @Param("origineServiceId") String origineServiceId);
 
     List<NonConformite> findAllByCreatedById(String userId);
+
+    List<NonConformite> findAllByCreatedByIdAndStatusIn(String createdById, List<Status> statuses);
+
+    List<NonConformite> findAllByUserImputId(String userImputId);
+
+    List<NonConformite> findAllByCreatedByIdAndStatus(String createdById, Status status);
+
+    List<NonConformite> findAllByStructureSoumissionIdOrOrigineId(String structureSoumissionId, String originId);
+
+    List<NonConformite> findAllByCurrentUserStructure(String structureId);
+
+    long countByCreatedByIdAndStatus(String userId, Status status);
+
+    long countByUserImputId(String userId);
+
+    @Query("SELECT n FROM NonConformite n WHERE n.createdById = :userId OR n.userImputId = :userId")
+    List<NonConformite> findAllByUserInvolved(@Param("userId") String userId);
 }
