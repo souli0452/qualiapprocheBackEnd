@@ -6,9 +6,9 @@ WORKDIR /app
 COPY . .
 
 # Compilation spécifique du module context
-# -pl : project list (on cible context)
+# -pl : project list (on cible contexte)
 # -am : also make (on compile les dépendances nécessaires comme le module common s'il existe)
-RUN mvn clean package -DskipTests -pl context-service -am
+RUN mvn clean package -DskipTests -pl contexte-service -am
 
 # Étape 2 : Image finale légère avec le JRE 21
 FROM eclipse-temurin:21-jre-jammy
@@ -16,7 +16,7 @@ WORKDIR /app
 
 # On récupère le JAR généré dans l'étape précédente
 # Vérifie bien que le dossier s'appelle "context-service" dans ton projet
-COPY --from=build /app/context-service/target/*.jar context-service.jar
+COPY --from=build /app/contexte-service/target/*.jar contexte-service.jar
 
 EXPOSE 8086
 
