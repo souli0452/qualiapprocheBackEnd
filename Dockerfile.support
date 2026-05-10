@@ -8,7 +8,7 @@ COPY . .
 # Compilation spécifique du module support
 # -pl : project list (on cible support)
 # -am : also make (on compile les dépendances nécessaires comme le module common s'il existe)
-RUN mvn clean package -DskipTests -pl support -am
+RUN mvn clean package -DskipTests -pl support-service -am
 
 # Étape 2 : Image finale légère avec le JRE 21
 FROM eclipse-temurin:21-jre-jammy
@@ -16,7 +16,7 @@ WORKDIR /app
 
 # On récupère le JAR généré dans l'étape précédente
 # Vérifie bien que le dossier s'appelle "support" dans ton projet
-COPY --from=build /app/support/target/*.jar support-service.jar
+COPY --from=build /app/support-service/target/*.jar support-service.jar
 
 # Port par défaut (souvent 8081 pour un premier microservice)
 EXPOSE 8081
