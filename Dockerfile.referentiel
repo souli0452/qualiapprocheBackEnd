@@ -1,0 +1,24 @@
+# Étape 1 : Build avec Maven et Java 21
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+WORKDIR /app
+
+# Copie du pom.xml parent et des sources
+COPY . .
+
+# Compilation spécifique du module referentiel
+# -pl : project list (on cible referentiel)
+# -am : also make (on compile les dépendances nécessaires comme le module common s'il existe)
+RUN mvn clean package -DskipTests -pl referentiel-service -am
+
+# Étape 2 : Image finale légère avec le JRE 21
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+
+# On récupère le JAR généré dans l'étape précédente
+# Vérifie bien que le dossier s'appelle "referentiel-service" dans ton projet
+COPY --from=build /app/referentiel-service/target/*.jar referentiel-service.jar
+
+# Port par défaut (souvent 8081 pour un premier microservice)
+EXPOSE 8084
+
+ENTRYPOINT ["java", "-jar", "referentiel-service.jar"]
