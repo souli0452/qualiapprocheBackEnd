@@ -20,4 +20,4 @@ COPY --from=build /app/contexte-service/target/*.jar contexte-service.jar
 
 EXPOSE 8086
 
-ENTRYPOINT ["java", "-jar", "context-service.jar"]
+ENTRYPOINT ["java", "-jar", "contexte-service.jar"]
