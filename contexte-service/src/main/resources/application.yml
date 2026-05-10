@@ -5,9 +5,9 @@ spring:
   application:
     name: contexte-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/bd_quali_sira_contexte
-    username: postgres
-    password: root
+    url: ${DB_URL_CONTEXTE:jdbc:postgresql://localhost:5433/bd_quali_sira_contexte}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
   jpa:
     hibernate:
       ddl-auto: update
@@ -16,9 +16,11 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/quali-approche
+          issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali-approche}
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
