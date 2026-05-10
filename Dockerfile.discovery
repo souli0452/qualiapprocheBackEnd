@@ -1,13 +1,12 @@
-# Stage 1: Build
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+# Étape de Build avec Maven et Java 21
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
-# On build le module discovery en incluant le module common (-am)
-RUN mvn clean package -pl discovery -am -DskipTests
+RUN mvn clean package -DskipTests -pl discovery -am
 
-# Stage 2: Run
-FROM eclipse-temurin:17-jre-jammy
+# Étape Finale avec Java 21 (JRE)
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-COPY --from=build /app/discovery/target/*.jar app.jar
+COPY --from=build /app/discovery/target/*.jar discovery.jar
 EXPOSE 8761
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-jar", "discovery.jar"]
