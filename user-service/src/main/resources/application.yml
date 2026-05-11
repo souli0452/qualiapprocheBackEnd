@@ -1,11 +1,11 @@
 server:
-  port: 8081
+  port: 8090
 
 spring:
   application:
     name: user-service
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/qualiapproche_user}
+    url: ${DB_URL_USER:jdbc:postgresql://localhost:5433/bd_quali_sira_user}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -37,6 +37,8 @@ eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
 
 frontend:
   url: ${FRONTEND_URL:http://localhost:4200}

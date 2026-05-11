@@ -1,0 +1,23 @@
+# Étape 1 : Build avec Maven et Java 21
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+WORKDIR /app
+
+# Copie du pom.xml parent et des sources
+COPY . .
+
+# Compilation spécifique du module realisation-service
+# -pl : project list (on cible realisation)
+# -am : also make (on compile les dépendances nécessaires comme le module common s'il existe)
+RUN mvn clean package -DskipTests -pl realisation-service -am
+
+# Étape 2 : Image finale légère avec le JRE 21
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+
+# On récupère le JAR généré dans l'étape précédente
+# Vérifie bien que le dossier s'appelle "realisation-service" dans ton projet
+COPY --from=build /app/realisation-service/target/*.jar realisation-service.jar
+
+EXPOSE 8082
+
+ENTRYPOINT ["java", "-jar", "realisation-service.jar"]
