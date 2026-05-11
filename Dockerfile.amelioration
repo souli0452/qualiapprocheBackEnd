@@ -1,24 +1,15 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
-
-# Copie uniquement les fichiers de configuration pour mettre en cache les dépendances
-COPY pom.xml .
-COPY common/pom.xml common/
-COPY referentiel-service/pom.xml referentiel-service/
-COPY amelioration-service/pom.xml amelioration-service/
-
-# Copie tout le reste du code
 COPY . .
 
-# FORCE l'installation de tout le projet dans le dépôt local du conteneur
-RUN mvn install -DskipTests -am -pl common,referentiel-service
-
-# MAINTENANT compile seulement amelioration
-RUN mvn package -DskipTests -pl amelioration-service
+# On compile TOUT le projet depuis la racine.
+# Cela installe forcément les classes de referentiel dans le cache local.
+RUN mvn clean install -DskipTests
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 RUN mkdir -p /app/attachments && chmod 777 /app/attachments
+# On va chercher le JAR spécifiquement dans le dossier amelioration-service
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
 EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "amelioration-service.jar"]
