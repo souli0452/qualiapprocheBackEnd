@@ -67,6 +67,22 @@ spring:
           filters:
             - RewritePath=/contexte-service/(?<segment>.*), /${segment}
 
+      globalcors:
+        add-to-simple-url-handler-mapping: true # Important pour Spring Cloud Gateway
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "https://qualisira.horeb.tech"
+              - "http://localhost:4200"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
 springdoc:
   swagger-ui:
     urls:
