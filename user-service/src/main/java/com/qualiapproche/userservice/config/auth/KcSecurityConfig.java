@@ -48,13 +48,14 @@ public class KcSecurityConfig {
         jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         return httpSecurity
+                .cors(org.springframework.security.config.Customizer.withDefaults()) // <--- AJOUTE CETTE LIGNE
                 .headers(header -> header.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .anonymous(AbstractHttpConfigurer::disable)
+                // .anonymous(AbstractHttpConfigurer::disable) // Conseil : laisse l'anonyme activé pour les preflights
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/actuator/**").permitAll();
-                    auth.requestMatchers(HttpMethod.OPTIONS, "/*").permitAll();
+                    // On laisse le filtre CORS gérer les OPTIONS automatiquement
                     auth.requestMatchers(
                             "/js/**",
                             "/images/**",
