@@ -1,11 +1,16 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
+
+# 1. On installe d'abord les modules dont dépend "amelioration"
+# sans lancer les tests pour gagner du temps
+RUN mvn install -DskipTests -pl common,referentiel-service -am
+
+# 2. Maintenant on compile le module amelioration
 RUN mvn clean package -DskipTests -pl amelioration-service -am
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-# Création du dossier pour les PJ
 RUN mkdir -p /app/attachments && chmod 777 /app/attachments
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
 EXPOSE 8083
