@@ -1,17 +1,23 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
+
+# 1. Copier tout le projet (nécessaire pour résoudre les dépendances entre modules)
 COPY . .
 
-# 1. On installe d'abord les modules dont dépend "amelioration"
-# sans lancer les tests pour gagner du temps
-RUN mvn install -DskipTests -pl common,referentiel-service -am
-
-# 2. Maintenant on compile le module amelioration
-RUN mvn clean package -DskipTests -pl amelioration-service -am
+# 2. Exécuter l'installation globale de tous les modules
+# -am (also-make) : construit aussi les dépendances (referentiel, common)
+# -pl (project-list) : cible le point final
+# On utilise 'install' pour que les JARs soient disponibles dans le cache local de build
+RUN mvn clean install -DskipTests -pl amelioration-service -am
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+
+# Création du dossier pour les pièces jointes
 RUN mkdir -p /app/attachments && chmod 777 /app/attachments
+
+# 3. Récupérer le JAR généré
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
+
 EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "amelioration-service.jar"]
