@@ -6,6 +6,7 @@ import com.qualiapproche.userservice.config.utils.KcJwtRoleConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -48,14 +49,13 @@ public class KcSecurityConfig {
         jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         return httpSecurity
-                .cors(org.springframework.security.config.Customizer.withDefaults()) // <--- AJOUTE CETTE LIGNE
                 .headers(header -> header.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // .anonymous(AbstractHttpConfigurer::disable) // Conseil : laisse l'anonyme activé pour les preflights
+                .anonymous(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/actuator/**").permitAll();
-                    // On laisse le filtre CORS gérer les OPTIONS automatiquement
+                    auth.requestMatchers(HttpMethod.OPTIONS, "/*").permitAll();
                     auth.requestMatchers(
                             "/js/**",
                             "/images/**",
@@ -90,29 +90,16 @@ public class KcSecurityConfig {
         return new GrantedAuthorityDefaults("");
     }
 
-//    @Bean
-//    public CorsConfigurationSource corsConfigurationSource() {
-//        CorsConfiguration configuration = new CorsConfiguration();
-//        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech"));
-//        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
-//        configuration.setAllowCredentials(true);
-//        configuration.setAllowedHeaders(List.of("*"));
-//        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-//        source.registerCorsConfiguration("/api/v1/**", configuration);
-//        return source;
-//    }
     @Bean
+    @Profile("dev")
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech", "http://localhost:4200"));
-        // Ajout de OPTIONS et PATCH pour être tranquille
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
         configuration.setAllowCredentials(true);
         configuration.setAllowedHeaders(List.of("*"));
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // Utilise /** pour couvrir /user-service, /amelioration-service, etc.
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/api/v1/**", configuration);
         return source;
     }
 }
