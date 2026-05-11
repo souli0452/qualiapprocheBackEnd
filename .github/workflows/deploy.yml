@@ -1,0 +1,14 @@
+name: Deploy to Coolify
+on:
+  push:
+    branches: [ develop ] # Ajuste si tu travailles sur 'main' ou une autre branche
+
+jobs:
+  trigger-coolify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Coolify Server
+        run: |
+          echo "🚀 Sending deployment signal to Coolify..."
+          curl -X POST "http://144.126.135.120:8000/webhooks/source/github/events/manual" \
+               -H "Content-Type: application/json"
