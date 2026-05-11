@@ -90,16 +90,16 @@ public class KcSecurityConfig {
         return new GrantedAuthorityDefaults("");
     }
 
-    @Bean
-    @Profile("dev")
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
-        configuration.setAllowCredentials(true);
-        configuration.setAllowedHeaders(List.of("*"));
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/v1/**", configuration);
-        return source;
-    }
+//    @Bean
+//    @Profile("dev")
+//    public CorsConfigurationSource corsConfigurationSource() {
+//        CorsConfiguration configuration = new CorsConfiguration();
+//        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech"));
+//        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
+//        configuration.setAllowCredentials(true);
+//        configuration.setAllowedHeaders(List.of("*"));
+//        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+//        source.registerCorsConfiguration("/api/v1/**", configuration);
+//        return source;
+//    }
 }
