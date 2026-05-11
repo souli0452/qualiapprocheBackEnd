@@ -2,14 +2,14 @@ FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
 
-# On compile TOUT le projet depuis la racine.
-# Cela installe forcément les classes de referentiel dans le cache local.
-RUN mvn clean install -DskipTests
+# On compile UNIQUEMENT amelioration-service et ses dépendances (common)
+RUN mvn clean package -DskipTests -pl amelioration-service -am
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
+# Création du dossier pour les pièces jointes
 RUN mkdir -p /app/attachments && chmod 777 /app/attachments
-# On va chercher le JAR spécifiquement dans le dossier amelioration-service
+
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
 EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "amelioration-service.jar"]

@@ -6,19 +6,17 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication(scanBasePackages = {
-    "com.qualiapproche.amelioration",
-    "com.qualiapproche.common.config"
+        "com.qualiapproche.amelioration",
+        "com.qualiapproche.common.config"
 })
 @EnableDiscoveryClient
 @EnableFeignClients
 @org.springframework.data.jpa.repository.config.EnableJpaRepositories(basePackages = {
-    "com.qualiapproche.amelioration.repository",
-    "com.qualiapproche.referentiel.repository"
+        "com.qualiapproche.amelioration.repository"
 })
 @org.springframework.boot.autoconfigure.domain.EntityScan(basePackages = {
-    "com.qualiapproche.amelioration.entities",
-    "com.qualiapproche.referentiel.entities",
-    "com.qualiapproche.common.entities"
+        "com.qualiapproche.amelioration.entities",
+        "com.qualiapproche.common.entities"
 })
 
 public class AmeliorationApplication {

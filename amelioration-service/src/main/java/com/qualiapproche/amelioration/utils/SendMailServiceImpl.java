@@ -4,7 +4,7 @@ import com.qualiapproche.common.utils.EmailMessage;
 import com.qualiapproche.common.config.MailConfig;
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.common.utils.MailUtils;
-import com.qualiapproche.referentiel.repository.ConfigGlobalRepository;
+import com.qualiapproche.amelioration.client.ReferentielClient;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class SendMailServiceImpl implements SendMailService {
     private final JavaMailSender javaMailSender;
     private final TemplateEngine templateEngine;
     private final MailConfig mailConfig;
-    private final ConfigGlobalRepository configGlobalRepository;
+    private final ReferentielClient referentielClient;
 
     @Override
     public void sendVerificationEmail(String recipientEmail, String firstName, String lastName, String password, String url) {
@@ -101,8 +101,7 @@ public class SendMailServiceImpl implements SendMailService {
         EmailMessage emailMessage = EmailMessage.builder()
                 .subject(subject)
                 .to_address(currentUserEmail)
-                .cc_address(configGlobalRepository.findAll().stream().findFirst()
-                        .map(c -> c.getEmailRq()).orElse(null))
+                .cc_address(referentielClient.getConfigGlobal().getEmailRq())
                 .build();
 
         try {

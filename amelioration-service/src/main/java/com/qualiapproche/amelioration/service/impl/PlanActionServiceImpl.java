@@ -10,10 +10,9 @@ import com.qualiapproche.amelioration.entities.*;
 
 import com.qualiapproche.common.dto.PieceJointeDTO;
 import com.qualiapproche.common.utils.StatutEnum;
-import com.qualiapproche.referentiel.entities.ConfigGlobal;
-import com.qualiapproche.referentiel.entities.Structure;
-import com.qualiapproche.referentiel.repository.ConfigGlobalRepository;
-import com.qualiapproche.referentiel.repository.StructureRepository;
+import com.qualiapproche.amelioration.client.ReferentielClient;
+import com.qualiapproche.common.dto.ConfigGlobalDto;
+import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +40,7 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PlanActionRepository planActionRepository;
     private final NonConformiteRepository nonConformiteRepository;
     private  final SendMailService sendMailService;
-    private  final StructureRepository structureRepository;
-    private  final ConfigGlobalRepository configGlobalRepository;
+    private final ReferentielClient referentielClient;
     private final PieceJointeService fichierService;
 
     @org.springframework.beans.factory.annotation.Value("${frontend.url}")
@@ -104,10 +102,10 @@ public class PlanActionServiceImpl implements PlanActionService {
     @Override
     public PlanActionDto changeStatus(PlanActionDto planActionDto) throws IOException {
 
-        Optional<ConfigGlobal> configGlobal=configGlobalRepository.findAll().stream().findFirst();
+        ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
         PlanAction planAction = planActionRepository.getReferenceById(planActionDto.getId());
         NonConformite nonConformite = nonConformiteRepository.getReferenceById(planActionDto.getNonConformeId());
-        Structure structure=structureRepository.getReferenceById(UUID.fromString(nonConformite.getOrigineId()));
+        StructureDto structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getOrigineId()));
         String subject = "Traitement terminé – Non-conformité N°"+nonConformite.getNumeroReference()+" prête à être validée ";
         String object="Suivi qualité – Plan d’action réalisé par l’agent " +planAction.getResponsableNomComplet();
         String link = frontendUrl + "/page/validation";
@@ -122,10 +120,10 @@ public class PlanActionServiceImpl implements PlanActionService {
         }
 
         if (planActionDto.getFichiers() != null) {
-           fichierService.savePj(planActionDto.getFichiers(),planActionDto.getId());
+            fichierService.savePj(planActionDto.getFichiers(),planActionDto.getId());
         }
         PlanAction savedPlanAction = planActionRepository.save(planAction);
-        //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.get().getEmailRq(), object,linkPlan,"emailRqPlan",configGlobal.get().getNomCompletRq(),nonConformite.getNumeroReference(), planAction.getResponsableNomComplet());
+        //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), object,linkPlan,"emailRqPlan",configGlobal.getNomCompletRq(),nonConformite.getNumeroReference(), planAction.getResponsableNomComplet());
         sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), object,linkPlan,"emailRqPlan",structure.getAutoriteSignataire(),nonConformite.getNumeroReference(), "");
 
         List<PlanAction> allPlans = planActionRepository.findPlanActionsByNonConformeId(nonConformite.getId());
@@ -149,10 +147,10 @@ public class PlanActionServiceImpl implements PlanActionService {
         planAction.setDateRejet(dto.getDateRejet());
         String link = frontendUrl + "/page/traitement-actions/rejeter";
         String object = " Rejet de l’évaluation d’efficacité – Non-conformité "+planAction.getNumeroNc();
-      List<PieceJointeDTO> fichiers=new ArrayList<>();
+        List<PieceJointeDTO> fichiers=new ArrayList<>();
         if (dto.getDocRejet() != null) {
             fichiers.add(dto.getDocRejet());
-         fichierService.savePj(fichiers,dto.getId());
+            fichierService.savePj(fichiers,dto.getId());
         }
         sendMailService.sendMailToUserAfterDemandImputed(planAction.getResponsableEmail(), object,link,"rejectPlanAction",planAction.getResponsableNomComplet(),planAction.getNumeroNc(),planAction.getObservationRejet());
 
