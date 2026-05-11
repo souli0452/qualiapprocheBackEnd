@@ -1,23 +1,12 @@
-# Étape 1 : Build avec Maven et Java 21
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
-
-# Copie du pom.xml parent et des sources
 COPY . .
-
-# Compilation spécifique du module amelioration-service
-# -pl : project list (on cible amelioration)
-# -am : also make (on compile les dépendances nécessaires comme le module common s'il existe)
 RUN mvn clean package -DskipTests -pl amelioration-service -am
 
-# Étape 2 : Image finale légère avec le JRE 21
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-
-# On récupère le JAR généré dans l'étape précédente
-# Vérifie bien que le dossier s'appelle "amelioration-service" dans ton projet
+# Création du dossier pour les PJ
+RUN mkdir -p /app/attachments && chmod 777 /app/attachments
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
-
 EXPOSE 8083
-
 ENTRYPOINT ["java", "-jar", "amelioration-service.jar"]
