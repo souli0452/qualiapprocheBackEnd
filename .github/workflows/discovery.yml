@@ -22,27 +22,23 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-
+          
       - name: Build discovery
-        run: |
-          cd discovery
-          mvn clean install -DskipTests
+        run: mvn clean install -pl discovery -am -DskipTests
 
       - name: Trigger Coolify Deployment
         run: |
           echo "Calling Coolify webhook..."
-          
+
+          # Ajout du header Authorization avec le token
           response=$(curl -s -o response.txt -w "%{http_code}" \
-          -X GET "${{ secrets.DISCOVERY_WEBHOOK }}")
-
+          -X GET "${{ secrets.DISCOVERY_WEBHOOK }}" \
+          -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")
           echo "HTTP Status: $response"
-
           echo "Response:"
           cat response.txt
-
           if [ "$response" -ne 200 ]; then
             echo "Deployment webhook failed!"
             exit 1
           fi
-
           echo "Deployment triggered successfully!"
