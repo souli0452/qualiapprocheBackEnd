@@ -1,0 +1,48 @@
+name: Deploy Referentiel Service
+
+on:
+  push:
+    branches:
+      - develop
+
+    paths:
+      - 'referentiel-service/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build referentiel-service
+        run: |
+          cd referentiel-service
+          mvn clean install -DskipTests
+
+      - name: Trigger Coolify Deployment
+        run: |
+          echo "Calling Coolify webhook..."
+          
+          response=$(curl -s -o response.txt -w "%{http_code}" \
+          -X GET "${{ secrets.REFERENTIEL_WEBHOOK }}")
+
+          echo "HTTP Status: $response"
+
+          echo "Response:"
+          cat response.txt
+
+          if [ "$response" -ne 200 ]; then
+            echo "Deployment webhook failed!"
+            exit 1
+          fi
+
+          echo "Deployment triggered successfully!"
