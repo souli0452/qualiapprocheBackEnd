@@ -16,7 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1")
-@CrossOrigin("*")
+//@CrossOrigin("*")
 @RequiredArgsConstructor
 @Tag(name = "Gestion des Utilisateurs", description = "Endpoints pour l'authentification et la gestion des utilisateurs Keycloak")
 public class KcUserController {

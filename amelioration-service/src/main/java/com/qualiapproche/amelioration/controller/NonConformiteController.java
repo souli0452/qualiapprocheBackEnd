@@ -21,7 +21,7 @@ import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.amelioration.service.NonConformiteService;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
-@CrossOrigin("*")
+//@CrossOrigin("*")
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
 @RequiredArgsConstructor
