@@ -23,6 +23,9 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Build common module
+        run: mvn clean install -pl common -DskipTests
+
       - name: Build amelioration-service
         run: |
           cd amelioration-service
