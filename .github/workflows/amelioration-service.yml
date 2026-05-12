@@ -30,17 +30,15 @@ jobs:
         run: |
           echo "Calling Coolify webhook..."
           
+          # Ajout du header Authorization avec le token
           response=$(curl -s -o response.txt -w "%{http_code}" \
-          -X GET "${{ secrets.AMELIORATION_WEBHOOK }}")
-
+          -X GET "${{ secrets.AMELIORATION_WEBHOOK }}" \
+          -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")
           echo "HTTP Status: $response"
-
           echo "Response:"
           cat response.txt
-
           if [ "$response" -ne 200 ]; then
             echo "Deployment webhook failed!"
             exit 1
           fi
-
           echo "Deployment triggered successfully!"
