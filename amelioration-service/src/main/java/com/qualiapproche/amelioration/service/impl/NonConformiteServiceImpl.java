@@ -217,7 +217,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
             if (dto.getEtatTraitement() == Etat.TRAITEMENT) {
                 String subject = "Taitement d'une non conformité ";
-                String link = frontendUrl + "/page/traitement";
+                String link = frontendUrl + "/traitement";
                 sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject, link,
                         "emailTemplate", dto.getUserImputFullName(), dto.getNumeroReference(),
                         dto.getObservationRejet());
@@ -230,7 +230,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                     existingNonConformite.setDateSuivi(LocalDateTime.now());
                 } else {
                     String subject = "Non-conformité signalée – Action attendue de votre part ";
-                    String link = frontendUrl + "/page/imputation";
+                    String link = frontendUrl + "/imputation";
                     if (structure != null) {
                         sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
                                 "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
@@ -241,7 +241,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             /*
              * if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
              * String subject = "Non-conformité signalée – Action attendue de votre part ";
-             * String link = frontendUrl + "/page/validation-plan";
+             * String link = frontendUrl + "/validation-plan";
              * sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(),
              * subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.
              * getNumeroReference(),dto.getCurrentUserfullName());
@@ -250,7 +250,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
              */
             if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
                 String subject = "Validation d'une non conformité ";
-                String link = frontendUrl + "/page/validation_rs";
+                String link = frontendUrl + "/validation_rs";
                 if (configGlobal != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
                             "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
@@ -258,7 +258,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
             if (dto.getEtatTraitement() == Etat.SUIVI_RQ) {
                 String subject = "Suivi d'une non conformité ";
-                String link = frontendUrl + "/page/suivi_rq";
+                String link = frontendUrl + "/suivi_rq";
                 if (configGlobal != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
                             "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
@@ -266,7 +266,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
             if (dto.getEtatTraitement() == Etat.CLOTURE) {
                 String subject = "Cloture  non conformité ";
-                String link = frontendUrl + "/page/consultation";
+                String link = frontendUrl + "/consultation";
                 if (structure != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
                             "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(),
@@ -281,7 +281,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
             if (dto.getEtatTraitement() == Etat.VALIDATION) {
                 String subject = "Validation de la non-conformité N°" + dto.getNumeroReference();
-                String link = frontendUrl + "/page/validation";
+                String link = frontendUrl + "/validation";
                 if (structure != null) {
                     sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
                             "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(),
@@ -501,7 +501,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
         if (rejectNonConformiteDto.getEtapeTraitement() == Etat.SOUMISSION) {
-            String link = frontendUrl + "/page/reception";
+            String link = frontendUrl + "/reception";
             try {
                 if (nonConformite.getStructureSoumissionId() != null) {
                     StructureDto structure = referentielClient
