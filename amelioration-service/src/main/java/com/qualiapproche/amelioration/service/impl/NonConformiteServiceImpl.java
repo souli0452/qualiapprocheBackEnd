@@ -875,4 +875,84 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .map(this::populateAttachments)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<NonConformiteDto> findByUser(String userId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatusIn(userId, List.of(Status.DRAFT, Status.PUBLISHED, Status.IN_PROGRESS)))
+                .stream()
+                .map(this::populateAttachments).toList();
+    }
+
+    @Override
+    public List<NonConformiteDto> findImputedByUser(String userId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByUserImputId(userId))
+                .stream()
+                .map(this::populateAttachments).toList();
+    }
+
+    @Override
+    public List<NonConformiteDto> findArchivedByUser(String userId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatus(userId, Status.ARCHIVED))
+                .stream()
+                .map(this::populateAttachments).toList();
+    }
+
+    @Override
+    public NcCountsDto getCountsByUser(String userId) {
+        return NcCountsDto.builder()
+                .brouillons(nonConformiteRepository.countByCreatedByIdAndStatus(userId, Status.DRAFT))
+                .imputees(nonConformiteRepository.countByUserImputId(userId))
+                .archives(nonConformiteRepository.countByCreatedByIdAndStatus(userId, Status.ARCHIVED))
+                .build();
+    }
+
+    @Override
+    public List<NonConformiteDto> findByStructure(String structureId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId))
+                .stream()
+                .map(this::populateAttachments).toList();
+    }
+
+    @Override
+    public List<NonConformiteDto> findByStructureAllUsers(String structureId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCurrentUserStructure(structureId)).stream()
+                .map(this::populateAttachments).toList();
+    }
+
+    @Override
+    public NcDashboardDto getDashboardRQ() {
+        List<NonConformite> all = nonConformiteRepository.findAll();
+        return buildDashboardDto(all);
+    }
+
+    @Override
+    public NcDashboardDto getDashboardPilot(String structureId) {
+        List<NonConformite> all = nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId);
+        return buildDashboardDto(all);
+    }
+
+    @Override
+    public NcDashboardDto getDashboardUser(String userId) {
+        List<NonConformite> all = nonConformiteRepository.findAllByUserInvolved(userId);
+        return buildDashboardDto(all);
+    }
+
+    private NcDashboardDto buildDashboardDto(List<NonConformite> ncs) {
+        Map<Status, Long> statsByStatus = ncs.stream()
+                .filter(nc -> nc.getStatus() != null)
+                .collect(Collectors.groupingBy(NonConformite::getStatus, Collectors.counting()));
+
+        Map<Status, Map<String, Long>> statsByStatusAndGravity = ncs.stream()
+                .filter(nc -> nc.getStatus() != null && nc.getNiveauNonConformiteLibelle() != null)
+                .collect(Collectors.groupingBy(
+                        NonConformite::getStatus,
+                        Collectors.groupingBy(NonConformite::getNiveauNonConformiteLibelle, Collectors.counting())
+                ));
+
+        return NcDashboardDto.builder()
+                .totalNC(ncs.size())
+                .statsByStatus(statsByStatus)
+                .statsByStatusAndGravity(statsByStatusAndGravity)
+                .build();
+    }
 }

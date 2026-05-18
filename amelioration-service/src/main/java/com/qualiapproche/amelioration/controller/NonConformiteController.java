@@ -239,4 +239,66 @@ public class NonConformiteController {
         List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByInitiator(id);
         return ResponseEntity.ok(nonConformiteDtos);
     }
+
+
+    // --- User specific lists ---
+
+    @Operation(summary = "NC créées par l'utilisateur", description = "Récupère toutes les NC actives (Brouillon, Publié, En cours) créées par l'utilisateur")
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<NonConformiteDto>> getNCByUser(@PathVariable String userId) {
+        return ResponseEntity.ok(nonConformiteService.findByUser(userId));
+    }
+
+    @Operation(summary = "NC imputées à l'utilisateur", description = "Récupère toutes les NC qui ont été assignées à cet utilisateur")
+    @GetMapping("/user/{userId}/imputed")
+    public ResponseEntity<List<NonConformiteDto>> getImputedNCByUser(@PathVariable String userId) {
+        return ResponseEntity.ok(nonConformiteService.findImputedByUser(userId));
+    }
+
+    @Operation(summary = "NC archivées par l'utilisateur", description = "Récupère uniquement les NC archivées par cet utilisateur")
+    @GetMapping("/user/{userId}/archived")
+    public ResponseEntity<List<NonConformiteDto>> getArchivedNCByUser(@PathVariable String userId) {
+        return ResponseEntity.ok(nonConformiteService.findArchivedByUser(userId));
+    }
+
+    @Operation(summary = "Nombres de NC pour les pastilles", description = "Renvoie les comptes (brouillons, imputées, archivées) pour l'utilisateur")
+    @GetMapping("/user/{userId}/counts")
+    public ResponseEntity<com.qualiapproche.common.dto.NcCountsDto> getNCCountsByUser(@PathVariable String userId) {
+        return ResponseEntity.ok(nonConformiteService.getCountsByUser(userId));
+    }
+
+    // --- Structure specific lists ---
+
+    @Operation(summary = "NC par structure", description = "Toutes les NC liées à un service (en tant que Soumissionnaire ou Origine)")
+    @GetMapping("/structure/{structureId}")
+    public ResponseEntity<List<NonConformiteDto>> getNCByStructure(@PathVariable String structureId) {
+        return ResponseEntity.ok(nonConformiteService.findByStructure(structureId));
+    }
+
+    @Operation(summary = "NC de tous les utilisateurs de la structure", description = "Récupère toutes les NC créées par n'importe quel agent de cette structure")
+    @GetMapping("/structure/{structureId}/all-users")
+    public ResponseEntity<List<NonConformiteDto>> getNCByStructureAllUsers(@PathVariable String structureId) {
+        return ResponseEntity.ok(nonConformiteService.findByStructureAllUsers(structureId));
+    }
+
+    // --- Dashboard endpoints ---
+
+    @Operation(summary = "Dashboard pour RQ", description = "Statistiques globales des NC pour le dashboard RQ")
+    @GetMapping("/dashboard/rq")
+    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardRQ() {
+        return ResponseEntity.ok(nonConformiteService.getDashboardRQ());
+    }
+
+    @Operation(summary = "Dashboard pour Pilote", description = "Statistiques des NC par structure pour le dashboard Pilote")
+    @GetMapping("/dashboard/pilot/{structureId}")
+    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardPilot(@PathVariable String structureId) {
+        return ResponseEntity.ok(nonConformiteService.getDashboardPilot(structureId));
+    }
+
+    @Operation(summary = "Dashboard pour Utilisateur", description = "Statistiques des NC liées à l'utilisateur (soumis ou imputé)")
+    @GetMapping("/dashboard/user/{userId}")
+    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardUser(@PathVariable String userId) {
+        return ResponseEntity.ok(nonConformiteService.getDashboardUser(userId));
+    }
+
 }

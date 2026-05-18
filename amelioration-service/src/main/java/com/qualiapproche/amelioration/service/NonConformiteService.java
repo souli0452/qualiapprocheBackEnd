@@ -68,4 +68,16 @@ public interface NonConformiteService {
     Map<String, Map<String, Map<String, Long>>> getStatsNiveauParAnnee(int annee, String origineServiceId);
 
     List<NonConformiteDto> findAllByInitiator(String userId);
+
+    List<NonConformiteDto> findByUser(String userId);
+    List<NonConformiteDto> findImputedByUser(String userId);
+    List<NonConformiteDto> findArchivedByUser(String userId);
+    NcCountsDto getCountsByUser(String userId);
+
+    List<NonConformiteDto> findByStructure(String structureId);
+    List<NonConformiteDto> findByStructureAllUsers(String structureId);
+
+    NcDashboardDto getDashboardRQ();
+    NcDashboardDto getDashboardPilot(String structureId);
+    NcDashboardDto getDashboardUser(String userId);
 }
