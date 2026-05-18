@@ -1,6 +1,5 @@
 package com.qualiapproche.amelioration.entities;
 
-import com.qualiapproche.referentiel.entities.Formation;
 import com.qualiapproche.common.base.AuditEntity;
 
 import jakarta.persistence.Entity;
