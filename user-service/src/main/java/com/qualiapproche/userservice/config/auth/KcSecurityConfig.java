@@ -66,9 +66,9 @@ public class KcSecurityConfig {
                             "/api/v1/login",
                             "/api/v1/refresh",
                             "/api/v1/verify-email",
+                            "/api/v1/verify-email",
                             "/api/v1/initiate-reset-pwd",
-                            "/api/v1/reinitialize-pwd"
-                    ).permitAll();
+                            "/api/v1/reinitialize-pwd").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(eh -> {

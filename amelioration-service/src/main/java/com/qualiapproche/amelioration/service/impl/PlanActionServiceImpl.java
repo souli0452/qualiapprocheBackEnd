@@ -11,8 +11,8 @@ import com.qualiapproche.amelioration.entities.*;
 import com.qualiapproche.common.dto.PieceJointeDTO;
 import com.qualiapproche.common.utils.StatutEnum;
 import com.qualiapproche.amelioration.client.ReferentielClient;
-import com.qualiapproche.common.dto.ConfigGlobalDto;
 import com.qualiapproche.common.dto.StructureDto;
+import feign.FeignException;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,6 @@ import com.qualiapproche.amelioration.service.PlanActionService;
 
 import lombok.RequiredArgsConstructor;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -39,15 +38,16 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PlanActionMapper planActionMapper;
     private final PlanActionRepository planActionRepository;
     private final NonConformiteRepository nonConformiteRepository;
-    private  final SendMailService sendMailService;
+    private final SendMailService sendMailService;
     private final ReferentielClient referentielClient;
     private final PieceJointeService fichierService;
 
     @org.springframework.beans.factory.annotation.Value("${frontend.url}")
     private String frontendUrl;
+
     @Override
     public void delete(UUID id) {
-        PlanAction planAction=planActionRepository.getReferenceById(id);
+        PlanAction planAction = planActionRepository.getReferenceById(id);
         planActionRepository.delete(planAction);
     }
 
@@ -58,13 +58,11 @@ public class PlanActionServiceImpl implements PlanActionService {
         NonConformite nonConformite = nonConformiteRepository.findById(dto.getNonConformeId())
                 .orElseThrow(() -> new RuntimeException("Ce plan d'action n'est associé à aucune non-conformité!"));
 
-        planAction.setNonConformeId(nonConformite.getId());  // Associer la NonConformité à PlanAction
+        planAction.setNonConformeId(nonConformite.getId()); // Associer la NonConformité à PlanAction
         PlanActionDto result = planActionMapper.toDto((planAction));
         result.setFichiers(fichierService.getPjByEntityId(result.getId()));
         return result;
     }
-
-
 
     @Override
     public List<PlanActionDto> allPlanActions() {
@@ -75,7 +73,8 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public List<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut) {
-        return planActionMapper.toDtos(planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable, statut)).stream()
+        return planActionMapper
+                .toDtos(planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable, statut)).stream()
                 .peek(dto -> dto.setFichiers(fichierService.getPjByEntityId(dto.getId())))
                 .toList();
     }
@@ -89,9 +88,6 @@ public class PlanActionServiceImpl implements PlanActionService {
         return dto;
     }
 
-
-
-
     @Override
     public List<PlanActionDto> planActionByResponsableAll(String responsable) {
         return planActionMapper.toDtos(planActionRepository.findPlanActionsByResponsableEmail(responsable)).stream()
@@ -102,12 +98,20 @@ public class PlanActionServiceImpl implements PlanActionService {
     @Override
     public PlanActionDto changeStatus(PlanActionDto planActionDto) throws IOException {
 
-        ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
         PlanAction planAction = planActionRepository.getReferenceById(planActionDto.getId());
         NonConformite nonConformite = nonConformiteRepository.getReferenceById(planActionDto.getNonConformeId());
-        StructureDto structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getOrigineId()));
-        String subject = "Traitement terminé – Non-conformité N°"+nonConformite.getNumeroReference()+" prête à être validée ";
-        String object="Suivi qualité – Plan d’action réalisé par l’agent " +planAction.getResponsableNomComplet();
+        
+        StructureDto structure = null;
+        try {
+            structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getOrigineId()));
+        } catch (FeignException.NotFound e) {
+            log.warn("Structure introuvable via Feign client pour l'origineId: {}", nonConformite.getOrigineId());
+        } catch (Exception e) {
+            log.error("Erreur lors de la récupération de la structure", e);
+        }
+        String subject = "Traitement terminé – Non-conformité N°" + nonConformite.getNumeroReference()
+                + " prête à être validée ";
+        String object = "Suivi qualité – Plan d’action réalisé par l’agent " + planAction.getResponsableNomComplet();
         String link = frontendUrl + "/page/validation";
         String linkPlan = frontendUrl + "/traitement-action/non-traiter";
         planAction.setStatus(planActionDto.getStatus());
@@ -120,11 +124,16 @@ public class PlanActionServiceImpl implements PlanActionService {
         }
 
         if (planActionDto.getFichiers() != null) {
-            fichierService.savePj(planActionDto.getFichiers(),planActionDto.getId());
+            fichierService.savePj(planActionDto.getFichiers(), planActionDto.getId());
         }
         PlanAction savedPlanAction = planActionRepository.save(planAction);
-        //sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), object,linkPlan,"emailRqPlan",configGlobal.getNomCompletRq(),nonConformite.getNumeroReference(), planAction.getResponsableNomComplet());
-        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), object,linkPlan,"emailRqPlan",structure.getAutoriteSignataire(),nonConformite.getNumeroReference(), "");
+        
+        if (structure != null && structure.getEmail() != null) {
+            sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), object, linkPlan, "emailRqPlan",
+                    structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), "");
+        } else {
+            log.warn("Structure introuvable ou email manquant pour l'origineId: {}", nonConformite.getOrigineId());
+        }
 
         List<PlanAction> allPlans = planActionRepository.findPlanActionsByNonConformeId(nonConformite.getId());
 
@@ -132,7 +141,10 @@ public class PlanActionServiceImpl implements PlanActionService {
                 .allMatch(plan -> plan.getStatus() == StatutEnum.TRAITER);
 
         if (allTreated) {
-            sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject,link,"validationAfterPlan",structure.getAutoriteSignataire(),nonConformite.getNumeroReference(), "");
+            if (structure != null && structure.getEmail() != null) {
+                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "validationAfterPlan",
+                        structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), "");
+            }
         }
         PlanActionDto result = planActionMapper.toDto(savedPlanAction);
         result.setFichiers(fichierService.getPjByEntityId(result.getId()));
@@ -146,13 +158,15 @@ public class PlanActionServiceImpl implements PlanActionService {
         planAction.setObservationRejet(dto.getObservationRejet());
         planAction.setDateRejet(dto.getDateRejet());
         String link = frontendUrl + "/page/traitement-actions/rejeter";
-        String object = " Rejet de l’évaluation d’efficacité – Non-conformité "+planAction.getNumeroNc();
-        List<PieceJointeDTO> fichiers=new ArrayList<>();
+        String object = " Rejet de l’évaluation d’efficacité – Non-conformité " + planAction.getNumeroNc();
+        List<PieceJointeDTO> fichiers = new ArrayList<>();
         if (dto.getDocRejet() != null) {
             fichiers.add(dto.getDocRejet());
-            fichierService.savePj(fichiers,dto.getId());
+            fichierService.savePj(fichiers, dto.getId());
         }
-        sendMailService.sendMailToUserAfterDemandImputed(planAction.getResponsableEmail(), object,link,"rejectPlanAction",planAction.getResponsableNomComplet(),planAction.getNumeroNc(),planAction.getObservationRejet());
+        sendMailService.sendMailToUserAfterDemandImputed(planAction.getResponsableEmail(), object, link,
+                "rejectPlanAction", planAction.getResponsableNomComplet(), planAction.getNumeroNc(),
+                planAction.getObservationRejet());
 
         PlanActionDto result = planActionMapper.toDto((planAction));
         result.setFichiers(fichierService.getPjByEntityId(result.getId()));
@@ -199,13 +213,14 @@ public class PlanActionServiceImpl implements PlanActionService {
 
         return Collections.singletonMap(String.valueOf(annee), frequences);
     }
+
     @Scheduled(cron = "0 0 0 * * *")
     public void rappelEcheance() {
         List<PlanAction> planActions = planActionRepository.findPlanActionsByStatus(StatutEnum.NON_TRAITER);
         LocalDate today = LocalDate.now();
 
         for (PlanAction action : planActions) {
-            String subject = "Traitement du plan d'action N° ordre "+action.getNumeroOdre();
+            String subject = "Traitement du plan d'action N° ordre " + action.getNumeroOdre();
             String link = frontendUrl + "/traitement-action/non-traiter";
 
             LocalDate echeance = action.getDateEcheance();
@@ -217,29 +232,36 @@ public class PlanActionServiceImpl implements PlanActionService {
             }
 
             if (joursRestants >= 1) {
-                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject,link,"alertePlanAction",action.getResponsableNomComplet(),action.getNumeroNc(), String.valueOf(joursRestants));
+                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject, link,
+                        "alertePlanAction", action.getResponsableNomComplet(), action.getNumeroNc(),
+                        String.valueOf(joursRestants));
             } else if (joursRestants == 0) {
-                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject,link,"alerteLastDay",action.getResponsableNomComplet(),action.getNumeroNc(), String.valueOf(joursRestants));
+                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject, link,
+                        "alerteLastDay", action.getResponsableNomComplet(), action.getNumeroNc(),
+                        String.valueOf(joursRestants));
             } else {
 
-                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject,link,"alerteEpuise",action.getResponsableNomComplet(),action.getNumeroNc(), String.valueOf(joursRestants));
+                sendMailService.sendMailToUserAfterDemandImputed(action.getResponsableEmail(), subject, link,
+                        "alerteEpuise", action.getResponsableNomComplet(), action.getNumeroNc(),
+                        String.valueOf(joursRestants));
             }
         }
     }
+
     private static final List<String> MOIS = List.of(
             "janvier", "février", "mars", "avril", "mai", "juin",
-            "juillet", "août", "septembre", "octobre", "novembre", "décembre"
-    );
+            "juillet", "août", "septembre", "octobre", "novembre", "décembre");
 
-    /*public void deletePlanAction(UUID id) {
-        PlanAction planAction = planActionRepository.getReferenceById(id);
-        if (planAction != null) {
-            // Retirer la planAction de la collection
-            NonConformite nonConformite = planAction.getNonConformite();
-            nonConformite.getPlanActions().remove(planAction); // Retirer de la liste
-            // Supprimer la planAction
-            planActionRepository.delete(planAction);
-        }
-    }*/
+    /*
+     * public void deletePlanAction(UUID id) {
+     * PlanAction planAction = planActionRepository.getReferenceById(id);
+     * if (planAction != null) {
+     * // Retirer la planAction de la collection
+     * NonConformite nonConformite = planAction.getNonConformite();
+     * nonConformite.getPlanActions().remove(planAction); // Retirer de la liste
+     * // Supprimer la planAction
+     * planActionRepository.delete(planAction);
+     * }
+     * }
+     */
 }
-

@@ -124,7 +124,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
         if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
             if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
             }
         }
         existingNonConformite.setCircuit(dto.getCircuit());
@@ -181,7 +182,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
                 if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
                 }
             }
             existingNonConformite.setCircuit(dto.getCircuit());
@@ -367,91 +369,6 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     }
 
     @Override
-    public List<NonConformiteDto> findAllByInitiator(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedById(userId)).stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public List<NonConformiteDto> findByUser(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatusIn(userId,
-                List.of(Status.DRAFT, Status.PUBLISHED, Status.IN_PROGRESS))).stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public List<NonConformiteDto> findImputedByUser(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByUserImputId(userId)).stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public List<NonConformiteDto> findArchivedByUser(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatus(userId, Status.ARCHIVED))
-                .stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public NcCountsDto getCountsByUser(String userId) {
-        return NcCountsDto.builder()
-                .brouillons(nonConformiteRepository.countByCreatedByIdAndStatus(userId, Status.DRAFT))
-                .imputees(nonConformiteRepository.countByUserImputId(userId))
-                .archives(nonConformiteRepository.countByCreatedByIdAndStatus(userId, Status.ARCHIVED))
-                .build();
-    }
-
-    @Override
-    public List<NonConformiteDto> findByStructure(String structureId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId))
-                .stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public List<NonConformiteDto> findByStructureAllUsers(String structureId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCurrentUserStructure(structureId)).stream()
-                .map(this::populateAttachments).toList();
-    }
-
-    @Override
-    public NcDashboardDto getDashboardRQ() {
-        List<NonConformite> all = nonConformiteRepository.findAll();
-        return buildDashboardDto(all);
-    }
-
-    @Override
-    public NcDashboardDto getDashboardPilot(String structureId) {
-        List<NonConformite> all = nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId);
-        return buildDashboardDto(all);
-    }
-
-    @Override
-    public NcDashboardDto getDashboardUser(String userId) {
-        List<NonConformite> all = nonConformiteRepository.findAllByUserInvolved(userId);
-        return buildDashboardDto(all);
-    }
-
-    private NcDashboardDto buildDashboardDto(List<NonConformite> ncs) {
-        Map<Status, Long> statsByStatus = ncs.stream()
-                .filter(nc -> nc.getStatus() != null)
-                .collect(Collectors.groupingBy(NonConformite::getStatus, Collectors.counting()));
-
-        Map<Status, Map<String, Long>> statsByStatusAndGravity = ncs.stream()
-                .filter(nc -> nc.getStatus() != null && nc.getNiveauNonConformiteLibelle() != null)
-                .collect(Collectors.groupingBy(
-                        NonConformite::getStatus,
-                        Collectors.groupingBy(NonConformite::getNiveauNonConformiteLibelle, Collectors.counting())
-                ));
-
-        return NcDashboardDto.builder()
-                .totalNC(ncs.size())
-                .statsByStatus(statsByStatus)
-                .statsByStatusAndGravity(statsByStatusAndGravity)
-                .build();
-    }
-
-    @Override
     public List<NonConformiteDto> getNonConformitesByStructure(String uuid) {
         return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByOrigineId(uuid)).stream()
                 .map(this::populateAttachments).toList();
@@ -473,6 +390,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     }
 
     @Override
+                
     public void delete(UUID id) {
         if (nonConformiteRepository.existsById(id)) {
             nonConformiteRepository.deleteById(id);
@@ -488,7 +406,8 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setObservationRejet(rejectNonConformiteDto.getRejectReason());
         nonConformite.setStatus(Status.REJECTED);
         /*
-         * List<Fichier> fichiers=new ArrayList<>();
+         * List<Fichier> fichiers=
+                new ArrayList<>();
          * if (rejectNonConformiteDto.getDocRejet() != null) {
          * Fichier fichier=fichierMapper.toEntity(rejectNonConformiteDto.getDocRejet());
          * fichiers.add(fichier);
@@ -508,6 +427,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                             .getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
                     if (structure != null) {
                         sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
+                
                                 "rejectNonConformite", structure.getAutoriteSignataire(),
                                 nonConformite.getNumeroReference(), nonConformite.getObservationRejet());
                     }
@@ -526,8 +446,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link,
                 "rejectNonConformite", nonConformite.getCurrentUserfullName(), nonConformite.getNumeroReference(),
                 nonConformite.getObservationRejet());
-        return populateAttachments(nonConformiteMapper.toDto((nonConformite)));
-    }
+        return populateAttachments(nonConformiteMapper.toDto((nonConformite)));}
 
     public void deleteMultiple(List<NonConformiteDto> nonConformiteDtos) {
         nonConformiteDtos.forEach(actualityDto -> {
@@ -931,4 +850,11 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     }
 
+    @Override
+    public List<NonConformiteDto> findAllByInitiator(String userId) {
+        return nonConformiteRepository.findAllByCreatedById(userId).stream()
+                .map(nonConformiteMapper::toDto)
+                .map(this::populateAttachments)
+                .collect(Collectors.toList());
+    }
 }

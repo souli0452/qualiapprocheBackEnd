@@ -1,6 +1,6 @@
 package com.qualiapproche.common.utils;
 
-import com.qualiapproche.common.utils.EmailMessage;
+
 import com.qualiapproche.common.config.ThymeleafConfig;
 import com.qualiapproche.common.config.MailConfig;
 import jakarta.mail.*;
@@ -19,13 +19,15 @@ import java.util.Properties;
 
 public final class MailUtils {
 
-    public static void sendEmailWithTheamleafEngine(EmailMessage emailMessage, MailConfig mailConfig, Map<String, Object> variables, List<File> attachments, String templateName) throws MessagingException, IOException {
+    public static void sendEmailWithTheamleafEngine(EmailMessage emailMessage, MailConfig mailConfig,
+            Map<String, Object> variables, List<File> attachments, String templateName)
+            throws MessagingException, IOException {
         Properties props = new Properties();
-        props.put("mail.smtp.auth", mailConfig.getAuth());
-        props.put("mail.smtp.starttls.enable", mailConfig.getStarttlsEnable());
-        props.put("mail.smtp.host", mailConfig.getHost());
-        props.put("mail.smtp.protocol", mailConfig.getProtocol());
-        props.put("mail.smtp.port", mailConfig.getPort());
+        props.put("mail.smtp.auth", mailConfig.getAuth() != null ? mailConfig.getAuth() : "true");
+        props.put("mail.smtp.starttls.enable", mailConfig.getStarttlsEnable() != null ? mailConfig.getStarttlsEnable() : "true");
+        props.put("mail.smtp.host", mailConfig.getHost() != null ? mailConfig.getHost() : "localhost");
+        props.put("mail.smtp.protocol", mailConfig.getProtocol() != null ? mailConfig.getProtocol() : "smtp");
+        props.put("mail.smtp.port", mailConfig.getPort() != 0 ? mailConfig.getPort() : 587);
 
         Session session = Session.getInstance(props, new Authenticator() {
             protected PasswordAuthentication getPasswordAuthentication() {

@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.entities;
-import com.qualiapproche.common.base.AuditEntity;
 
+import com.qualiapproche.referentiel.entities.Formation;
+import com.qualiapproche.common.base.AuditEntity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToMany;
@@ -24,8 +25,10 @@ public class Evaluation extends AuditEntity {
     private String description;
     private String typeEvaluation;
 
-/*    @OneToMany
-    private List<Formation> formations;*/
+    /*
+     * @OneToMany
+     * private List<Formation> formations;
+     */
 
     private LocalDateTime dateEvaluation;
     private UUID fournisseurId;

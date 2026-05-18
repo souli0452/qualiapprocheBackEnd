@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.client;
 
+import com.qualiapproche.amelioration.config.FeignConfig;
 import com.qualiapproche.common.dto.ConfigGlobalDto;
 import com.qualiapproche.common.dto.StructureDto;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -10,7 +11,7 @@ import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
 
-@FeignClient(name = "referentiel-service")
+@FeignClient(name = "referentiel-service", configuration = FeignConfig.class)
 public interface ReferentielClient {
 
     @GetMapping(ROOT_STRUCTURE_API + STRUCTURE_BY_ID)

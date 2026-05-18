@@ -32,7 +32,7 @@ public class PlanActionDto extends AuditEntityDto {
     private StatutEnum status;
     private String responsableEmail;
     private String numeroTelephone;
-
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
     private LocalDate dateEcheance;
     private String numeroNc;
 

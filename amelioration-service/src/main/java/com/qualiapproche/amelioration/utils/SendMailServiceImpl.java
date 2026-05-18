@@ -5,6 +5,7 @@ import com.qualiapproche.common.config.MailConfig;
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.common.utils.MailUtils;
 import com.qualiapproche.amelioration.client.ReferentielClient;
+import com.qualiapproche.common.dto.ConfigGlobalDto;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,8 @@ public class SendMailServiceImpl implements SendMailService {
     private final ReferentielClient referentielClient;
 
     @Override
-    public void sendVerificationEmail(String recipientEmail, String firstName, String lastName, String password, String url) {
+    public void sendVerificationEmail(String recipientEmail, String firstName, String lastName, String password,
+            String url) {
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
@@ -97,11 +99,22 @@ public class SendMailServiceImpl implements SendMailService {
     }
 
     @Override
-    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName, String numeroNc, String observation) {
+    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link,
+            String templateName, String fullName, String numeroNc, String observation) {
+        String emailRq = null;
+        try {
+            ConfigGlobalDto config = referentielClient.getConfigGlobal();
+            if (config != null) {
+                emailRq = config.getEmailRq();
+            }
+        } catch (Exception e) {
+            // Ignorer si la config globale n'est pas joignable
+        }
+
         EmailMessage emailMessage = EmailMessage.builder()
                 .subject(subject)
                 .to_address(currentUserEmail)
-                .cc_address(referentielClient.getConfigGlobal().getEmailRq())
+                .cc_address(emailRq)
                 .build();
 
         try {
@@ -116,8 +129,7 @@ public class SendMailServiceImpl implements SendMailService {
                     mailConfig,
                     variables,
                     Collections.emptyList(),
-                    templateName
-            );
+                    templateName);
         } catch (MessagingException | IOException e) {
             throw new RuntimeException(e);
         }
