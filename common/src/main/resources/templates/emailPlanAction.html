@@ -1,96 +1,42 @@
-<!--
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
-  <meta name="viewport" content="width=device-width">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
-  <style>
-    .content, .footer, .logo { text-align: left; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 0; background: #e1e1e1; position: relative; width: 100%; height: 100vh; font-family: Roboto, sans-serif; }
-    h1 { color: gray; font-size: 25px; }
-    .content { max-width: 550px; min-height: 550px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 5px; box-shadow: 0 0 10px -10px gray; padding: 2%; }
-    .footer img, .logo img { height: 100px; }
-    .footer { display: flex; align-items: center; }
-    .footer-content { margin-left: 15px; }
-    .footer-content span { font-size: 13px; margin-bottom: 15px; position: relative; font-weight: 600; opacity: .7; }
-    .footer-content span:after { content: ""; border-bottom: 1px dashed gray; width: 100px; height: 1px; position: absolute; bottom: -8px; left: 0; }
-  </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 </head>
-<body style="background:#f7f7f7; padding: 10px; text-align: center; position: relative;">
-<div class="content" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%); margin: auto;">
-  <div class="logo">
-    <img src="https://www.finances.gov.bf/fileadmin/user_upload/tof_2.png">
-  </div>
-  <div class="contenu">
-    <h1 th:text="${subject}">Subject</h1>
-    <p th:text="${body}">Body content</p>
-    <br />
-    <br />
-  </div>
-  <br />
-  <div class="footer">
-    <img src="https://www.finances.gov.bf/fileadmin/user_upload/tof_2.png" alt="footer image">
-    <div class="footer-content" style="opacity: 0.7;">
-      <span style="border-bottom: 1px dashed gray; padding-bottom: 4px; font-size:13px; margin-bottom: 10px; display: block;">Burkina Faso</span>
-      <span style="border-bottom: 1px dashed gray; padding-bottom: 4px; font-size:13px; margin-bottom: 10px; display: block;">Quali-Approche</span>
-      <span style="border-bottom: 1px dashed gray; padding-bottom: 4px; font-size:13px; margin-bottom: 10px; display: block;">Siège social: Ouagadougou</span>
-    </div>
-  </div>
-</div>
-</body>
-</html>
--->
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta name="viewport" content="width=device-width">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
-    <style>
-        .content, .footer, .logo { text-align: left; }
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #e1e1e1; position: relative; width: 100%; height: 100vh; font-family: Roboto, sans-serif; }
-        h1 { color: gray; font-size: 25px; }
-        .content { max-width: 550px; min-height: 550px; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #fff; border-radius: 5px; box-shadow: 0 0 10px -10px gray; padding: 2%; }
-        .footer img, .logo img { height: 100px; }
-        .footer { display: flex; align-items: center; }
-        .footer-content { margin-left: 15px; }
-        .footer-content span { font-size: 13px; margin-bottom: 15px; position: relative; font-weight: 600; opacity: .7; }
-        .footer-content span:after { content: ""; border-bottom: 1px dashed gray; width: 100px; height: 1px; position: absolute; bottom: -8px; left: 0; }
-    </style>
-</head>
-<body style="background:#f7f7f7; padding: 10px; text-align: center; position: relative;">
-<div class="content">
-    <div class="logo">
-        <img src="https://qualiapproche.com/wp-content/uploads/2025/06/cropped-dermiss-logo-fin-couleur-bleu-rouge.png">
-    </div>
-    <div class="contenu">
-        <p>Bonjour M/Mme <strong>[[${fullName}]]</strong>,</p>
-
-        <p>Suite au traitement de la non-conformité identifiée, nous vous informons qu’un <strong>plan d’action correctif</strong> vous a été attribué pour mise en œuvre conformément aux exigences du dispositif qualité.</p>
-
-        <p>Nous vous invitons à consulter les éléments relatifs à votre engagement :</p>
-        <p><a th:href="${link}" target="_blank" style="color:#1976d2;">📄 Accéder au détail de la demande</a></p>
-
-        <br>
-        <p>🧭 Votre implication est essentielle pour garantir la conformité du processus et assurer l’amélioration continue.</p>
-        <p>En cas de difficulté ou de besoin de clarification, notre équipe qualité reste disponible pour vous accompagner.</p>
-
-        <br>
-        <p>Nous vous remercions pour votre professionnalisme et votre contribution à la robustesse du système qualité.</p>
-    </div>
-
-    <br />
-    <div class="footer">
-        <img src="https://qualiapproche.com/wp-content/uploads/2025/06/cropped-dermiss-logo-fin-couleur-bleu-rouge.png" alt="footer image">
-        <div class="footer-content" style="opacity: 0.7;">
-            <span>Burkina Faso</span>
-            <span>Cabinet Conseil en Gestion de qualités</span>
-            <span>BURKINA FASO - Siège social : Ouagadougou</span>
+<body style="margin: 0; padding: 0; min-width: 100%; width: 100% !important; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<div style="width: 100%; background-color: #f3f4f6; padding: 40px 0;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); border: 1px solid #e5e7eb;">
+        <!-- Header -->
+        <div style="background-color: #1e3a8a; padding: 32px; text-align: center;">
+            <div style="color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">quali-sira</div>
+            <div style="color: #93c5fd; font-size: 11px; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Système d’Information & Gestion Qualité</div>
+        </div>
+        <!-- Body -->
+        <div style="padding: 40px 32px; color: #374151;">
+            <h1 style="font-size: 20px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 20px; line-height: 1.4;">📋 Nouveau plan d’action correctif attribué</h1>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Bonjour M/Mme <strong>[[${fullName}]]</strong>,</p>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Suite au traitement de la non-conformité identifiée, nous vous informons qu’un <strong>plan d’action correctif</strong> vous a été attribué pour mise en œuvre, conformément aux exigences de notre dispositif qualité.</p>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Nous vous invitons à consulter les éléments détaillés relatifs à votre engagement en cliquant sur le bouton ci-dessous :</p>
+            
+            <div style="margin: 32px 0; text-align: center;">
+                <a th:href="${link}" target="_blank" style="display: inline-block; background-color: #3b82f6; color: #ffffff !important; text-decoration: none; padding: 14px 28px; font-size: 15px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);">Consulter le plan d'action</a>
+            </div>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">🧭 Votre implication active est essentielle pour garantir la conformité de nos processus et inscrire notre démarche dans une dynamique d'amélioration continue.</p>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">En cas de besoin ou pour toute demande de clarification, l'équipe de coordination reste à votre entière disposition pour vous guider.</p>
+            
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 24px; margin-bottom: 0;">Nous vous remercions pour votre professionnalisme et votre engagement.</p>
+        </div>
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 24px 32px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #9ca3af; line-height: 1.5; text-align: center;">
+            <div style="margin-bottom: 6px;"><span style="color: #6b7280; font-weight: 600;">quali-sira</span> • Cabinet Conseil en Gestion de Qualité</div>
+            <div style="margin-bottom: 6px;">BURKINA FASO • Siège social : Ouagadougou</div>
+            <div style="margin-top: 12px; font-size: 10px; color: #d1d5db;">Ce message vous a été envoyé automatiquement. Merci de ne pas y répondre directement.</div>
         </div>
     </div>
 </div>
