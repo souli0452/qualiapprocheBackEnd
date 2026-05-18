@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component } from '@angular/core';
 import { Location } from '@angular/common';
 import { convertFilesToBase64, getCurrentUserStructure, onFileUpload, PieceJointe, showToast, StatusEnum, StatusEnumShow } from '../../../utils';
 import { MessageService } from 'primeng/api';
@@ -22,18 +22,13 @@ import { ReclamationService } from '../../../services/reclamation.service';
 import { NiveauNonConformiteService } from '../../../services/niveau-non-conformite.service';
 import { ActionNonConformiteService } from '../../../services/action-non-conformite.service';
 import { ActivatedRoute } from '@angular/router';
-import { NonConformStatus, EtapeTraitement } from '../../../enums';
 
 @Component({
     selector: 'app-nc-compose',
     templateUrl: './nc-compose.component.html',
-    styleUrl: './nc-compose.component.scss',
     standalone: false
 })
 export class NcComposeComponent {
-    @Input() editId: any;
-    @Output() closeDialog = new EventEmitter<void>();
-
     userStructure: Structure = {};
     nc: any = { pieceJointes: [] };
     hasImage: any;
@@ -71,22 +66,11 @@ export class NcComposeComponent {
     }
 
     goBack() {
-        if (this.editId) {
-            this.closeDialog.emit();
-        } else {
-            this.location.back();
-        }
+        this.location.back();
     }
-    removeExistingFile(index: number) {
-        if (this.nonConformite.fichiers) {
-            this.nonConformite.fichiers.splice(index, 1);
-        }
-    }
-
-
     ngOnInit(): void {
         this.userStructure = getCurrentUserStructure();
-        const id = this.editId || this.activatedRoute.snapshot.paramMap.get('id');
+        const id = this.activatedRoute.snapshot.paramMap.get('id');
 
         if (id && id !== '' && id !== 'create') {
             this.nonConformiteService
@@ -108,23 +92,17 @@ export class NcComposeComponent {
         }
     }
 
-    async onSave(publish: boolean = false) {
+    async onSave() {
         this.formSubmitted = true;
 
-        // Vérification de base pour éviter les erreurs d'accès à undefined
-        if (!this.nc.niveauNonConformite || !this.nc.typeNonformite) {
-            this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Veuillez remplir tous les champs obligatoires.' });
-            return;
-        }
 
         // Remplir les champs requis
         this.nonConformite.niveauNonConformiteId = this.nc.niveauNonConformite.id;
         this.nonConformite.typeNonConformiteId = this.nc.typeNonformite.id;
         this.nonConformite.structureSoumissionLibelle = this.userStructure?.libelleCourt;
         this.nonConformite.structureSoumissionId = this.userStructure?.id;
-        // On récupère directement la structure de l'utilisateur pour le processus
-        this.nonConformite.typeProcessusId = this.userStructure?.id;
-        this.nonConformite.typeProcessusLibelle = this.userStructure?.libelleCourt || this.userStructure?.libelleCourt;
+        this.nonConformite.typeProcessusId = this.nc.typeProcedure.id;
+        this.nonConformite.typeProcessusLibelle = this.nc.typeProcedure.libelle;
 
         if (this.nc.typeAction) {
             this.nonConformite.actionLibelle = this.nc.typeAction.libelle;
@@ -134,7 +112,7 @@ export class NcComposeComponent {
         this.nonConformite.fonctionEmetteur = '';
         this.nonConformite.niveauNonConformiteLibelle = this.nc.niveauNonConformite.libelle;
         this.nonConformite.typeNonConformiteLibelle = this.nc.typeNonformite.libelle;
-        
+
         // Gestion des pièces jointes de manière asynchrone
         if (this.uploadedFiles && this.uploadedFiles.length > 0) {
             try {
@@ -150,13 +128,7 @@ export class NcComposeComponent {
             }
         }
 
-        if (publish) {
-            this.nonConformite.status = NonConformStatus.PUBLISHED;
-            this.nonConformite.etatTraitement = EtapeTraitement.RECEPTION;
-        } else if (!this.nonConformite.id) {
-            this.nonConformite.status = NonConformStatus.DRAFT;
-        }
-
+        console.log(this.nonConformite);
         if (this.nonConformite.id != null) {
             this.nonConformiteService.update(this.nonConformite).subscribe(this.onResponse());
         } else {
@@ -167,12 +139,12 @@ export class NcComposeComponent {
     onResponse() {
         return {
             next: (res: HttpResponse<any>) => {
-                this.messageService.add({ severity: 'success', summary: 'Succès', detail: 'La non-conformité a été enregistrée avec succès.' });
-                this.closeDialog.emit();
+                showToast(StatusEnum.success, res.status, null, this.messageService);
                 this.featureService.onReloadRequested(true);
+                this.goBack();
             },
             error: (error: HttpErrorResponse) => {
-                this.messageService.add({ severity: 'error', summary: 'Erreur', detail: 'Une erreur est survenue' });
+                showToast(StatusEnum.error, error.status, null, this.messageService, error);
             }
         };
     }

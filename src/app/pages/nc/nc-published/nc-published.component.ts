@@ -12,16 +12,16 @@ import { Structure } from '../../structure/structure-config/structure';
 @Component({
     selector: 'app-nc-published',
     templateUrl: './nc-published.component.html',
-    standalone:false
+    standalone: false
 })
 export class NcPublishedComponent implements OnInit, OnDestroy {
-    brouillonData: any[] = [];
+    actualities: any[] = [];
     loading: boolean = false;
     destroy$: Subject<boolean> = new Subject<boolean>();
     cols: any[] = [
-        {field: 'numeroReference', header: 'N° ref', type: 'string', filter: true, width: '28%'},
-        {field: 'origineService', header: 'Popcessus Destinataire', type: 'string', filter: true, width: '30%'},
-        {field: 'currentUserfullName', header: 'Responsable', type: 'string', filter: true, width: '25%'},
+        { field: 'numeroReference', header: 'N° ref', type: 'string', filter: true, width: '28%' },
+        { field: 'structureSoumissionLibelle', header: 'Processus Emetteur', type: 'string', filter: true, width: '30%' },
+        { field: 'currentUserfullName', header: 'Responsable', type: 'string', filter: true, width: '25%' },
         {
             field: 'publicationDate',
             header: 'Date publication',
@@ -32,21 +32,21 @@ export class NcPublishedComponent implements OnInit, OnDestroy {
         }
     ];
     colsDetail: any[] = [
-        {field: 'title', header: 'Titre', type: 'string'},
-        {field: 'content', header: 'Description', type: 'string'},
-        {field: 'createdAt', header: 'Date création', type: 'dateTime'},
-        {field: 'dueDate', header: 'Date expiration', type: 'date'},
-        {field: 'publicationDate', header: 'Date publication', type: 'dateTime'},
-        {field: 'tags', header: 'Tags', type: 'tags'},
-        {field: 'pieceJointes', header: 'Pièces Jointes', type: 'file'}
-
+        { field: 'title', header: 'Titre', type: 'string' },
+        { field: 'content', header: 'Description', type: 'string' },
+        { field: 'createdAt', header: 'Date création', type: 'dateTime' },
+        { field: 'dueDate', header: 'Date expiration', type: 'date' },
+        { field: 'publicationDate', header: 'Date publication', type: 'dateTime' },
+        { field: 'tags', header: 'Tags', type: 'tags' },
+        { field: 'pieceJointes', header: 'Pièces Jointes', type: 'file' }
     ];
-    userStructure:Structure={};
-    constructor(private nonConformiteService: NonConformiteService,
-                private messageService: MessageService,
-                private featureService: FeaturesService,
-                private location: Location) {
-    }
+    userStructure: Structure = {};
+    constructor(
+        private actualityService: NonConformiteService,
+        private messageService: MessageService,
+        private featureService: FeaturesService,
+        private location: Location
+    ) {}
 
     ngOnInit() {
         this.userStructure = getCurrentUserStructure();
@@ -55,12 +55,12 @@ export class NcPublishedComponent implements OnInit, OnDestroy {
 
     fetchActuality() {
         this.loading = true;
-        this.nonConformiteService
-            .findAllNc(NonConformStatus.PUBLISHED,this.userStructure.id)
+        this.actualityService
+            .findAllNc(NonConformStatus.PUBLISHED, this.userStructure.id)
             .pipe(takeUntil(this.destroy$))
             .subscribe({
                 next: (data) => {
-                    this.brouillonData = data.body!;
+                    this.actualities = data.body!;
                     this.loading = false;
                 },
                 error: (error) => {
@@ -79,27 +79,27 @@ export class NcPublishedComponent implements OnInit, OnDestroy {
     }
 
     archive(rowdata: any): void {
-        this.nonConformiteService.updateStatus(rowdata.id, NonConformStatus.ARCHIVED).subscribe({
+        this.actualityService.updateStatus(rowdata.id, NonConformStatus.ARCHIVED).subscribe({
             next: (data) => {
                 this.fetchActuality();
                 this.featureService.onReloadRequested(true);
                 this.goBack();
                 showToast(StatusEnum.success, data.status, 'Opération succès', this.messageService);
             },
-            error: error => {
+            error: (error) => {
                 showToast(StatusEnum.error, error.status, 'Une erreur est survenue', this.messageService, error);
             }
         });
     }
 
     delete(rowdata: any) {
-        this.nonConformiteService.delete(rowdata.id!).subscribe({
+        this.actualityService.delete(rowdata.id!).subscribe({
             next: (data) => {
                 this.fetchActuality();
                 this.featureService.onReloadRequested(true);
                 showToast(StatusEnum.success, data.status, 'Opération succès', this.messageService);
             },
-            error: error => {
+            error: (error) => {
                 showToast(StatusEnum.error, error.status, 'Une erreur est survenue', this.messageService, error);
             }
         });
