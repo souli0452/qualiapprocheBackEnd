@@ -48,7 +48,7 @@ export class ReceptionComponent {
                 private service:ProcNonConformiteService) {
         this.cols = [
             { field: 'numeroReference', header: 'N° ordre', type: 'string', filter: true, width: '10%', centered: false },
-            { field: 'origineService', header: 'Nom processus', type: 'string', filter: true, width: '30%', centered: false },
+            { field: 'structureSoumissionLibelle', header: 'Processus Emetteur', type: 'string', filter: true, width: '30%', centered: false },
             {
                 field: 'currentUserfullName',
                 header: 'Responsable',
@@ -86,7 +86,7 @@ ngOnInit() {
                     }
                 },
                 error: () => {
-                    this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer 9", life: 3000 });
+                    this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer", life: 3000 });
                     //showToast(handleHttpErrors(err, 'error', 'Impression correspondance', 'demandeCodeKey'), this.messageService);
                 }
             });
@@ -100,7 +100,7 @@ ngOnInit() {
                 this.dmdTraitement.closeDetailsDialog();
             },
             error: () => {
-                this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer 10", life: 3000 });
+                this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer", life: 3000 });
             }
             });
     }
@@ -110,8 +110,6 @@ ngOnInit() {
             next: (data) => {
                 this.demandeList = data.body;
                 this.loading = false;
-                console.log("demandeList : ",this.demandeList);
-                
             },
             error: (error) => {
                 this.loading = false;
@@ -129,18 +127,14 @@ ngOnInit() {
         this.motifRejetDialog = true;
     }
     reception(dmd:any) {
-        console.log("dmd : ",dmd);
-        
      this.service.updateNomConformites(dmd).subscribe({
          next: (data) => {
              this.getDemandeList()
              this.dmdTraitement.closeDetailsDialog();
-             this.messageService.add({ severity: 'success', summary: 'SUCCES', detail: "L'oppération à réussie !", life: 3000 });
+             this.messageService.add({ severity: 'success', summary: 'Succès', detail: "L'oppération à réussie !", life: 3000 });
          },
          error: (error) => {
-            console.log("ERREUR : ", error);
-            
-             this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer 11", life: 3000 });
+             this.messageService.add({ severity: 'error', summary: 'ERREUR', detail: "L'oppération à échouée ! Veuillez réessayer", life: 3000 });
          }
      })
     }
