@@ -8,7 +8,6 @@ import com.qualiapproche.referentiel.entities.mappers.StructureMapper;
 import com.qualiapproche.common.enumeration.TypeStructure;
 import com.qualiapproche.referentiel.repository.StructureRepository;
 import com.qualiapproche.referentiel.service.StructureService;
-import jakarta.ws.rs.NotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -80,15 +79,15 @@ public class StructureServiceImpl implements StructureService {
     @Override
     public StructureDto getStructureById(UUID directionId) {
         Structure structure = structureRepository.findById(directionId)
-                .orElseThrow(() -> new NotFoundException("Aucune structure trouvée avec l'id: {}" + directionId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Aucune structure trouvée avec l'id: {}" + directionId));
 
         return mapper.toDto(structure);
     }
 
     @Override
-    public String getStructureNameById(UUID directionId) throws NotFoundException {
+    public String getStructureNameById(UUID directionId) {
         Structure structure = structureRepository.findById(directionId)
-                .orElseThrow(() -> new NotFoundException("Aucune structure trouvée avec l'id: {}" + directionId));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Aucune structure trouvée avec l'id: {}" + directionId));
 
         return structure.getLibelleCourt();
     }

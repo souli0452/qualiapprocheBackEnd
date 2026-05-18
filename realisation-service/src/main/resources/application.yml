@@ -16,7 +16,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali-approche}
+          issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
 
 eureka:
   client:

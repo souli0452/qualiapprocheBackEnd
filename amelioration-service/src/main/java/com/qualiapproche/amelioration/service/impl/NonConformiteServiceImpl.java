@@ -90,7 +90,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
         nonConformite.setOriginNonConformiteLibelle(dto.getOriginNonConformiteLibelle());
-        nonConformite.setNumeroReference(genererNumeroReference(dto.getStructureSoumissionLibelle()));
+        nonConformite.setNumeroReference(genererNumeroReference(dto.getStructureSoumissionId(), dto.getStructureSoumissionLibelle()));
         nonConformite.setStructureSoumissionId(dto.getStructureSoumissionId());
         nonConformite.setStructureSoumissionLibelle(dto.getStructureSoumissionLibelle());
         nonConformite.setOrigineId(null);
@@ -185,11 +185,13 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
                 }
+                existingNonConformite.setCircuit(dto.getCircuit());
+                existingNonConformite.setOrigineId(dto.getOrigineId());
+                existingNonConformite.setOrigineService(dto.getOrigineService());
+                existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
             }
-            existingNonConformite.setCircuit(dto.getCircuit());
-            existingNonConformite.setOrigineId(dto.getOrigineId());
-            existingNonConformite.setOrigineService(dto.getOrigineService());
-            existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
+
+
             existingNonConformite.setActionLibelle(dto.getActionLibelle());
             existingNonConformite.setUserImputId(dto.getUserImputId());
             existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
@@ -229,6 +231,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 if (dto.getCircuit() == com.qualiapproche.common.enumeration.Circuit.A) {
                     dto.setEtatTraitement(Etat.CLOTURE);
                     existingNonConformite.setEtatTraitement(Etat.CLOTURE);
+                    existingNonConformite.setStatus(Status.APPROVED);
                     existingNonConformite.setDateSuivi(LocalDateTime.now());
                 } else {
                     String subject = "Non-conformité signalée – Action attendue de votre part ";
@@ -370,7 +373,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> getNonConformitesByStructure(String uuid) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByOrigineId(uuid)).stream()
+        List<NonConformite> list = nonConformiteRepository.findAllByOrigineId(uuid);
+        Set<NonConformite> uniqueList = new LinkedHashSet<>(list);
+        return nonConformiteMapper.toDtos(new ArrayList<>(uniqueList)).stream()
                 .map(this::populateAttachments).toList();
     }
 
@@ -553,21 +558,34 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .findAllByOrigineIdAndStatusIsNot(structureSoumissionId, Status.DRAFT);
         List<NonConformite> nonConformitesS = nonConformiteRepository
                 .findAllByStructureSoumissionIdAndStatusIsNot(structureSoumissionId, Status.DRAFT);
-        List<NonConformite> all = new ArrayList<>();
-        all.addAll(nonConformites);
-        all.addAll(nonConformitesS);
-        return nonConformiteMapper.toDtos(all).stream().map(this::populateAttachments).toList();
+        
+        Set<NonConformite> uniqueNonConformites = new LinkedHashSet<>(nonConformites);
+        uniqueNonConformites.addAll(nonConformitesS);
+        
+        return nonConformiteMapper.toDtos(new ArrayList<>(uniqueNonConformites)).stream().map(this::populateAttachments).toList();
     }
 
-    public String genererNumeroReference(String origineService) {
+    public String genererNumeroReference(String structureSoumissionId, String structureSoumissionLibelle) {
         final String prefix = "NFQT";
         final int annee = LocalDate.now().getYear();
 
-        Integer dernierNumero = nonConformiteRepository.findDernierNumero(origineService, annee);
+        Integer dernierNumero = nonConformiteRepository.findDernierNumero(structureSoumissionId, annee);
         int nouveauNumero = (dernierNumero != null) ? dernierNumero + 1 : 1;
 
+        String sigle = structureSoumissionLibelle;
+        if (structureSoumissionId != null) {
+            try {
+                StructureDto structure = referentielClient.getStructureById(UUID.fromString(structureSoumissionId));
+                if (structure != null && structure.getLibelleCourt() != null) {
+                    sigle = structure.getLibelleCourt();
+                }
+            } catch (Exception e) {
+                log.error("Error fetching structure sigle for reference generation: {}", e.getMessage());
+            }
+        }
+
         String numeroFormate = String.format("%05d", nouveauNumero);
-        return String.format("%s-%s-%d-%s", prefix, origineService.toUpperCase(), annee, numeroFormate);
+        return String.format("%s-%s-%d-%s", prefix, sigle.toUpperCase().replaceAll("\\s+", "_"), annee, numeroFormate);
     }
 
     @Override

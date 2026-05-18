@@ -38,9 +38,9 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
         List<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId);
 
         @Query("SELECT MAX(CAST(SUBSTRING(n.numeroReference, LENGTH(n.numeroReference) - 4) AS integer)) " +
-                        "FROM NonConformite n WHERE n.origineServiceLibelleCourt = :service " +
+                        "FROM NonConformite n WHERE n.structureSoumissionId = :structureSoumissionId " +
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
-        Integer findDernierNumero(@Param("service") String service, @Param("annee") int annee);
+        Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
 
         @Query(value = "SELECT a.origine_service_libelle_court, COUNT(*) as count " +
                         "FROM quali_nc a " +
