@@ -64,7 +64,10 @@ public class ApiUrls {
     public static final String GET_TYPE_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String UPDATE_TYPE_NON_CONFORMITE = "/update";
     public static final String DELETE_TYPE_NON_CONFORMITE = "/delete/{id}";
-
+    /* Type document urls */
+    public static final String DOCUMENT_TYPE =QUALI_APPROCHE_ROOT_URL+ "/qms/document-types";
+    /* documennts  urls */
+    public static final String DOCUMENT_URL =QUALI_APPROCHE_ROOT_URL+ "/qms/documents";
     /* Type processus urls */
 
     public static final String TYPE_PROCESSUS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-processus";

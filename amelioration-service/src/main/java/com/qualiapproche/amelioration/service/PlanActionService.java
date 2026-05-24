@@ -20,4 +20,5 @@ public interface PlanActionService {
     void delete(UUID id);
     Map<String, Map<String, Map<String, Long>>> getFrequenceTraitementParMois(int annee);
 
+    List<PlanActionDto> getPlanActionsByStructure(String structureId);
 }

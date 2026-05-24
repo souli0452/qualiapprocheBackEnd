@@ -5,7 +5,7 @@ spring:
   application:
     name: support-service
   datasource:
-    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5433/bd_quali_sira_support}
+    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5433/qualiapproche_support}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -17,6 +17,18 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:tachquali@gmail.com}
+    password: ${MAIL_PASSWORD:qpkcnamwhjfkundy}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 eureka:
   client:
@@ -24,3 +36,10 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
+
+alfresco:
+  url: ${ALFRESCO_URL:http://localhost:8999/alfresco}
+  username: ${ALFRESCO_USERNAME:admin}
+  password: ${ALFRESCO_PASSWORD:admin}
+  root-folder-id: ${ALFRESCO_ROOT_FOLDER_ID:-root-}
+  site-id: ${ALFRESCO_SITE_ID:qms-site}
