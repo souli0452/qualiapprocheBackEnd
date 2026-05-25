@@ -5,7 +5,7 @@ spring:
   application:
     name: user-service
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/bd_quali_sira_user}
+    url: ${DB_URL_USER:jdbc:postgresql://localhost:5433/bd_quali_sira_user}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -46,8 +46,8 @@ frontend:
 keycloak:
   realm: ${KC_REALM:quali}
   serverUrl: ${KC_SERVER_URL:http://localhost:8080}
-  clientId: ${KC_CLIENT_ID:quali-sira}
-  clientSecret: ${KC_CLIENT_SECRET:soQD0CdF706iM7sRhh4AsPV4JbmopEqZ}
+  clientId: ${KC_CLIENT_ID:quali-approche}
+  clientSecret: ${KC_CLIENT_SECRET:EGBtXZ6hO13LHY8BfFwjkUgdINNtAXeu}
   issuerUri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
   tokenUri: ${KC_TOKEN_URI:http://localhost:8080/realms/quali/protocol/openid-connect/token}
   adminUsername: ${KC_ADMIN_USERNAME:admin}
