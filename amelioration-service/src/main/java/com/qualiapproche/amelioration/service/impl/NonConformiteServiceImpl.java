@@ -176,7 +176,6 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setJustificationRs(dto.getJustificationRs());
             existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
             existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
-            existingNonConformite.setActionId(findActionById(dto.getActionId()));
             existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
