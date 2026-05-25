@@ -873,7 +873,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> findByUser(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatusIn(userId, List.of(Status.DRAFT, Status.PUBLISHED, Status.IN_PROGRESS)))
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedById(userId))
                 .stream()
                 .map(this::populateAttachments).toList();
     }
