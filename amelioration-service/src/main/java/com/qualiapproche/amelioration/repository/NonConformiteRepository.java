@@ -137,6 +137,50 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query("SELECT n FROM NonConformite n WHERE n.createdById = :userId OR n.userImputId = :userId")
         List<NonConformite> findAllByUserInvolved(@Param("userId") String userId);
+
+        @Query(value = "SELECT EXTRACT(MONTH FROM created_at) as mois, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
+                        "FROM quali_nc " +
+                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "AND status <> 'DRAFT' " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
+                        "GROUP BY EXTRACT(MONTH FROM created_at), niveau_non_conformite_libelle", nativeQuery = true)
+        List<Object[]> getEvolutionStatsByYear(
+                        @Param("annee") int annee,
+                        @Param("structureId") String structureId);
+
+        @Query(value = "SELECT COUNT(*) " +
+                        "FROM quali_nc " +
+                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "AND status <> 'DRAFT' " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)", nativeQuery = true)
+        long countTotalByYear(
+                        @Param("annee") int annee,
+                        @Param("structureId") String structureId);
+
+        @Query(value = "SELECT CEIL(EXTRACT(DAY FROM created_at) / 7.0) as semaine, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
+                        "FROM quali_nc " +
+                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "AND EXTRACT(MONTH FROM created_at) = :mois " +
+                        "AND status <> 'DRAFT' " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
+                        "GROUP BY CEIL(EXTRACT(DAY FROM created_at) / 7.0), niveau_non_conformite_libelle", nativeQuery = true)
+        List<Object[]> getEvolutionStatsByMonth(
+                        @Param("annee") int annee,
+                        @Param("mois") int mois,
+                        @Param("structureId") String structureId);
+
+        @Query(value = "SELECT COUNT(*) " +
+                        "FROM quali_nc " +
+                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "AND EXTRACT(MONTH FROM created_at) = :mois " +
+                        "AND status <> 'DRAFT' " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)", nativeQuery = true)
+        long countTotalByMonth(
+                        @Param("annee") int annee,
+                        @Param("mois") int mois,
+                        @Param("structureId") String structureId);
+
+        List<NonConformite> findAllByNiveauNonConformiteId(java.util.UUID niveauNonConformiteId);
 }
 
         

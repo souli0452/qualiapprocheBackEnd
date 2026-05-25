@@ -29,4 +29,7 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID> {
             @Param("debut") LocalDateTime debut,
             @Param("fin") LocalDateTime fin);
     PlanAction findPlanActionByNumeroNc(String numeroNc);
+
+    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
+    List<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId);
 }

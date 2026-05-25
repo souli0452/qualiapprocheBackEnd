@@ -264,4 +264,11 @@ public class PlanActionServiceImpl implements PlanActionService {
      * }
      * }
      */
+
+    @Override
+    public List<PlanActionDto> getPlanActionsByStructure(String structureId) {
+        return planActionMapper.toDtos(planActionRepository.findPlanActionsByStructureId(structureId)).stream()
+                .peek(dto -> dto.setFichiers(fichierService.getPjByEntityId(dto.getId())))
+                .toList();
+    }
 }

@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.qualiapproche.common.dto.NcStats;
+import com.qualiapproche.common.dto.NcEvolutionDto;
 import com.qualiapproche.common.dto.RejectNonConformiteDto;
 import com.qualiapproche.common.dto.ValidatePlanActionDto;
 import com.qualiapproche.common.enumeration.Etat;
@@ -299,6 +300,21 @@ public class NonConformiteController {
     @GetMapping("/dashboard/user/{userId}")
     public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardUser(@PathVariable String userId) {
         return ResponseEntity.ok(nonConformiteService.getDashboardUser(userId));
+    }
+
+    @Operation(summary = "Evolution des non-conformités", description = "Statistiques d'évolution des non-conformités filtrées par année, mois optionnel, et structure optionnelle")
+    @GetMapping("/stats/evolution")
+    public ResponseEntity<NcEvolutionDto> getNcEvolution(
+            @RequestParam int annee,
+            @RequestParam(required = false) Integer mois,
+            @RequestParam(required = false) String structureId) {
+        return ResponseEntity.ok(nonConformiteService.getNcEvolutionStats(annee, mois, structureId));
+    }
+
+    @Operation(summary = "NC par niveau", description = "Récupérer les NC en rapport avec une gravité ou niveau de NC")
+    @GetMapping("/by-niveau/{niveauId}")
+    public ResponseEntity<List<NonConformiteDto>> getByNiveau(@PathVariable UUID niveauId) {
+        return ResponseEntity.ok(nonConformiteService.getNonConformitesByNiveau(niveauId));
     }
 
 }

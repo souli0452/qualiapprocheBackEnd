@@ -123,7 +123,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
         existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
         if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
-            if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
+            if (dto.getCircuit() == null || dto.getOrigineId() == null ) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
             }
@@ -228,19 +228,14 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
             }
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-                if (dto.getCircuit() == com.qualiapproche.common.enumeration.Circuit.A) {
-                    dto.setEtatTraitement(Etat.CLOTURE);
-                    existingNonConformite.setEtatTraitement(Etat.CLOTURE);
-                    existingNonConformite.setStatus(Status.APPROVED);
-                    existingNonConformite.setDateSuivi(LocalDateTime.now());
-                } else {
+
                     String subject = "Non-conformité signalée – Action attendue de votre part ";
                     String link = frontendUrl + "/imputation";
                     if (structure != null) {
                         sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
                                 "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
                                 dto.getStructureSoumissionLibelle());
-                    }
+
                 }
             }
             /*
@@ -878,7 +873,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
     @Override
     public List<NonConformiteDto> findByUser(String userId) {
-        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedByIdAndStatusIn(userId, List.of(Status.DRAFT, Status.PUBLISHED, Status.IN_PROGRESS)))
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByCreatedById(userId))
                 .stream()
                 .map(this::populateAttachments).toList();
     }
@@ -954,5 +949,149 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .statsByStatus(statsByStatus)
                 .statsByStatusAndGravity(statsByStatusAndGravity)
                 .build();
+    }
+
+    @Override
+    public NcEvolutionDto getNcEvolutionStats(int annee, Integer mois, String structureId) {
+        if (structureId != null && (structureId.trim().isEmpty() || "null".equalsIgnoreCase(structureId.trim()))) {
+            structureId = null;
+        }
+
+        List<String> tousNiveaux = niveauNonConformiteRepository.findAllLibelles();
+        if (tousNiveaux == null) {
+            tousNiveaux = new ArrayList<>();
+        }
+
+        long totalEvolution;
+        double pct = 0.0;
+        List<String> labels;
+        List<NcEvolutionDto.DatasetDto> datasets = new ArrayList<>();
+        Map<String, Long> gravityCounts = new LinkedHashMap<>();
+
+        for (String libelle : tousNiveaux) {
+            gravityCounts.put(libelle, 0L);
+        }
+
+        if (mois == null) {
+            totalEvolution = nonConformiteRepository.countTotalByYear(annee, structureId);
+            long countPrev = nonConformiteRepository.countTotalByYear(annee - 1, structureId);
+
+            if (countPrev > 0) {
+                pct = ((double) (totalEvolution - countPrev) / countPrev) * 100.0;
+            } else if (totalEvolution > 0) {
+                pct = 100.0;
+            }
+
+            labels = List.of("Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Jul", "Août", "Sep", "Oct", "Nov", "Déc");
+
+            for (String libelle : tousNiveaux) {
+                datasets.add(NcEvolutionDto.DatasetDto.builder()
+                        .label(libelle)
+                        .data(new ArrayList<>(Collections.nCopies(12, 0L)))
+                        .build());
+            }
+
+            List<Object[]> results = nonConformiteRepository.getEvolutionStatsByYear(annee, structureId);
+            for (Object[] row : results) {
+                if (row[0] == null || row[1] == null || row[2] == null) continue;
+                int moisVal = ((Number) row[0]).intValue();
+                String gravite = (String) row[1];
+                long count = ((Number) row[2]).longValue();
+
+                int moisIdx = moisVal - 1;
+                if (moisIdx >= 0 && moisIdx < 12) {
+                    for (NcEvolutionDto.DatasetDto dataset : datasets) {
+                        if (dataset.getLabel().equals(gravite)) {
+                            dataset.getData().set(moisIdx, count);
+                            break;
+                        }
+                    }
+                    if (gravityCounts.containsKey(gravite)) {
+                        gravityCounts.put(gravite, gravityCounts.get(gravite) + count);
+                    }
+                }
+            }
+        } else {
+            totalEvolution = nonConformiteRepository.countTotalByMonth(annee, mois, structureId);
+            long countPrev;
+            if (mois > 1) {
+                countPrev = nonConformiteRepository.countTotalByMonth(annee, mois - 1, structureId);
+            } else {
+                countPrev = nonConformiteRepository.countTotalByMonth(annee - 1, 12, structureId);
+            }
+
+            if (countPrev > 0) {
+                pct = ((double) (totalEvolution - countPrev) / countPrev) * 100.0;
+            } else if (totalEvolution > 0) {
+                pct = 100.0;
+            }
+
+            labels = List.of("Semaine 1", "Semaine 2", "Semaine 3", "Semaine 4");
+
+            for (String libelle : tousNiveaux) {
+                datasets.add(NcEvolutionDto.DatasetDto.builder()
+                        .label(libelle)
+                        .data(new ArrayList<>(Collections.nCopies(4, 0L)))
+                        .build());
+            }
+
+            List<Object[]> results = nonConformiteRepository.getEvolutionStatsByMonth(annee, mois, structureId);
+            for (Object[] row : results) {
+                if (row[0] == null || row[1] == null || row[2] == null) continue;
+                int semaineVal = ((Number) row[0]).intValue();
+                String gravite = (String) row[1];
+                long count = ((Number) row[2]).longValue();
+
+                int semaineIdx = Math.min(4, semaineVal) - 1;
+                if (semaineIdx >= 0 && semaineIdx < 4) {
+                    for (NcEvolutionDto.DatasetDto dataset : datasets) {
+                        if (dataset.getLabel().equals(gravite)) {
+                            long existing = dataset.getData().get(semaineIdx);
+                            dataset.getData().set(semaineIdx, existing + count);
+                            break;
+                        }
+                    }
+                    if (gravityCounts.containsKey(gravite)) {
+                        gravityCounts.put(gravite, gravityCounts.get(gravite) + count);
+                    }
+                }
+            }
+        }
+
+        String pourcentageEvolution;
+        if (pct > 0.0) {
+            pourcentageEvolution = String.format(Locale.US, "+%.1f", pct);
+        } else if (pct < 0.0) {
+            pourcentageEvolution = String.format(Locale.US, "%.1f", pct);
+        } else {
+            pourcentageEvolution = "0.0";
+        }
+
+        List<NcEvolutionDto.GravityCountDto> gravitesBreakdown = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : gravityCounts.entrySet()) {
+            gravitesBreakdown.add(NcEvolutionDto.GravityCountDto.builder()
+                    .nom(entry.getKey())
+                    .count(entry.getValue())
+                    .build());
+        }
+
+        NcEvolutionDto.ChartDataDto chartData = NcEvolutionDto.ChartDataDto.builder()
+                .labels(labels)
+                .datasets(datasets)
+                .build();
+
+        return NcEvolutionDto.builder()
+                .totalEvolution(totalEvolution)
+                .pourcentageEvolution(pourcentageEvolution)
+                .gravites(gravitesBreakdown)
+                .chartData(chartData)
+                .build();
+    }
+
+    @Override
+    public List<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId) {
+        return nonConformiteMapper.toDtos(nonConformiteRepository.findAllByNiveauNonConformiteId(niveauId)).stream()
+                .map(this::populateAttachments)
+                .collect(Collectors.toList());
     }
 }

@@ -80,4 +80,8 @@ public interface NonConformiteService {
     NcDashboardDto getDashboardRQ();
     NcDashboardDto getDashboardPilot(String structureId);
     NcDashboardDto getDashboardUser(String userId);
+
+    NcEvolutionDto getNcEvolutionStats(int annee, Integer mois, String structureId);
+
+    List<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId);
 }

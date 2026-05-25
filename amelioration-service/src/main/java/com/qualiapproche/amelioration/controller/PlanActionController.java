@@ -70,4 +70,9 @@ public class PlanActionController {
         return ResponseEntity.ok(planActionService.getFrequenceTraitementParMois(annee));
     }
 
+    @GetMapping("/structure/{structureId}")
+    public ResponseEntity<List<PlanActionDto>> getPlanActionsByStructure(@PathVariable String structureId) {
+        List<PlanActionDto> planActionDtos = planActionService.getPlanActionsByStructure(structureId);
+        return new ResponseEntity<>(planActionDtos, HttpStatus.OK);
+    }
 }
