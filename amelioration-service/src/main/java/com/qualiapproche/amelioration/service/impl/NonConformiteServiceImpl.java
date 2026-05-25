@@ -181,7 +181,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-                if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
+                if (dto.getCircuit() == null || dto.getOrigineId() == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
                 }
