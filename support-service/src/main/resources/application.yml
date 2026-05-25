@@ -5,7 +5,7 @@ spring:
   application:
     name: support-service
   datasource:
-    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5432/bd_quali_sira_support}
+    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5433/qualiapproche_support}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:

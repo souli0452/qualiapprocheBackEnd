@@ -5,7 +5,7 @@ spring:
   application:
     name: amelioration-service
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/bd_quali_sira_amelioration}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/qualiapproche_amelioration}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
