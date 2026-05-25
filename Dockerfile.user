@@ -18,6 +18,6 @@ WORKDIR /app
 # Vérifie bien que le dossier s'appelle "user-service" dans ton projet
 COPY --from=build /app/user-service/target/*.jar user-service.jar
 
-EXPOSE 8090
+EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "user-service.jar"]
