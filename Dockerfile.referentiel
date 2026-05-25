@@ -18,7 +18,6 @@ WORKDIR /app
 # Vérifie bien que le dossier s'appelle "referentiel-service" dans ton projet
 COPY --from=build /app/referentiel-service/target/*.jar referentiel-service.jar
 
-# Port par défaut (souvent 8081 pour un premier microservice)
-EXPOSE 8084
+EXPOSE 8090
 
 ENTRYPOINT ["java", "-jar", "referentiel-service.jar"]
