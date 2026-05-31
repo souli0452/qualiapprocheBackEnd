@@ -5,7 +5,7 @@ spring:
   application:
     name: planification-service
   datasource:
-    url: ${DB_URL_PLANIFICATION:jdbc:postgresql://localhost:5433/qualiapproche_planification}
+    url: ${DB_URL_PLANIFICATION:jdbc:postgresql://localhost:5432/bd_quali_sira_planification}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
