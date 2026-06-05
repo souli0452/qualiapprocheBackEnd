@@ -99,9 +99,18 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         nonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
         nonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         nonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        nonConformite.setEtatTraitement(Etat.SOUMISSION);
-        nonConformite.setDateVisaEmetteur(LocalDateTime.now());
-        nonConformite.setStatus(Status.DRAFT);
+        if (nonConformite.getEtatTraitement() != null){
+            nonConformite.setEtatTraitement(nonConformite.getEtatTraitement());
+        }else {
+            nonConformite.setEtatTraitement(Etat.SOUMISSION);
+        }
+        if (nonConformite.getStatus() != null){
+            nonConformite.setStatus(nonConformite.getStatus());
+        }else {
+            nonConformite.setStatus(Status.DRAFT);
+        }
+            nonConformite.setDateVisaEmetteur(LocalDateTime.now());
+
 
         // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
         NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
@@ -180,7 +189,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
             existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
             if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-                if (dto.getCircuit() == null || dto.getOrigineId() == null || dto.getActionId() == null) {
+                if (dto.getCircuit() == null || dto.getOrigineId() == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
                 }
                 existingNonConformite.setCircuit(dto.getCircuit());
@@ -190,7 +199,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             }
 
 
-            existingNonConformite.setActionLibelle(dto.getActionLibelle());
+          //  existingNonConformite.setActionLibelle(dto.getActionLibelle());
             existingNonConformite.setUserImputId(dto.getUserImputId());
             existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());

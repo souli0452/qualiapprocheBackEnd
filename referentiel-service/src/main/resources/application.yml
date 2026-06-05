@@ -23,7 +23,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET:soQD0CdF706iM7sRhh4AsPV4JbmopEqZ}
+            client-secret: ${KC_CLIENT_SECRET:DqtqwAfamayREk88aCcV2QlOrZIwPp6u}
             authorization-grant-type: client_credentials
         provider:
           keycloak:

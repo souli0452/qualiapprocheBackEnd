@@ -47,7 +47,7 @@ keycloak:
   realm: ${KC_REALM:quali}
   serverUrl: ${KC_SERVER_URL:http://localhost:8080}
   clientId: ${KC_CLIENT_ID:quali-sira}
-  clientSecret: ${KC_CLIENT_SECRET:soQD0CdF706iM7sRhh4AsPV4JbmopEqZ}
+  clientSecret: ${KC_CLIENT_SECRET:DqtqwAfamayREk88aCcV2QlOrZIwPp6u}
   issuerUri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
   tokenUri: ${KC_TOKEN_URI:http://localhost:8080/realms/quali/protocol/openid-connect/token}
   adminUsername: ${KC_ADMIN_USERNAME:admin}
