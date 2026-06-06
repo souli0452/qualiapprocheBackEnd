@@ -10,7 +10,7 @@ spring:
     password: ${DB_PASSWORD:root}
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
     hikari:
       maximum-pool-size: 5
