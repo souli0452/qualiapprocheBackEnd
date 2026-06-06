@@ -2,7 +2,9 @@ package com.qualiapproche.userservice.service;
 
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
 import com.qualiapproche.common.dto.auth.KcRoleDto;
+import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.entities.mappers.KcRoleMapper;
+import com.qualiapproche.userservice.repository.AppRoleRepository;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.Keycloak;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +28,7 @@ public class KcRoleService {
     private final Keycloak keycloak;
     private final KcAuthProperties kcAuthProperties;
     private final KcRoleMapper kcRoleMapper;
+    private final AppRoleRepository appRoleRepository;
 
     @Value("${keycloak.realm}")
     private String realm;
@@ -59,6 +63,13 @@ public class KcRoleService {
     public void deleteRole(String roleName) {
         keycloak.realm(realm).roles().deleteRole(roleName);
     }
+
+    public void deleteRoleById(UUID id) {
+        AppRole role = appRoleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Role not found with id: " + id));
+        appRoleRepository.delete(role);
+    }
+
 
     public void assignRoles(String userId, List<String> newRoleNames) {
         UserResource userResource = getUserResourcebyId(userId);

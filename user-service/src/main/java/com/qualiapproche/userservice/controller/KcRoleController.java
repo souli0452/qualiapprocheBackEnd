@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/roles")
@@ -46,6 +47,16 @@ public class KcRoleController {
     public ResponseEntity<Void> deleteRole(@PathVariable String roleName) {
         kcRoleService.deleteRole(roleName);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/role/{id}")
+    public ResponseEntity<Void> deleteRoleById(@PathVariable UUID id) {
+        try {
+            kcRoleService.deleteRoleById(id);
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @PostMapping("/assign-roles")

@@ -73,11 +73,17 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 public class PlanAction extends AuditEntity {
 
   private String numeroOdre;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String observation;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String causeIdentifiees;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String solutionRetenues;
   private String responsableNomComplet;
-  private String responsableId;
+  private UUID responsableId;
   private String responsableEmail;
   private String numeroTelephone;
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
@@ -93,6 +99,8 @@ public class PlanAction extends AuditEntity {
   private UUID nonConformeId;
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy")
   private LocalDate dateTraitement;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String observationRejet;
   private String actionCorrective;
   /*

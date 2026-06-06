@@ -46,6 +46,8 @@ public class NonConformite extends AuditEntity {
   private LocalDateTime publicationDate;
   @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
   private LocalDateTime archivageDate;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String justification;
   private UUID efficaciteId;
   private String userImputeEmail;
@@ -65,20 +67,30 @@ public class NonConformite extends AuditEntity {
   private Etat etatTraitement;
   @Enumerated(EnumType.STRING)
   private TypeDemande typeDemande;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String observationsRq;
   private String dateObservationsRq;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String observationsCloture;
   private String dateVerification;
   private String structureResponsableId;
   private String structureResponsableSigle;
   private String structureResponsableLibelle;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String dispositionPreventives;
   private String dateClotureRq;
   @Enumerated(EnumType.STRING)
   private Status status;
   private String pertinanceRs;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String justificationRs;
   private String pertinancePilote;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String justificationPilote;
   private String userImputId;
   private String userImputFullName;
@@ -86,8 +98,14 @@ public class NonConformite extends AuditEntity {
   private String originNonConformiteLibelle;
   private String numeroFdac;
   private String pertinanceRsSuivi;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String actionDsc;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String observationRejet;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String actionPreventive;
   @Enumerated(EnumType.STRING)
   private Circuit circuit;
