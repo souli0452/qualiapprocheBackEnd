@@ -1,10 +1,10 @@
 package com.qualiapproche.support.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "qms_document_versions")
@@ -19,8 +19,10 @@ public class QmsDocumentVersion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private UUID documentId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "document_id", nullable = false)
+    @JsonIgnore
+    private DocumentQms document;
 
     @Column(nullable = false)
     private String versionLabel; // e.g. "1.0", "1.1"
@@ -34,5 +36,9 @@ public class QmsDocumentVersion {
     private String comment;
 
     @Column(nullable = false)
-    private String alfrescoNodeId; // Alfresco node ID of the archived file version
+    private String objectName; // Nom de l'objet dans Minio (UUID + extension)
+
+    private String originalFilename;
+
+    private Long fileSize;
 }

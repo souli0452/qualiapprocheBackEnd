@@ -13,6 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -37,14 +40,14 @@ public class KcUserController {
     }
 
     @GetMapping("/users")
-    public ResponseEntity<List<KcUserDto>> getAllUsers() {
-        List<KcUserDto> users = kcUserService.getAllUsers();
+    public ResponseEntity<Page<KcUserDto>> getAllUsers(@ParameterObject Pageable pageable) {
+        Page<KcUserDto> users = kcUserService.getAllUsers(pageable);
         return ResponseEntity.ok(users);
     }
     
     @GetMapping("/users/{structureId}")
-    public ResponseEntity<List<KcUserDto>> getAllUsersByStructureId(@PathVariable String structureId) {
-        List<KcUserDto> users = kcUserService.getUsersByStructure(structureId);
+    public ResponseEntity<Page<KcUserDto>> getAllUsersByStructureId(@PathVariable String structureId, @ParameterObject Pageable pageable) {
+        Page<KcUserDto> users = kcUserService.getUsersByStructure(structureId, pageable);
         return ResponseEntity.ok(users);
     }
 

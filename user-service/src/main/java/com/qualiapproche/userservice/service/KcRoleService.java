@@ -20,6 +20,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -33,11 +36,15 @@ public class KcRoleService {
     @Value("${keycloak.realm}")
     private String realm;
 
-    public List<KcRoleDto> getAllRoles() {
-        List<RoleRepresentation> roleRepresentations = keycloak.realm(realm).roles().list();
-        return roleRepresentations.stream()
+    public Page<KcRoleDto> getAllRoles(Pageable pageable) {
+        List<RoleRepresentation> allRoles = keycloak.realm(realm).roles().list();
+        List<KcRoleDto> allDtos = allRoles.stream()
                 .map(kcRoleMapper::toDto)
                 .collect(Collectors.toList());
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allDtos.size());
+        List<KcRoleDto> page = start >= allDtos.size() ? List.of() : allDtos.subList(start, end);
+        return new PageImpl<>(page, pageable, allDtos.size());
     }
 
     public KcRoleDto getRoleByName(String roleName) {

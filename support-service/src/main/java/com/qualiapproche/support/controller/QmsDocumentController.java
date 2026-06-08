@@ -5,7 +5,6 @@ import com.qualiapproche.support.model.QmsAuditLog;
 import com.qualiapproche.support.model.QmsDocumentVersion;
 import com.qualiapproche.support.service.QmsAuditLogService;
 import com.qualiapproche.support.service.QmsDocumentService;
-import com.qualiapproche.support.service.AlfrescoDocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -18,7 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_URL;
@@ -31,12 +29,14 @@ public class QmsDocumentController {
 
     private final QmsDocumentService documentService;
     private final QmsAuditLogService auditLogService;
-    private final AlfrescoDocumentService alfrescoDocumentService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentQms> createDocument(
             @RequestPart("file") MultipartFile file,
+            @RequestParam("titre") String titre,
             @RequestParam("documentType") String documentType,
+            @RequestParam(value = "reference", required = false) String reference,
+            @RequestParam(value = "description", required = false) String description,
             @RequestParam("serviceId") String serviceId,
             @RequestParam("serviceLibelle") String serviceLibelle,
             @RequestParam("serviceSigle") String serviceSigle,
@@ -47,13 +47,24 @@ public class QmsDocumentController {
             @RequestParam(value = "organismeEmetteur", required = false) String organismeEmetteur,
             @RequestParam(value = "referenceOfficielle", required = false) String referenceOfficielle,
             @RequestParam(value = "domaine", required = false) String domaine,
-            @RequestParam(value = "statutLegal", required = false) String statutLegal
+            @RequestParam(value = "statutLegal", required = false) String statutLegal,
+            @RequestParam(value = "workflowId", required = false) UUID workflowId
     ) {
         DocumentQms doc = documentService.createDocument(
-                file, documentType, serviceId, serviceLibelle, serviceSigle, redacteur, periodiciteMois,
-                confidentiel, documentExterne, organismeEmetteur, referenceOfficielle, domaine, statutLegal
+                file, titre, documentType, reference, description, serviceId, serviceLibelle, serviceSigle, redacteur, periodiciteMois,
+                confidentiel, documentExterne, organismeEmetteur, referenceOfficielle, domaine, statutLegal, workflowId
         );
         return ResponseEntity.ok(doc);
+    }
+
+    @PostMapping("/{id}/versions")
+    public ResponseEntity<QmsDocumentVersion> addVersion(
+            @PathVariable("id") UUID id,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam("comments") String comments
+    ) throws Exception {
+        QmsDocumentVersion version = documentService.addVersion(id, file, comments);
+        return ResponseEntity.ok(version);
     }
 
     @PostMapping("/{id}/transition")
@@ -110,52 +121,8 @@ public class QmsDocumentController {
         return ResponseEntity.ok(results);
     }
 
-    @PostMapping("/users")
-    public ResponseEntity<Void> createAlfrescoUser(@RequestBody Map<String, String> body) {
-        alfrescoDocumentService.createAlfrescoUser(
-                body.get("username"),
-                body.get("firstName"),
-                body.get("lastName"),
-                body.get("email"),
-                body.get("password")
-        );
-        return ResponseEntity.ok().build();
-    }
-
-    @GetMapping("/users")
-    public ResponseEntity<List<Map<String, Object>>> getAlfrescoUsers() {
-        return ResponseEntity.ok(alfrescoDocumentService.getAlfrescoUsers());
-    }
-
-    @PostMapping("/{id}/permissions")
-    public ResponseEntity<Void> setDocumentPermissions(
-            @PathVariable("id") UUID id,
-            @RequestBody Map<String, String> body
-    ) {
-        DocumentQms doc = documentService.getDocumentById(id);
-        alfrescoDocumentService.setNodePermissions(
-                doc.getAlfrescoNodeId(),
-                body.get("username"),
-                body.get("role"),
-                doc.getDocumentNumber()
-        );
-        return ResponseEntity.ok().build();
-    }
-
-    @GetMapping("/{id}/share-link")
-    public ResponseEntity<Map<String, String>> getShareLink(@PathVariable("id") UUID id) {
-        DocumentQms doc = documentService.getDocumentById(id);
-        String sharedId = alfrescoDocumentService.getOrCreateShareLink(doc.getAlfrescoNodeId());
-        return ResponseEntity.ok(Map.of("sharedId", sharedId));
-    }
-
-    @GetMapping("/{id}/aos-url")
-    public ResponseEntity<Map<String, String>> getAosUrl(@PathVariable("id") UUID id) {
-        DocumentQms doc = documentService.getDocumentById(id);
-        String aosUrl = alfrescoDocumentService.getAosUrl(doc.getAlfrescoNodeId());
-        if (aosUrl == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Ce document ne supporte pas l'édition en direct."));
-        }
-        return ResponseEntity.ok(Map.of("aosUrl", aosUrl));
+    @GetMapping("/{id}")
+    public ResponseEntity<DocumentQms> getDocument(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(documentService.getDocumentById(id));
     }
 }

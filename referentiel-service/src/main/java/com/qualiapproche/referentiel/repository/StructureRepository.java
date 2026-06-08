@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 public interface StructureRepository extends JpaRepository<Structure, UUID> {
     Optional<Structure> findByLibelleLong(String libelle);
     List<Structure> findByLibelleCourt(String libelle);
@@ -17,8 +20,11 @@ public interface StructureRepository extends JpaRepository<Structure, UUID> {
     boolean existsByLibelleLongAndIdNot(String nom, UUID id);
 
     List<Structure> findAllByTypeStructure(TypeStructure typeStructure);
+    Page<Structure> findAllByTypeStructure(TypeStructure typeStructure, Pageable pageable);
     List<Structure> findAllByDirectionId(UUID id);
+    Page<Structure> findAllByDirectionId(UUID id, Pageable pageable);
     List<Structure> findAllByDirectionIdAndTypeStructure(UUID id, TypeStructure typeStructure);
+    Page<Structure> findAllByDirectionIdAndTypeStructure(UUID id, TypeStructure typeStructure, Pageable pageable);
 
     boolean existsByTypeStructure(TypeStructure typeStructure);
     boolean existsByTypeStructureAndIdNot(TypeStructure typeStructure, UUID id);

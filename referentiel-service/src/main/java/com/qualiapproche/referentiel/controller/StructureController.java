@@ -12,6 +12,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 import static com.qualiapproche.common.utils.ApiUrls.*;
 
 
@@ -45,16 +48,17 @@ public record StructureController(StructureService structureService) {
     }
 
     @GetMapping(GET_ALL_STRUCTURE)
-    public ResponseEntity<List<StructureDto>> getAllStructuresAll() {
-        return ResponseEntity.ok(structureService.getAllStructuresAll());
+    public ResponseEntity<Page<StructureDto>> getAllStructuresAll(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(structureService.getAllStructuresAll(pageable));
     }
 
 
 
     @GetMapping
-    public ResponseEntity<List<StructureDto>> getAllStructures(@RequestParam(required = false) TypeStructure typeStructure,
-                                                               @RequestParam(required = false) UUID directionId) {
-        return ResponseEntity.ok(structureService.getAllStructures(typeStructure, directionId));
+    public ResponseEntity<Page<StructureDto>> getAllStructures(@RequestParam(required = false) TypeStructure typeStructure,
+                                                               @RequestParam(required = false) UUID directionId,
+                                                               @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(structureService.getAllStructures(typeStructure, directionId, pageable));
     }
 
 

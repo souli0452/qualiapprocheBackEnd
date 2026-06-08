@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.repository;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import com.qualiapproche.common.utils.StatutEnum;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -11,9 +12,14 @@ import com.qualiapproche.amelioration.entities.PlanAction;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface PlanActionRepository extends JpaRepository<PlanAction, UUID> {
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, JpaSpecificationExecutor<PlanAction> {
     List<PlanAction> findPlanActionsByResponsableEmailAndStatus(String responsableEmail, StatutEnum statut);
+    Page<PlanAction> findPlanActionsByResponsableEmailAndStatus(String responsableEmail, StatutEnum statut, Pageable pageable);
     List<PlanAction> findPlanActionsByResponsableEmail(String responsableEmail);
+    Page<PlanAction> findPlanActionsByResponsableEmail(String responsableEmail, Pageable pageable);
     List<PlanAction> findPlanActionsByStatus(StatutEnum statut);
     List<PlanAction> findPlanActionsByNonConformeId(UUID nonConformeId);
     @Query(value = "SELECT " +
@@ -32,4 +38,7 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID> {
 
     @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
     List<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId);
+    
+    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
+    Page<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId, Pageable pageable);
 }

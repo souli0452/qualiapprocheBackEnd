@@ -7,18 +7,27 @@ import java.util.UUID;
 
 import com.qualiapproche.common.dto.PlanActionDto;
 import com.qualiapproche.common.utils.StatutEnum;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface PlanActionService {
     PlanActionDto createPlanActionDto(PlanActionDto dto) throws IOException;
 
-    List<PlanActionDto> allPlanActions();
-    List<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut);
+    Page<PlanActionDto> allPlanActions(Pageable pageable);
+    Page<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut, Pageable pageable);
     PlanActionDto getPlanActionDtoById(UUID id);
-    List<PlanActionDto> planActionByResponsableAll(String responsable);
+    Page<PlanActionDto> planActionByResponsableAll(String responsable, Pageable pageable);
     PlanActionDto changeStatus(PlanActionDto dto) throws IOException ;
     PlanActionDto rejet(PlanActionDto dto) throws IOException ;
     void delete(UUID id);
     Map<String, Map<String, Map<String, Long>>> getFrequenceTraitementParMois(int annee);
 
-    List<PlanActionDto> getPlanActionsByStructure(String structureId);
+    Page<PlanActionDto> getPlanActionsByStructure(String structureId, Pageable pageable);
+
+    Page<PlanActionDto> search(
+            String numeroOdre, String responsableEmail, String responsableNomComplet,
+            String numeroNc, StatutEnum status, UUID nonConformeId,
+            java.time.LocalDate dateEcheanceFrom, java.time.LocalDate dateEcheanceTo,
+            java.time.LocalDate dateTraitementFrom, java.time.LocalDate dateTraitementTo,
+            Pageable pageable);
 }

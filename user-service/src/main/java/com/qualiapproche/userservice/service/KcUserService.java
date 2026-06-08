@@ -27,6 +27,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 @Service
 @RequiredArgsConstructor
@@ -124,10 +127,14 @@ public class KcUserService {
         return responseData;
     }
 
-    public List<KcUserDto> getAllUsers() {
-        return keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
+    public Page<KcUserDto> getAllUsers(Pageable pageable) {
+        List<KcUserDto> allUsers = keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
                 .map(this::mapUserToDto)
                 .collect(Collectors.toList());
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allUsers.size());
+        List<KcUserDto> page = start >= allUsers.size() ? List.of() : allUsers.subList(start, end);
+        return new PageImpl<>(page, pageable, allUsers.size());
     }
 
     private KcUserDto mapUserToDto(UserRepresentation user) {
@@ -313,8 +320,15 @@ public class KcUserService {
                 .build());
     }
 
-    public List<KcUserDto> getUsersByStructure(String structureId) {
-        return getAllUsers().stream().filter(u -> structureId.equals(u.getStructure())).collect(Collectors.toList());
+    public Page<KcUserDto> getUsersByStructure(String structureId, Pageable pageable) {
+        List<KcUserDto> allFiltered = keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
+                .map(this::mapUserToDto)
+                .filter(u -> structureId.equals(u.getStructure()))
+                .collect(Collectors.toList());
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), allFiltered.size());
+        List<KcUserDto> page = start >= allFiltered.size() ? List.of() : allFiltered.subList(start, end);
+        return new PageImpl<>(page, pageable, allFiltered.size());
     }
 
     public KcUserDto getUserById(String userId) {

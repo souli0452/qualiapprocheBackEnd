@@ -1,11 +1,15 @@
 package com.qualiapproche.support.model;
 
 import com.qualiapproche.common.base.AuditEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "qms_documents")
@@ -20,14 +24,20 @@ public class DocumentQms extends AuditEntity {
     private String documentNumber;
 
     @Column(nullable = false)
-    private String documentType; // Matches QmsDocumentType code, e.g. "PRO", "INS", etc.
+    private String titre;
 
     @Column(nullable = false)
-    private String serviceId; // Structure/Service ID (UUID representation as string)
+    private String documentType; // code du type ex: "PRO", "INS", etc.
 
-    private String serviceLibelle; // Structure/Service display label
+    private String reference;    // Référence officielle interne
 
-    private String serviceSigle; // Structure/Service abbreviation/sigle
+    private String description;
+
+    @Column(nullable = false)
+    private String serviceId;
+
+    private String serviceLibelle;
+    private String serviceSigle;
 
     @Column(nullable = false)
     private String redacteur;
@@ -52,11 +62,26 @@ public class DocumentQms extends AuditEntity {
     private String domaine;
     private String statutLegal;
 
-    private String alfrescoNodeId; // Reference to node in Alfresco
-    private String ncReference; // Associated NC Reference
+    private String ncReference;
 
     private String lastModifiedBy;
     private String lastModifiedReason;
-    private String alerteEnvoyee; // e.g. J-60, J-30, etc.
+    private String alerteEnvoyee;
     private boolean archived;
+
+    // Workflow
+    private String workflowStatus; // EN_COURS, TERMINE, null
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @JsonIgnore
+    private List<QmsDocumentVersion> versions = new ArrayList<>();
+
+    @JsonProperty("currentObjectName")
+    public String getCurrentObjectName() {
+        if (versions != null && !versions.isEmpty()) {
+            return versions.get(versions.size() - 1).getObjectName();
+        }
+        return null;
+    }
 }

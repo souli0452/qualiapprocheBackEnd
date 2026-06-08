@@ -4,10 +4,15 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 import com.qualiapproche.common.dto.*;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
+import com.qualiapproche.common.enumeration.TypeDemande;
+import com.qualiapproche.common.enumeration.Circuit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface NonConformiteService {
@@ -26,26 +31,26 @@ public interface NonConformiteService {
     // NonConformiteDto create(NonConformiteDto nonConformiteDto);
     NonConformiteDto update(NonConformiteDto nonConformiteDto);
 
-    List<NonConformiteDto> allNonConformites();
+    Page<NonConformiteDto> allNonConformites(Pageable pageable);
 
-    List<NonConformiteDto> findImupted(String userId, Etat etat);
+    Page<NonConformiteDto> findImupted(String userId, Etat etat, Pageable pageable);
 
     // Méthode pour récupérer les non-conformités par état
-    List<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat);
+    Page<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat, Pageable pageable);
 
-    List<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid);
+    Page<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid, Pageable pageable);
 
-    List<NonConformiteDto> getNonConformitesByStructure(String uuid);
+    Page<NonConformiteDto> getNonConformitesByStructure(String uuid, Pageable pageable);
 
-    List<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid);
+    Page<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid, Pageable pageable);
 
     void changeManyStatus(List<NonConformiteDto> nonConformiteDtos, Status status);
 
     NonConformiteDto getNonConformiteById(UUID id);
 
-    List<NonConformiteDto> findAll(Status status, String structureSoumissionId);
+    Page<NonConformiteDto> findAll(Status status, String structureSoumissionId, Pageable pageable);
 
-    List<NonConformiteDto> findAllByStructure(String structureSoumissionId);
+    Page<NonConformiteDto> findAllByStructure(String structureSoumissionId, Pageable pageable);
 
     void delete(UUID id);
 
@@ -67,15 +72,15 @@ public interface NonConformiteService {
 
     Map<String, Map<String, Map<String, Long>>> getStatsNiveauParAnnee(int annee, String origineServiceId);
 
-    List<NonConformiteDto> findAllByInitiator(String userId);
+    Page<NonConformiteDto> findAllByInitiator(String userId, Pageable pageable);
 
-    List<NonConformiteDto> findByUser(String userId);
-    List<NonConformiteDto> findImputedByUser(String userId);
-    List<NonConformiteDto> findArchivedByUser(String userId);
+    Page<NonConformiteDto> findByUser(String userId, Pageable pageable);
+    Page<NonConformiteDto> findImputedByUser(String userId, Pageable pageable);
+    Page<NonConformiteDto> findArchivedByUser(String userId, Pageable pageable);
     NcCountsDto getCountsByUser(String userId);
 
-    List<NonConformiteDto> findByStructure(String structureId);
-    List<NonConformiteDto> findByStructureAllUsers(String structureId);
+    Page<NonConformiteDto> findByStructure(String structureId, Pageable pageable);
+    Page<NonConformiteDto> findByStructureAllUsers(String structureId, Pageable pageable);
 
     NcDashboardDto getDashboardRQ();
     NcDashboardDto getDashboardPilot(String structureId);
@@ -83,5 +88,14 @@ public interface NonConformiteService {
 
     NcEvolutionDto getNcEvolutionStats(int annee, Integer mois, String structureId);
 
-    List<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId);
+    Page<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId, Pageable pageable);
+
+    Page<NonConformiteDto> search(
+            String numeroReference, String nomProcessus, String origineId, String origineService,
+            String structureSoumissionId, String structureResponsableId,
+            Etat etatTraitement, Status status, TypeDemande typeDemande, Circuit circuit,
+            String userImputeEmail, String typeNonConformiteLibelle, String niveauNonConformiteLibelle,
+            UUID typeNonConformiteId, UUID niveauNonConformiteId,
+            LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
+            Pageable pageable);
 }

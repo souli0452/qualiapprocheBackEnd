@@ -5,7 +5,7 @@ spring:
   application:
     name: support-service
   datasource:
-    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5432/bd_quali_sira_support}
+    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5433/qualiapproche_support}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -37,9 +37,8 @@ eureka:
   instance:
     prefer-ip-address: true
 
-alfresco:
-  url: ${ALFRESCO_URL:http://localhost:8999/alfresco}
-  username: ${ALFRESCO_USERNAME:admin}
-  password: ${ALFRESCO_PASSWORD:admin}
-  root-folder-id: ${ALFRESCO_ROOT_FOLDER_ID:-root-}
-  site-id: ${ALFRESCO_SITE_ID:qms-site}
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:qualisira_admin_minio}
+  secret-key: ${MINIO_SECRET_KEY:qualisira_admin_password}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}

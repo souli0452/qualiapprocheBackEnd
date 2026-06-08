@@ -12,12 +12,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableDiscoveryClient
 @EnableFeignClients
 @org.springframework.data.jpa.repository.config.EnableJpaRepositories(basePackages = {
-        "com.qualiapproche.amelioration.repository",
-        "com.qualiapproche.referentiel.repository"
+        "com.qualiapproche.amelioration.repository"
 })
 @org.springframework.boot.autoconfigure.domain.EntityScan(basePackages = {
         "com.qualiapproche.amelioration.entities",
-        "com.qualiapproche.referentiel.entities",
         "com.qualiapproche.common.entities"
 })
 

@@ -17,6 +17,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -93,25 +96,21 @@ public class StructureServiceImpl implements StructureService {
     }
 
     @Override
-    public List<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId) {
-        List<Structure> structures;
-
+    public Page<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId, Pageable pageable) {
         if (isNull(typeStructure) && isNull(directionId)) {
-            structures = structureRepository.findAll();
+            return structureRepository.findAll(pageable).map(mapper::toDto);
         } else if (isNull(typeStructure)) {
-            structures = structureRepository.findAllByDirectionId(directionId);
+            return structureRepository.findAllByDirectionId(directionId, pageable).map(mapper::toDto);
         } else if (isNull(directionId)) {
-            structures = structureRepository.findAllByTypeStructure(typeStructure);
+            return structureRepository.findAllByTypeStructure(typeStructure, pageable).map(mapper::toDto);
         } else {
-            structures = structureRepository.findAllByDirectionIdAndTypeStructure(directionId, typeStructure);
+            return structureRepository.findAllByDirectionIdAndTypeStructure(directionId, typeStructure, pageable).map(mapper::toDto);
         }
-
-        return structures.stream().map(mapper::toDto).toList();
     }
 
     @Override
-    public List<StructureDto> getAllStructuresAll() {
-        return structureRepository.findAll().stream().map(mapper::toDto).toList();
+    public Page<StructureDto> getAllStructuresAll(Pageable pageable) {
+        return structureRepository.findAll(pageable).map(mapper::toDto);
     }
 
     @Override

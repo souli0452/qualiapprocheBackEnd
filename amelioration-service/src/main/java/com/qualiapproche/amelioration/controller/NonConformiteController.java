@@ -17,6 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 
 import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.amelioration.service.NonConformiteService;
@@ -62,22 +65,22 @@ public class NonConformiteController {
     }
 
     @GetMapping(GET_ALL_CONFORMITE_IMPUTED)
-    public ResponseEntity<List<NonConformiteDto>> getNonConformiteByUserId(@PathVariable Etat etapeTraitement,
-            @PathVariable String userId) throws IOException {
-        return ResponseEntity.ok(nonConformiteService.findImupted(userId, etapeTraitement));
+    public ResponseEntity<Page<NonConformiteDto>> getNonConformiteByUserId(@PathVariable Etat etapeTraitement,
+            @PathVariable String userId, @ParameterObject Pageable pageable) throws IOException {
+        return ResponseEntity.ok(nonConformiteService.findImupted(userId, etapeTraitement, pageable));
     }
 
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTORIGIN)
-    public ResponseEntity<List<NonConformiteDto>> getNonConformitesByEtatAndOrigineId(
-            @PathVariable Etat etapeTraitement, @PathVariable String structureId) {
+    public ResponseEntity<Page<NonConformiteDto>> getNonConformitesByEtatAndOrigineId(
+            @PathVariable Etat etapeTraitement, @PathVariable String structureId, @ParameterObject Pageable pageable) {
         return ResponseEntity
-                .ok(nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId));
+                .ok(nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId, pageable));
     }
 
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTSOUMISSION)
-    public ResponseEntity<List<NonConformiteDto>> getNonConformitesByEtatAndStructureSoumission(
-            @PathVariable Etat etapeTraitement, @PathVariable String structureId) {
-        return ResponseEntity.ok(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId));
+    public ResponseEntity<Page<NonConformiteDto>> getNonConformitesByEtatAndStructureSoumission(
+            @PathVariable Etat etapeTraitement, @PathVariable String structureId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId, pageable));
     }
 
     /*-----------------------------------------------------------------------/
@@ -110,8 +113,8 @@ public class NonConformiteController {
     /-----------------------------------------------------------------------*/
     @Operation(summary = "Lister toutes les non-conformités", description = "Récupère la liste complète des non-conformités enregistrées")
     @GetMapping(GET_ALL_NON_CONFORMITE)
-    public ResponseEntity<List<NonConformiteDto>> allNonConformites() {
-        List<NonConformiteDto> nonConformite = nonConformiteService.allNonConformites();
+    public ResponseEntity<Page<NonConformiteDto>> allNonConformites(@ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformite = nonConformiteService.allNonConformites(pageable);
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
     /*-----------------------------------------------------------------------/
@@ -119,8 +122,8 @@ public class NonConformiteController {
     /-----------------------------------------------------------------------*/
 
     @GetMapping(GET_ETAT_BAY_NON_CONFORMITE)
-    public List<NonConformiteDto> getNonConformitesByEtat(@PathVariable Etat etapeTraitement) {
-        return nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement);
+    public Page<NonConformiteDto> getNonConformitesByEtat(@PathVariable Etat etapeTraitement, @ParameterObject Pageable pageable) {
+        return nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement, pageable);
     }
 
     /*-----------------------------------------------------------------------/
@@ -141,16 +144,16 @@ public class NonConformiteController {
     }
 
     @GetMapping("/publish")
-    public ResponseEntity<List<NonConformiteDto>> getAllPublish(@RequestParam(required = false) Status status,
-            @RequestParam(required = false) String id) {
-        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status, id);
+    public ResponseEntity<Page<NonConformiteDto>> getAllPublish(@RequestParam(required = false) Status status,
+            @RequestParam(required = false) String id, @ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status, id, pageable);
         return ResponseEntity.ok(nonConformiteDtos);
     }
 
     @GetMapping
-    public ResponseEntity<List<NonConformiteDto>> getAll(@RequestParam(required = false) Status status,
-            @RequestParam(required = false) String id) {
-        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status, id);
+    public ResponseEntity<Page<NonConformiteDto>> getAll(@RequestParam(required = false) Status status,
+            @RequestParam(required = false) String id, @ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAll(status, id, pageable);
         return ResponseEntity.ok(nonConformiteDtos);
     }
 
@@ -212,8 +215,8 @@ public class NonConformiteController {
     }
 
     @GetMapping("structure/{id}")
-    public ResponseEntity<List<NonConformiteDto>> getAllByStructure(@PathVariable String id) {
-        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.getNonConformitesByStructure(id);
+    public ResponseEntity<Page<NonConformiteDto>> getAllByStructure(@PathVariable String id, @ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.getNonConformitesByStructure(id, pageable);
         return ResponseEntity.ok(nonConformiteDtos);
     }
 
@@ -230,14 +233,14 @@ public class NonConformiteController {
     }
 
     @GetMapping("/all/structure/{id}")
-    public ResponseEntity<List<NonConformiteDto>> getAllByStructu(@PathVariable String id) {
-        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByStructure(id);
+    public ResponseEntity<Page<NonConformiteDto>> getAllByStructu(@PathVariable String id, @ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByStructure(id, pageable);
         return ResponseEntity.ok(nonConformiteDtos);
     }
 
     @GetMapping("/initiateur/{id}")
-    public ResponseEntity<List<NonConformiteDto>> getAllByInitiator(@PathVariable String id) {
-        List<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByInitiator(id);
+    public ResponseEntity<Page<NonConformiteDto>> getAllByInitiator(@PathVariable String id, @ParameterObject Pageable pageable) {
+        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.findAllByInitiator(id, pageable);
         return ResponseEntity.ok(nonConformiteDtos);
     }
 
@@ -246,20 +249,20 @@ public class NonConformiteController {
 
     @Operation(summary = "NC créées par l'utilisateur", description = "Récupère toutes les NC actives (Brouillon, Publié, En cours) créées par l'utilisateur")
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<NonConformiteDto>> getNCByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(nonConformiteService.findByUser(userId));
+    public ResponseEntity<Page<NonConformiteDto>> getNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.findByUser(userId, pageable));
     }
 
     @Operation(summary = "NC imputées à l'utilisateur", description = "Récupère toutes les NC qui ont été assignées à cet utilisateur")
     @GetMapping("/user/{userId}/imputed")
-    public ResponseEntity<List<NonConformiteDto>> getImputedNCByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(nonConformiteService.findImputedByUser(userId));
+    public ResponseEntity<Page<NonConformiteDto>> getImputedNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.findImputedByUser(userId, pageable));
     }
 
     @Operation(summary = "NC archivées par l'utilisateur", description = "Récupère uniquement les NC archivées par cet utilisateur")
     @GetMapping("/user/{userId}/archived")
-    public ResponseEntity<List<NonConformiteDto>> getArchivedNCByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(nonConformiteService.findArchivedByUser(userId));
+    public ResponseEntity<Page<NonConformiteDto>> getArchivedNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.findArchivedByUser(userId, pageable));
     }
 
     @Operation(summary = "Nombres de NC pour les pastilles", description = "Renvoie les comptes (brouillons, imputées, archivées) pour l'utilisateur")
@@ -272,14 +275,14 @@ public class NonConformiteController {
 
     @Operation(summary = "NC par structure", description = "Toutes les NC liées à un service (en tant que Soumissionnaire ou Origine)")
     @GetMapping("/structure/{structureId}")
-    public ResponseEntity<List<NonConformiteDto>> getNCByStructure(@PathVariable String structureId) {
-        return ResponseEntity.ok(nonConformiteService.findByStructure(structureId));
+    public ResponseEntity<Page<NonConformiteDto>> getNCByStructure(@PathVariable String structureId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.findByStructure(structureId, pageable));
     }
 
     @Operation(summary = "NC de tous les utilisateurs de la structure", description = "Récupère toutes les NC créées par n'importe quel agent de cette structure")
     @GetMapping("/structure/{structureId}/all-users")
-    public ResponseEntity<List<NonConformiteDto>> getNCByStructureAllUsers(@PathVariable String structureId) {
-        return ResponseEntity.ok(nonConformiteService.findByStructureAllUsers(structureId));
+    public ResponseEntity<Page<NonConformiteDto>> getNCByStructureAllUsers(@PathVariable String structureId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.findByStructureAllUsers(structureId, pageable));
     }
 
     // --- Dashboard endpoints ---
@@ -313,8 +316,8 @@ public class NonConformiteController {
 
     @Operation(summary = "NC par niveau", description = "Récupérer les NC en rapport avec une gravité ou niveau de NC")
     @GetMapping("/by-niveau/{niveauId}")
-    public ResponseEntity<List<NonConformiteDto>> getByNiveau(@PathVariable UUID niveauId) {
-        return ResponseEntity.ok(nonConformiteService.getNonConformitesByNiveau(niveauId));
+    public ResponseEntity<Page<NonConformiteDto>> getByNiveau(@PathVariable UUID niveauId, @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(nonConformiteService.getNonConformitesByNiveau(niveauId, pageable));
     }
 
 }

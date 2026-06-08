@@ -11,6 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 
 @RestController
 @RequestMapping("/api/v1/roles")
@@ -22,8 +25,8 @@ public class KcRoleController {
 
     @Operation(summary = "Lister les rôles", description = "Récupère tous les rôles définis dans Keycloak")
     @GetMapping
-    public ResponseEntity<List<KcRoleDto>> getAllRoles() {
-        return ResponseEntity.ok(kcRoleService.getAllRoles());
+    public ResponseEntity<Page<KcRoleDto>> getAllRoles(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(kcRoleService.getAllRoles(pageable));
     }
 
     @GetMapping("/{roleName}")

@@ -9,8 +9,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
 
@@ -35,8 +37,8 @@ public class TypeNonConformiteController {
         return new ResponseEntity<>(TypeNonConformiteDto1, HttpStatus.OK);
     }
     @GetMapping(GET_ALL_TYPE_NON_CONFORMITE)
-    public ResponseEntity<List<TypeNonConformiteDto>> allTypeNonConformite() {
-        List<TypeNonConformiteDto> typeNonConformiteDtos  = typeNonConformiteService.getAll();
+    public ResponseEntity<Page<TypeNonConformiteDto>> allTypeNonConformite(@ParameterObject Pageable pageable) {
+        Page<TypeNonConformiteDto> typeNonConformiteDtos  = typeNonConformiteService.getAll(pageable);
         return new ResponseEntity<>(typeNonConformiteDtos, HttpStatus.OK);
     }
     @GetMapping(GET_TYPE_NON_CONFORMITE_BY_ID)

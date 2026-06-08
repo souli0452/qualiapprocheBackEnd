@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -37,8 +39,8 @@ public class TypeProcessusServiceImpl implements TypeProcessusService {
     }
 
     @Override
-    public List<TypeProcessusDto> getAll() {
-        return  typeProcessusMapper.toDtos(typeProcessusRepository.findAll()) ;
+    public Page<TypeProcessusDto> getAll(Pageable pageable) {
+        return typeProcessusRepository.findAll(pageable).map(typeProcessusMapper::toDto);
     }
 
     @Override

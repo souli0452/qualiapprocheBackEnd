@@ -7,8 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springdoc.core.annotations.ParameterObject;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
 
@@ -31,8 +33,8 @@ public class TypeProcessusController {
         return new ResponseEntity<>(TypeProcessusDto1, HttpStatus.OK);
     }
     @GetMapping(GET_ALL_TYPE_PROCESSUS)
-    public ResponseEntity<List<TypeProcessusDto>> allTypeProcessus() {
-        List<TypeProcessusDto> typeProcessusDtos  = typeProcessusService.getAll();
+    public ResponseEntity<Page<TypeProcessusDto>> allTypeProcessus(@ParameterObject Pageable pageable) {
+        Page<TypeProcessusDto> typeProcessusDtos  = typeProcessusService.getAll(pageable);
         return new ResponseEntity<>(typeProcessusDtos, HttpStatus.OK);
     }
     @GetMapping(GET_TYPE_PROCESSUS_BY_ID)

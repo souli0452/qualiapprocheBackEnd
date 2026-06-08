@@ -1,6 +1,5 @@
 package com.qualiapproche.support.service;
 
-import com.qualiapproche.support.client.AlfrescoClient;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.model.QmsDocumentVersion;
@@ -15,25 +14,21 @@ import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.util.Matrix;
-import org.springframework.data.jpa.domain.Specification;
-import jakarta.persistence.criteria.Predicate;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import jakarta.persistence.criteria.Predicate;
 
 @Slf4j
 @Service
@@ -43,17 +38,20 @@ public class QmsDocumentService {
     private final DocumentQmsRepository documentRepository;
     private final QmsDocumentVersionRepository versionRepository;
     private final QmsAuditLogService auditLogService;
-    private final AlfrescoDocumentService alfrescoDocumentService;
+    private final MinioService minioService;
     private final QmsDocumentTypeService typeService;
-    private final AlfrescoClient alfrescoClient;
+    private final WorkflowService workflowService;
 
     /**
-     * Creates a new Quality Document (auto-numbering, classification, upload to Alfresco, persist metadata).
+     * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
      */
     @Transactional
     public DocumentQms createDocument(
             MultipartFile file,
+            String titre,
             String documentType,
+            String reference,
+            String description,
             String serviceId,
             String serviceLibelle,
             String serviceSigle,
@@ -64,7 +62,8 @@ public class QmsDocumentService {
             String organismeEmetteur,
             String referenceOfficielle,
             String domaine,
-            String statutLegal
+            String statutLegal,
+            UUID workflowId
     ) {
         log.info("Creating new QMS document: type={}, serviceId={}", documentType, serviceId);
 
@@ -75,28 +74,22 @@ public class QmsDocumentService {
         String documentNumber = generateDocumentNumber(docType.getCode(), serviceSigle != null ? serviceSigle : "GEN");
         log.info("Generated document number: {}", documentNumber);
 
-        // 3. Classify folder path in Alfresco
-        String folderName = getClassificationFolder(docType, documentExterne);
-        String docLibId = alfrescoDocumentService.getOrCreateFolder(null, "documentLibrary");
-        String targetFolderId = alfrescoDocumentService.getOrCreateFolder(docLibId, folderName);
-
-        // 4. Upload file to Alfresco
-        Map<String, Object> uploadResponse = alfrescoClient.uploadFile(targetFolderId, file, file.getOriginalFilename(), "cm:content");
-        
-        String alfrescoNodeId = null;
-        if (uploadResponse != null && uploadResponse.containsKey("entry")) {
-            Map<String, Object> entry = (Map<String, Object>) uploadResponse.get("entry");
-            alfrescoNodeId = (String) entry.get("id");
+        // 3. Upload file to Minio
+        String objectName;
+        try {
+            objectName = minioService.uploadFile(file);
+        } catch (Exception e) {
+            log.error("Failed to upload file to Minio", e);
+            throw new RuntimeException("Échec du dépôt du fichier dans le stockage Minio.");
         }
 
-        if (alfrescoNodeId == null) {
-            throw new RuntimeException("Échec de la récupération du NodeId du fichier déposé dans Alfresco.");
-        }
-
-        // 5. Save metadata to local DB
+        // 4. Save metadata to local DB
         DocumentQms document = DocumentQms.builder()
                 .documentNumber(documentNumber)
+                .titre(titre != null && !titre.isBlank() ? titre : file.getOriginalFilename())
                 .documentType(docType.getCode())
+                .reference(reference != null && !reference.isBlank() ? reference : "REF-" + System.currentTimeMillis())
+                .description(description)
                 .serviceId(serviceId)
                 .serviceLibelle(serviceLibelle)
                 .serviceSigle(serviceSigle)
@@ -104,7 +97,7 @@ public class QmsDocumentService {
                 .status("brouillon")
                 .versionMajeure(1)
                 .versionMineure(0)
-                .periodiciteMois(periodiciteMois)
+                .periodiciteMois(periodiciteMois != null ? periodiciteMois : 12)
                 .confidentiel(confidentiel)
                 .documentExterne(documentExterne)
                 .organismeEmetteur(organismeEmetteur)
@@ -112,20 +105,71 @@ public class QmsDocumentService {
                 .datePublication(documentExterne ? LocalDateTime.now() : null)
                 .domaine(domaine)
                 .statutLegal(statutLegal)
-                .alfrescoNodeId(alfrescoNodeId)
                 .archived(false)
                 .build();
 
         document = documentRepository.save(document);
 
+        // 5. Create version history record in local DB
+        QmsDocumentVersion version = QmsDocumentVersion.builder()
+                .document(document)
+                .versionLabel("1.0")
+                .dateCreation(LocalDateTime.now())
+                .createdBy(getCurrentUser())
+                .comment("Dépôt initial")
+                .objectName(objectName)
+                .originalFilename(file.getOriginalFilename())
+                .fileSize(file.getSize())
+                .build();
+
+        versionRepository.save(version);
+
         // 6. Register Audit log
-        auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document");
+        auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
+
+        // 7. Initiate validation workflow if workflowId is provided
+        if (workflowId != null) {
+            workflowService.initiateWorkflow(document, workflowId);
+            document.setStatus("en_approbation");
+            documentRepository.save(document);
+        }
 
         return document;
     }
 
+    @Transactional
+    public QmsDocumentVersion addVersion(UUID documentId, MultipartFile file, String comments) throws Exception {
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document introuvable"));
+
+        String objectName = minioService.uploadFile(file);
+
+        // Nouvelle version mineure par défaut
+        document.setVersionMineure(document.getVersionMineure() + 1);
+        documentRepository.save(document);
+
+        String versionLabel = document.getVersionMajeure() + "." + document.getVersionMineure();
+
+        QmsDocumentVersion version = QmsDocumentVersion.builder()
+                .document(document)
+                .versionLabel(versionLabel)
+                .dateCreation(LocalDateTime.now())
+                .createdBy(getCurrentUser())
+                .comment(comments)
+                .objectName(objectName)
+                .originalFilename(file.getOriginalFilename())
+                .fileSize(file.getSize())
+                .build();
+
+        version = versionRepository.save(version);
+
+        auditLogService.logAction("MISE_A_JOUR_VERSION", document.getDocumentNumber(), "Nouvelle version ajoutée: " + versionLabel);
+
+        return version;
+    }
+
     /**
-     * State transition engine (handles workflow validation, archiving preceding copies, moving obsolete nodes).
+     * State transition engine.
      */
     @Transactional
     public DocumentQms transitionStatus(UUID id, String nextStatus, String reason) {
@@ -145,55 +189,10 @@ public class QmsDocumentService {
                 doc.setDateProchRevision(doc.getDateVigueur().plusMonths(doc.getPeriodiciteMois()));
             }
 
-            // 1. Resolve or create archive folder in Alfresco
-            String docLibId = alfrescoDocumentService.getOrCreateFolder(null, "documentLibrary");
-            String archivesRootId = alfrescoDocumentService.getOrCreateFolder(docLibId, "Archives");
-            String docArchiveFolderId = alfrescoDocumentService.getOrCreateFolder(archivesRootId, doc.getDocumentNumber());
-
-            // 2. Copy current active node to Archives folder via Feign
-            String versionLabel = doc.getVersionMajeure() + "." + doc.getVersionMineure();
-            String archiveNodeName = doc.getDocumentNumber() + "_V" + versionLabel + "_" + System.currentTimeMillis();
-
-            Map<String, Object> copyBody = Map.of(
-                    "targetParentId", docArchiveFolderId,
-                    "name", archiveNodeName
-            );
-
-            Map<String, Object> copyResponse = alfrescoClient.copyNode(doc.getAlfrescoNodeId(), copyBody);
-            String archivedNodeId = null;
-            if (copyResponse != null && copyResponse.containsKey("entry")) {
-                Map<String, Object> entry = (Map<String, Object>) copyResponse.get("entry");
-                archivedNodeId = (String) entry.get("id");
-            }
-
-            // 3. Register historical version record in local DB
-            if (archivedNodeId != null) {
-                QmsDocumentVersion history = QmsDocumentVersion.builder()
-                        .documentId(doc.getId())
-                        .versionLabel(versionLabel)
-                        .dateCreation(LocalDateTime.now())
-                        .createdBy(getCurrentUser())
-                        .comment(reason)
-                        .alfrescoNodeId(archivedNodeId)
-                        .build();
-
-                versionRepository.save(history);
-            }
-
-            // Increment version (Valide represents major progression)
+            // Incrément version
             doc.setVersionMajeure(doc.getVersionMajeure() + 1);
             doc.setVersionMineure(0);
 
-        } else if ("obsolete".equals(nextStatus)) {
-            // Move node to Archives folder
-            String docLibId = alfrescoDocumentService.getOrCreateFolder(null, "documentLibrary");
-            String archivesRootId = alfrescoDocumentService.getOrCreateFolder(docLibId, "Archives");
-            String docArchiveFolderId = alfrescoDocumentService.getOrCreateFolder(archivesRootId, doc.getDocumentNumber());
-
-            Map<String, Object> moveBody = Map.of(
-                    "targetParentId", docArchiveFolderId
-            );
-            alfrescoClient.moveNode(doc.getAlfrescoNodeId(), moveBody);
         }
 
         doc = documentRepository.save(doc);
@@ -215,7 +214,7 @@ public class QmsDocumentService {
         doc.setNcReference(ncRef);
 
         if ("mise_a_jour_document".equalsIgnoreCase(actionCorrective)) {
-            // Trigger revision: update status to brouillon or en_approbation
+            // Trigger revision: update status to brouillon
             doc.setStatus("brouillon");
             doc.setVersionMineure(doc.getVersionMineure() + 1);
             doc.setLastModifiedReason("Modification initiée par Action Corrective suite à NC : " + ncRef);
@@ -246,42 +245,27 @@ public class QmsDocumentService {
     /**
      * Export secured PDF overlayed with custom watermark using PDFBox, and password protected if confidential.
      */
-    @SuppressWarnings("unchecked")
     public ExportedDocument securedExportPdf(UUID id) throws IOException {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
 
         log.info("Exporting secured PDF for document '{}'", doc.getDocumentNumber());
 
-        // 1. Fetch file bytes from Alfresco
-        ResponseEntity<byte[]> response = alfrescoClient.downloadFile(doc.getAlfrescoNodeId());
-        byte[] originalPdf = response.getBody();
-
-        if (originalPdf == null || originalPdf.length == 0) {
-            throw new RuntimeException("Contenu binaire du document Alfresco vide ou inaccessible.");
+        List<QmsDocumentVersion> versions = versionRepository.findByDocumentIdOrderByDateCreationDesc(doc.getId());
+        if (versions.isEmpty()) {
+            throw new RuntimeException("Aucun fichier ou version trouvé pour ce document.");
         }
 
-        // Fetch original filename and content type from Alfresco metadata
-        String filename = "document_" + doc.getDocumentNumber();
-        String contentType = "application/octet-stream";
-        try {
-            Map<String, Object> nodeInfo = alfrescoClient.getNodeInfo(doc.getAlfrescoNodeId(), null);
-            if (nodeInfo != null && nodeInfo.containsKey("entry")) {
-                Map<String, Object> entry = (Map<String, Object>) nodeInfo.get("entry");
-                if (entry != null) {
-                    if (entry.containsKey("name")) {
-                        filename = (String) entry.get("name");
-                    }
-                    if (entry.containsKey("content")) {
-                        Map<String, Object> contentMap = (Map<String, Object>) entry.get("content");
-                        if (contentMap != null && contentMap.containsKey("mimeType")) {
-                            contentType = (String) contentMap.get("mimeType");
-                        }
-                    }
-                }
-            }
+        QmsDocumentVersion lastVersion = versions.get(0);
+        String objectName = lastVersion.getObjectName();
+        String filename = lastVersion.getOriginalFilename() != null ? lastVersion.getOriginalFilename() : "document_" + doc.getDocumentNumber() + ".pdf";
+
+        byte[] originalPdf;
+        try (InputStream is = minioService.downloadFile(objectName)) {
+            originalPdf = is.readAllBytes();
         } catch (Exception e) {
-            log.warn("Failed to get node info for node '{}' from Alfresco: {}", doc.getAlfrescoNodeId(), e.getMessage());
+            log.error("Failed to download file from Minio for objectName: " + objectName, e);
+            throw new RuntimeException("Impossible de lire le fichier depuis le stockage Minio.");
         }
 
         // 2. Check if the downloaded file is a valid PDF
@@ -290,6 +274,8 @@ public class QmsDocumentService {
             String header = new String(originalPdf, 0, 4);
             isPdf = "%PDF".equals(header);
         }
+
+        String contentType = filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream";
 
         if (!isPdf) {
             log.warn("Downloaded file for document '{}' is not a PDF. Skipping watermark and returning original content.", doc.getDocumentNumber());
@@ -365,6 +351,7 @@ public class QmsDocumentService {
                 String likePattern = "%" + query.toLowerCase() + "%";
                 predicates.add(cb.or(
                         cb.like(cb.lower(root.get("documentNumber")), likePattern),
+                        cb.like(cb.lower(root.get("titre")), likePattern),
                         cb.like(cb.lower(root.get("redacteur")), likePattern),
                         cb.like(cb.lower(root.get("organismeEmetteur")), likePattern)
                 ));
@@ -411,15 +398,6 @@ public class QmsDocumentService {
         }
 
         return prefix + String.format("%03d", nextSeq);
-    }
-
-    private String getClassificationFolder(QmsDocumentType docType, boolean isExterne) {
-        if (isExterne) {
-            return "Documents externes";
-        }
-        return (docType.getFolderName() != null && !docType.getFolderName().isBlank())
-                ? docType.getFolderName()
-                : "Documents QMS";
     }
 
     private String getCurrentUser() {

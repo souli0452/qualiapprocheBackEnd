@@ -3,17 +3,15 @@ package com.qualiapproche.amelioration.service.impl;
 import com.qualiapproche.common.dto.NiveauNonConformiteDto;
 import com.qualiapproche.amelioration.entities.NiveauNonConformite;
 import com.qualiapproche.amelioration.entities.mappers.NiveauNonConformiteMapper;
-import com.qualiapproche.amelioration.entities.mappers.NiveauNonConformiteMapper;
 import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
-import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
-import com.qualiapproche.amelioration.service.NiveauNonConformiteService;
 import com.qualiapproche.amelioration.service.NiveauNonConformiteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -42,8 +40,8 @@ public class NiveauNonConformiteServiceImpl implements NiveauNonConformiteServic
     }
 
     @Override
-    public List<NiveauNonConformiteDto> getAll() {
-        return  niveauNonConformiteMapper.toDtos(niveauNonConformiteRepository.findAll()) ;
+    public Page<NiveauNonConformiteDto> getAll(Pageable pageable) {
+        return niveauNonConformiteRepository.findAll(pageable).map(niveauNonConformiteMapper::toDto);
     }
 
     @Override
@@ -60,5 +58,11 @@ public class NiveauNonConformiteServiceImpl implements NiveauNonConformiteServic
     public void delete(UUID id) {
         NiveauNonConformite niveauNonConformite = niveauNonConformiteRepository.getReferenceById(id);
         niveauNonConformiteRepository.delete(niveauNonConformite);
+    }
+
+    @Override
+    public Page<NiveauNonConformiteDto> search(String libelle, String description, Pageable pageable) {
+        return niveauNonConformiteRepository.findAll(pageable)
+                .map(niveauNonConformiteMapper::toDto);
     }
 }

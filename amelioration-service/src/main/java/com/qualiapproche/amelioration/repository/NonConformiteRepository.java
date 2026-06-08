@@ -1,5 +1,7 @@
 package com.qualiapproche.amelioration.repository;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
 import com.qualiapproche.common.dto.NcStats;
 import com.qualiapproche.common.dto.NonConformiteByStructDto;
 import com.qualiapproche.amelioration.entities.NonConformite;
@@ -13,29 +15,32 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-public interface NonConformiteRepository extends JpaRepository<NonConformite, UUID> {
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-        List<NonConformite> findByEtatTraitement(Etat etat);
+public interface NonConformiteRepository extends JpaRepository<NonConformite, UUID>, JpaSpecificationExecutor<NonConformite> {
 
-        List<NonConformite> findAllByOrigineId(String origineId);
+        Page<NonConformite> findByEtatTraitement(Etat etat, Pageable pageable);
 
-        List<NonConformite> findAllByOrigineIdAndStatusIsNot(String origineId, Status status);
+        Page<NonConformite> findAllByOrigineId(String origineId, Pageable pageable);
 
-        List<NonConformite> findAllByStructureSoumissionIdAndStatusIsNot(String structureSoumissionId, Status status);
+        Page<NonConformite> findAllByOrigineIdAndStatusIsNot(String origineId, Status status, Pageable pageable);
 
-        List<NonConformite> findAllByEtatTraitementAndStructureSoumissionId(Etat etatTraitement,
-                        String structureSoumissionId);
+        Page<NonConformite> findAllByStructureSoumissionIdAndStatusIsNot(String structureSoumissionId, Status status, Pageable pageable);
 
-        List<NonConformite> findAllByEtatTraitementAndOrigineId(Etat etatTraitement, String origineId);
+        Page<NonConformite> findAllByEtatTraitementAndStructureSoumissionId(Etat etatTraitement,
+                        String structureSoumissionId, Pageable pageable);
+
+        Page<NonConformite> findAllByEtatTraitementAndOrigineId(Etat etatTraitement, String origineId, Pageable pageable);
 
         NonConformite getNonConformiteByNumeroReference(String numeroReference);
 
-        List<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId, Etat etatTraitement);
+        Page<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId, Etat etatTraitement, Pageable pageable);
 
         @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_soumission_id = :structureId GROUP BY a.status", nativeQuery = true)
         List<NcStats> countByStatusForStructure(@Param("structureId") String structureId);
 
-        List<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId);
+        Page<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId, Pageable pageable);
 
         @Query("SELECT MAX(CAST(SUBSTRING(n.numeroReference, LENGTH(n.numeroReference) - 4) AS integer)) " +
                         "FROM NonConformite n WHERE n.structureSoumissionId = :structureSoumissionId " +
@@ -119,24 +124,24 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         @Param("debut") LocalDateTime debut,
                         @Param("fin") LocalDateTime fin,
                         @Param("origineServiceId") String origineServiceId);
-        List<NonConformite> findAllByCreatedById(String userId);
+        Page<NonConformite> findAllByCreatedById(String userId, Pageable pageable);
 
-        List<NonConformite> findAllByCreatedByIdAndStatusIn(String createdById, List<Status> statuses);
+        Page<NonConformite> findAllByCreatedByIdAndStatusIn(String createdById, List<Status> statuses, Pageable pageable);
 
-        List<NonConformite> findAllByUserImputId(String userImputId);
+        Page<NonConformite> findAllByUserImputId(String userImputId, Pageable pageable);
 
-        List<NonConformite> findAllByCreatedByIdAndStatus(String createdById, Status status);
+        Page<NonConformite> findAllByCreatedByIdAndStatus(String createdById, Status status, Pageable pageable);
 
-        List<NonConformite> findAllByStructureSoumissionIdOrOrigineId(String structureSoumissionId, String originId);
+        Page<NonConformite> findAllByStructureSoumissionIdOrOrigineId(String structureSoumissionId, String originId, Pageable pageable);
 
-        List<NonConformite> findAllByCurrentUserStructure(String structureId);
+        Page<NonConformite> findAllByCurrentUserStructure(String structureId, Pageable pageable);
 
         long countByCreatedByIdAndStatus(String userId, Status status);
 
         long countByUserImputId(String userId);
 
         @Query("SELECT n FROM NonConformite n WHERE n.createdById = :userId OR n.userImputId = :userId")
-        List<NonConformite> findAllByUserInvolved(@Param("userId") String userId);
+        Page<NonConformite> findAllByUserInvolved(@Param("userId") String userId, Pageable pageable);
 
         @Query(value = "SELECT EXTRACT(MONTH FROM created_at) as mois, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
                         "FROM quali_nc " +
@@ -180,7 +185,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         @Param("mois") int mois,
                         @Param("structureId") String structureId);
 
-        List<NonConformite> findAllByNiveauNonConformiteId(java.util.UUID niveauNonConformiteId);
+        Page<NonConformite> findAllByNiveauNonConformiteId(java.util.UUID niveauNonConformiteId, Pageable pageable);
 }
 
         

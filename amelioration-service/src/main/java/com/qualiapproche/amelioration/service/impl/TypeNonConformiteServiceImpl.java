@@ -3,17 +3,15 @@ package com.qualiapproche.amelioration.service.impl;
 import com.qualiapproche.common.dto.TypeNonConformiteDto;
 import com.qualiapproche.amelioration.entities.TypeNonConformite;
 import com.qualiapproche.amelioration.entities.mappers.TypeNonConformiteMapper;
-import com.qualiapproche.amelioration.entities.mappers.TypeNonConformiteMapper;
 import com.qualiapproche.amelioration.repository.TypeNonConformiteRepository;
-import com.qualiapproche.amelioration.repository.TypeNonConformiteRepository;
-import com.qualiapproche.amelioration.service.TypeNonConformiteService;
 import com.qualiapproche.amelioration.service.TypeNonConformiteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,7 +20,6 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
 
     private final TypeNonConformiteMapper typeNonConformiteMapper;
     private final TypeNonConformiteRepository typeNonConformiteRepository;
-
 
     @Override
     @org.springframework.transaction.annotation.Transactional
@@ -42,8 +39,8 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
     }
 
     @Override
-    public List<TypeNonConformiteDto> getAll() {
-        return  typeNonConformiteMapper.toDtos(typeNonConformiteRepository.findAll()) ;
+    public Page<TypeNonConformiteDto> getAll(Pageable pageable) {
+        return typeNonConformiteRepository.findAll(pageable).map(typeNonConformiteMapper::toDto);
     }
 
     @Override
@@ -58,7 +55,14 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
 
     @Override
     public void delete(UUID id) {
-        TypeNonConformite typeNonConformite=typeNonConformiteRepository.getReferenceById(id);
+        TypeNonConformite typeNonConformite = typeNonConformiteRepository.getReferenceById(id);
         typeNonConformiteRepository.delete(typeNonConformite);
     }
+
+    @Override
+    public Page<TypeNonConformiteDto> search(String libelle, String description, Pageable pageable) {
+        return typeNonConformiteRepository.findAll(pageable)
+                .map(typeNonConformiteMapper::toDto);
+    }
 }
+
