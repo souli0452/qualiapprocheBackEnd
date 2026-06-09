@@ -154,23 +154,24 @@ public class TenantProvisioningService implements CommandLineRunner {
 
 
     private void updateLicenseForExistingDirection(Structure direction, JsonNode node) {
-        AbonnementDirection abo = abonnementDirectionRepository.findByDirection(direction)
-                .orElseGet(() -> {
-                    log.info("No abonnement found for existing direction {}, creating one.", direction.getLibelleLong());
-                    return AbonnementDirection.builder()
-                            .direction(direction)
-                            .active(true)
-                            .build();
-                });
+        // Recherche de l'abonnement par UUID direct (robuste, basé sur subscribed_direction_id)
+        // Double fallback : par UUID d'abord, puis par entité, puis création si rien trouvé
+        AbonnementDirection abo = abonnementDirectionRepository.findByDirectionUUID(direction.getId())
+                .orElseGet(() -> abonnementDirectionRepository.findByDirection(direction)
+                        .orElseGet(() -> {
+                            log.info("Aucun abonnement trouvé pour la direction '{}', création d'un nouvel abonnement.", direction.getLibelleLong());
+                            return AbonnementDirection.builder()
+                                    .direction(direction)
+                                    .active(true)
+                                    .build();
+                        }));
 
-        boolean changed = false;
+        // Mise à jour systématique de toutes les données depuis tenant-init.json (update idempotent)
         if (node.has("dateDebutLicence")) {
             abo.setDateDebut(java.time.LocalDateTime.parse(node.get("dateDebutLicence").asText()));
-            changed = true;
         }
         if (node.has("dateFinLicence")) {
             abo.setDateFin(java.time.LocalDateTime.parse(node.get("dateFinLicence").asText()));
-            changed = true;
         }
         if (node.has("modulesSubscribed")) {
             List<String> modules = new java.util.ArrayList<>();
@@ -179,15 +180,11 @@ public class TenantProvisioningService implements CommandLineRunner {
             }
             String modulesRaw = String.join(",", modules);
             String encryptedLicense = com.qualiapproche.common.utils.CryptoUtils.encrypt(modulesRaw);
-            if (!encryptedLicense.equals(abo.getLicense())) {
-                abo.setLicense(encryptedLicense);
-                changed = true;
-            }
+            abo.setLicense(encryptedLicense);
+            log.info("Modules mis à jour pour la direction '{}': {}", direction.getLibelleLong(), modules);
         }
-        
-        if (changed || abo.getId() == null) {
-            abonnementDirectionRepository.save(abo);
-            log.info("License info updated/created for direction: {}", direction.getLibelleLong());
-        }
+
+        abonnementDirectionRepository.save(abo);
+        log.info("Licence sauvegardée/mise à jour avec succès pour la direction: {}", direction.getLibelleLong());
     }
 }

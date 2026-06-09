@@ -73,7 +73,7 @@ public class KcUserService {
                         : new java.util.ArrayList<>();
             }
         } catch (Exception e) {
-            log.error("Erreur récupération licence globale: {}", e.getMessage());
+            log.error("Erreur récupération licence via Feign (referentiel-service): {}", e.getMessage());
         }
 
         // Rôles Applicatifs (Base de données locale uniquement)

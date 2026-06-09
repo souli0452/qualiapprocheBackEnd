@@ -141,9 +141,9 @@ public class StructureServiceImpl implements StructureService {
     public StructureDto getDirection() {
         log.info("Récupération de la licence globale (Tenant License)...");
 
-        // On récupère le premier abonnement trouvé en base (Licence unique de la
-        // plateforme)
-        List<AbonnementDirection> allAbos = abonnementDirectionRepository.findAll();
+        // Requête robuste : charge directement les abonnements des structures de type DIRECTION
+        // avec JOIN FETCH (évite le lazy loading) et ordrée par date de création
+        List<AbonnementDirection> allAbos = abonnementDirectionRepository.findGlobalDirectionLicense();
 
         if (allAbos.isEmpty()) {
             log.error("DEBUG LICENCE: Aucun abonnement trouvé dans la table 'abonnements_directions'.");
@@ -205,10 +205,16 @@ public class StructureServiceImpl implements StructureService {
             } catch (Exception e) {
                 log.error("DEBUG LICENCE: Échec décryptage: {}. Tentative lecture en clair...", e.getMessage());
                 // Fallback si jamais c'est stocké en clair par erreur
-                if (abo.getLicense().contains("NON_CONFORMITE")) {
+                if (abo.getLicense().contains(",")) {
                     dto.setModulesSubscribed(java.util.Arrays.asList(abo.getLicense().split(",")));
+                } else if (abo.getLicense().contains("NON_CONFORMITE")) {
+                    dto.setModulesSubscribed(java.util.Collections.singletonList(abo.getLicense()));
                 }
             }
+        } else {
+            dto.setModulesSubscribed(java.util.Arrays.asList(
+                "NON_CONFORMITE", "QMS", "DOCUMENT", "AUDIT", "ACTION", "FORMATION", "FOURNISSEUR", "RISQUE"
+            ));
         }
         return dto;
     }

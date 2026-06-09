@@ -23,6 +23,36 @@ public class WorkflowController {
         return ResponseEntity.ok(workflowRepository.findAll());
     }
 
+    @PostMapping
+    public ResponseEntity<DocumentWorkflow> createWorkflow(@RequestBody DocumentWorkflow workflow) {
+        if (workflow.getSteps() != null) {
+            workflow.getSteps().forEach(step -> step.setWorkflow(workflow));
+        }
+        return ResponseEntity.ok(workflowRepository.save(workflow));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<DocumentWorkflow> updateWorkflow(@PathVariable UUID id, @RequestBody DocumentWorkflow workflowDetails) {
+        return workflowRepository.findById(id).map(workflow -> {
+            workflow.setNom(workflowDetails.getNom());
+            workflow.setDescription(workflowDetails.getDescription());
+            if (workflowDetails.getSteps() != null) {
+                workflow.getSteps().clear();
+                workflowDetails.getSteps().forEach(step -> {
+                    step.setWorkflow(workflow);
+                    workflow.getSteps().add(step);
+                });
+            }
+            return ResponseEntity.ok(workflowRepository.save(workflow));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteWorkflow(@PathVariable UUID id) {
+        workflowRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/documents/{documentId}/validate")
     public ResponseEntity<Void> validateStep(
             @PathVariable UUID documentId,
