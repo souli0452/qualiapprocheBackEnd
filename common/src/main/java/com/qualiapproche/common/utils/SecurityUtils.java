@@ -51,4 +51,14 @@ public class SecurityUtils {
         }
         return null;
     }
+
+    public static boolean hasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equalsIgnoreCase("ROLE_" + role)
+                                    || authority.getAuthority().equalsIgnoreCase(role));
+    }
 }

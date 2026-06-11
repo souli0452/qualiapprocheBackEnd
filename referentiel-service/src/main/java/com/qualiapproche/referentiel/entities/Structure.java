@@ -40,5 +40,9 @@ public class Structure extends AuditEntity {
     @jakarta.persistence.JoinColumn(name = "parent_direction_id")
     private Structure direction;
 
+    @jakarta.persistence.ManyToOne
+    @jakarta.persistence.JoinColumn(name = "type_processus_id")
+    private TypeProcessus typeProcessus;
+
     private Boolean licenceActive;
 }

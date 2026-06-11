@@ -26,6 +26,8 @@ public class StructureDto extends AuditEntityDto {
   private String description;
   private UUID directionId;
   private String libelleDirection;
+  private UUID typeProcessusId;
+  private String typeProcessusLibelle;
   
   private String typeStructure;
 

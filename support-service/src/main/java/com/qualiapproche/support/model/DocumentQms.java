@@ -77,6 +77,10 @@ public class DocumentQms extends AuditEntity {
     @JsonIgnore
     private List<QmsDocumentVersion> versions = new ArrayList<>();
 
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<DocumentUserAccess> userAccessList = new ArrayList<>();
+
     @JsonProperty("currentObjectName")
     public String getCurrentObjectName() {
         if (versions != null && !versions.isEmpty()) {
