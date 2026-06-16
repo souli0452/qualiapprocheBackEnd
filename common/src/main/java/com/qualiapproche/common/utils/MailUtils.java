@@ -40,6 +40,11 @@ public final class MailUtils {
         context.setVariables(variables);
         String htmlBody = ThymeleafConfig.getTemplateEngine().process(templateName, context);
 
+        if (emailMessage == null || emailMessage.getTo_address() == null || emailMessage.getTo_address().trim().isEmpty()) {
+            System.err.println("Warning: Attempted to send email but to_address is null or empty. Subject: " + (emailMessage != null ? emailMessage.getSubject() : "N/A"));
+            return;
+        }
+
         Message msg = new MimeMessage(session);
         msg.setFrom(new InternetAddress(mailConfig.getUsername(), false));
 
