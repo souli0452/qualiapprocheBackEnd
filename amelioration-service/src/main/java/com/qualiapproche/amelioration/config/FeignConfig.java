@@ -1,8 +1,10 @@
 package com.qualiapproche.amelioration.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.RequestInterceptor;
-import feign.RequestTemplate;
+import feign.codec.Decoder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,6 +55,11 @@ public class FeignConfig {
                 log.error("Échec de la récupération du token pour l'appel Feign.");
             }
         };
+    }
+
+    @Bean
+    public Decoder feignDecoder(@Autowired ObjectMapper objectMapper) {
+        return new ApiResponseFeignDecoder(objectMapper);
     }
 
     private String getAccessToken() {

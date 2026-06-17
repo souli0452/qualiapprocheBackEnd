@@ -1,12 +1,13 @@
 package com.qualiapproche.referentiel.client;
 
 import com.qualiapproche.common.dto.auth.KcUserDto;
+import com.qualiapproche.referentiel.config.FeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@FeignClient(name = "user-service", path = "/api/v1")
+@FeignClient(name = "user-service", path = "/api/v1", configuration = FeignConfig.class)
 public interface UserClient {
 
     @PostMapping("/users/create")
