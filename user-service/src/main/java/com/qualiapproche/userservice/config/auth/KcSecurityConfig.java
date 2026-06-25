@@ -3,7 +3,9 @@ package com.qualiapproche.userservice.config.auth;
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
 import com.qualiapproche.userservice.config.utils.KcJwtRoleConverter;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,15 +20,11 @@ import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.server.resource.authentication.DelegatingJwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.util.List;
+import java.util.Optional;
 
 @Configuration
 @EnableWebMvc
@@ -35,6 +33,10 @@ public class KcSecurityConfig {
 
     @Autowired
     private KcAuthProperties kcAuthProperties;
+
+    /** En production (HTTPS), les cookies doivent être Secure. Injectez via application.yml : cookie.secure=true */
+    @Value("${cookie.secure:false}")
+    private boolean cookieSecure;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
@@ -65,7 +67,7 @@ public class KcSecurityConfig {
                             "/test/**",
                             "/api/v1/login",
                             "/api/v1/refresh",
-                            "/api/v1/verify-email",
+                            "/api/v1/logout",
                             "/api/v1/verify-email",
                             "/api/v1/initiate-reset-pwd",
                             "/api/v1/reinitialize-pwd").permitAll();
@@ -75,7 +77,9 @@ public class KcSecurityConfig {
                     eh.authenticationEntryPoint(entryPoint);
                     eh.accessDeniedHandler(accessDenied);
                 })
-                .oauth2ResourceServer(osr -> osr.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .oauth2ResourceServer(osr -> osr
+                        .bearerTokenResolver(cookieBearerTokenResolver())
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
     }
 
@@ -89,15 +93,25 @@ public class KcSecurityConfig {
         return new GrantedAuthorityDefaults("");
     }
 
-//    @Bean
-//    public CorsConfigurationSource corsConfigurationSource() {
-//        CorsConfiguration configuration = new CorsConfiguration();
-//        configuration.setAllowedOrigins(List.of("https://qualisira.horeb.tech"));
-//        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE"));
-//        configuration.setAllowCredentials(true);
-//        configuration.setAllowedHeaders(List.of("*"));
-//        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-//        source.registerCorsConfiguration("/api/v1/**", configuration);
-//        return source;
-//    }
+    /**
+     * Résolveur de token Bearer qui lit en priorité le cookie {@code access_token}.
+     * Si le cookie est absent, il retombe sur l'header {@code Authorization: Bearer ...}
+     * standard (compatibilité avec Swagger UI / appels API directs).
+     */
+    @Bean
+    public BearerTokenResolver cookieBearerTokenResolver() {
+        return (HttpServletRequest request) -> {
+            // 1. Lecture depuis le cookie HTTP-Only
+            Optional<String> cookieToken = CookieUtils.getAccessToken(request);
+            if (cookieToken.isPresent() && !cookieToken.get().isBlank()) {
+                return cookieToken.get();
+            }
+            // 2. Fallback : header Authorization: Bearer <token> (ex. Swagger)
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                return authHeader.substring(7);
+            }
+            return null;
+        };
+    }
 }

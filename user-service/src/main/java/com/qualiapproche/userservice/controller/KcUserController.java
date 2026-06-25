@@ -25,18 +25,23 @@ import org.springdoc.core.annotations.ParameterObject;
 public class KcUserController {
     private final KcUserService kcUserService;
 
-    @Operation(summary = "Authentification utilisateur", description = "Permet de se connecter et de recevoir un jeton JWT")
+    @Operation(summary = "Authentification utilisateur", description = "Permet de se connecter. Les tokens JWT sont déposés dans des cookies HTTP-Only sécurisés.")
     @PostMapping("/login")
-    public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest) {
-        return ResponseEntity.ok(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
-                .status("SUCCESS")
-                .data(kcUserService.login(loginRequest))
-                .build());
+    public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest,
+                                        HttpServletResponse response) {
+        return ResponseEntity.ok(kcUserService.login(loginRequest, response));
     }
 
+    @Operation(summary = "Rafraîchissement du token", description = "Lit le refresh_token depuis le cookie et émet un nouvel access_token via cookie HTTP-Only.")
     @PostMapping("/refresh")
-    public ResponseEntity<Object> refreshToken(@RequestParam String refreshToken, HttpServletRequest request, HttpServletResponse response) {
-        return kcUserService.refreshToken(refreshToken, request, response);
+    public ResponseEntity<Object> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        return kcUserService.refreshToken(request, response);
+    }
+
+    @Operation(summary = "Déconnexion", description = "Efface les cookies d'authentification et révoque le token Keycloak.")
+    @PostMapping("/logout")
+    public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response) {
+        return kcUserService.logout(request, response);
     }
 
     @GetMapping("/users")
@@ -52,8 +57,8 @@ public class KcUserController {
     }
 
     @GetMapping("/user-by-id")
-    public ResponseEntity<KcUserDto> getUserById(@RequestParam String userId) {
-        KcUserDto user = kcUserService.getUserById(userId);
+    public ResponseEntity<java.util.Map<String, Object>> getUserById(@RequestParam String userId) {
+        java.util.Map<String, Object> user = kcUserService.getUserById(userId);
         return ResponseEntity.ok(user);
     }
 

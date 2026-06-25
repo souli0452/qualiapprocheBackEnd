@@ -1,6 +1,7 @@
 package com.qualiapproche.userservice.service;
 
 import com.qualiapproche.common.service.SendMailService;
+import com.qualiapproche.userservice.config.auth.CookieUtils;
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
 import com.qualiapproche.userservice.config.auth.KcConstants;
 
@@ -46,7 +47,7 @@ public class KcUserService {
     @Value("${frontend.url}")
     private String frontendUrl;
 
-    public Map<String, Object> login(KcLoginRequestDto kcLoginRequest) {
+    public Map<String, Object> login(KcLoginRequestDto kcLoginRequest, HttpServletResponse response) {
         KcTokenDto kcTokenDto = kcTokenService.getAccessToken(kcLoginRequest);
 
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
@@ -110,8 +111,7 @@ public class KcUserService {
         userMap.put("roles", appRoles);
 
         Map<String, Object> responseData = new HashMap<>();
-        responseData.put("access_token", kcTokenDto.getAccessToken());
-        responseData.put("refresh_token", kcTokenDto.getRefreshToken());
+        // Les tokens NE SONT PLUS dans le body — ils sont dans les cookies HTTP-Only
         responseData.put("expires_in", kcTokenDto.getExpiresIn());
         responseData.put("refresh_expires_in", kcTokenDto.getRefreshExpiresIn());
         responseData.put("token_type", kcTokenDto.getTokenType());
@@ -123,6 +123,10 @@ public class KcUserService {
         responseData.put("licenseDaysRemaining", licenseDaysRemaining);
         responseData.put("modulesSubscribed", modulesSubscribed);
         responseData.put("fonction", getAttributeValue(attributes, "fonction"));
+
+        // Pose des cookies HTTP-Only sécurisés
+        CookieUtils.addAccessTokenCookie(response, kcTokenDto.getAccessToken(), false);
+        CookieUtils.addRefreshTokenCookie(response, kcTokenDto.getRefreshToken(), false);
 
         return responseData;
     }
@@ -311,13 +315,38 @@ public class KcUserService {
         return null;
     }
 
-    public ResponseEntity<Object> refreshToken(String refreshToken, HttpServletRequest request,
-            HttpServletResponse response) {
+    public ResponseEntity<Object> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = CookieUtils.getRefreshToken(request)
+                .orElseThrow(() -> new RuntimeException("Cookie refresh_token absent ou expiré"));
         KcTokenDto kcTokenDto = kcTokenService.getRefreshToken(refreshToken);
-        return ResponseEntity.ok().body(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
-                .status("SUCCESS")
-                .data(kcTokenDto)
-                .build());
+
+        // Renouvellement des cookies avec les nouveaux tokens
+        CookieUtils.addAccessTokenCookie(response, kcTokenDto.getAccessToken(), false);
+        CookieUtils.addRefreshTokenCookie(response, kcTokenDto.getRefreshToken(), false);
+
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Déconnexion : efface les cookies HTTP-Only côté serveur.
+     * Optionnellement révoque le token Keycloak (end_session).
+     */
+    public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response) {
+        // Révocation du refresh token côté Keycloak (best effort)
+        CookieUtils.getRefreshToken(request).ifPresent(rt -> {
+            try {
+                kcTokenService.revokeToken(rt);
+            } catch (Exception e) {
+                log.warn("Impossible de révoquer le token Keycloak : {}", e.getMessage());
+            }
+        });
+
+        // Effacement des cookies
+        CookieUtils.clearAuthCookies(response, false);
+
+        Map<String, String> result = new HashMap<>();
+        result.put("message", "Déconnexion réussie");
+        return ResponseEntity.ok(result);
     }
 
     public Page<KcUserDto> getUsersByStructure(String structureId, Pageable pageable) {
@@ -331,9 +360,75 @@ public class KcUserService {
         return new PageImpl<>(page, pageable, allFiltered.size());
     }
 
-    public KcUserDto getUserById(String userId) {
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
-        return mapUserToDto(user);
+    /**
+     * Retourne le profil complet d'un utilisateur par son ID Keycloak.
+     * Inclut les rôles applicatifs, les permissions et les informations de licence.
+     */
+    public Map<String, Object> getUserById(String userId) {
+        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
+                .users().get(userId).toRepresentation();
+
+        Map<String, List<String>> attributes = user.getAttributes();
+        String structureId = getAttributeValue(attributes, "structure");
+
+        // Infos de licence via referentiel-service
+        boolean licenseActive = false;
+        int licenseDaysRemaining = 0;
+        List<String> modulesSubscribed = new java.util.ArrayList<>();
+
+        try {
+            com.qualiapproche.common.dto.StructureDto direction = structureClient.getDirection();
+            if (direction != null) {
+                licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
+                licenseDaysRemaining = direction.getLicenseDaysRemaining() != null
+                        ? direction.getLicenseDaysRemaining().intValue() : 0;
+                modulesSubscribed = direction.getModulesSubscribed() != null
+                        ? direction.getModulesSubscribed() : new java.util.ArrayList<>();
+            }
+        } catch (Exception e) {
+            log.error("Erreur récupération licence pour getUserById: {}", e.getMessage());
+        }
+
+        // Rôles applicatifs
+        List<String> appRoles = userRoleAssignmentRepository.findByUserId(user.getId()).stream()
+                .map(assignment -> assignment.getRole().getName())
+                .collect(Collectors.toList());
+
+        boolean isSuperAdmin = appRoles.stream()
+                .anyMatch(r -> r.equalsIgnoreCase("SUPER_ADMIN") || r.equalsIgnoreCase("SUPERADMIN"));
+        if (isSuperAdmin && !appRoles.contains("SUPER_ADMIN")) {
+            appRoles.add("SUPER_ADMIN");
+        }
+
+        // Permissions
+        List<String> permissions;
+        if (isSuperAdmin) {
+            permissions = appRoleRepository.findAll().stream()
+                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+        } else {
+            permissions = appRoleRepository.findAll().stream()
+                    .filter(role -> appRoles.contains(role.getName()))
+                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("userId", user.getId());
+        result.put("username", user.getUsername());
+        result.put("email", user.getEmail());
+        result.put("firstName", user.getFirstName());
+        result.put("lastName", user.getLastName());
+        result.put("enabled", user.isEnabled());
+        result.put("emailVerified", user.isEmailVerified());
+        result.put("structure", structureId);
+        result.put("fonction", getAttributeValue(attributes, "fonction"));
+        result.put("roles", appRoles);
+        result.put("appRoles", appRoles);
+        result.put("permissions", permissions);
+        result.put("licenseActive", licenseActive);
+        result.put("licenseDaysRemaining", licenseDaysRemaining);
+        result.put("modulesSubscribed", modulesSubscribed);
+
+        return result;
     }
 
     private String generateRandomPassword(int length) {
