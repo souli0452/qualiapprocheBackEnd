@@ -130,10 +130,10 @@ public final class CookieUtils {
     private static ResponseCookie buildCookie(String name, String value, int maxAge, boolean secure) {
         return ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(secure)
+                .secure(true)
+                .sameSite("None")
                 .path("/")
                 .maxAge(maxAge)
-                .sameSite("Lax")
                 .build();
     }
 }
