@@ -62,6 +62,12 @@ public class KcUserController {
         return ResponseEntity.ok(user);
     }
 
+    @Operation(summary = "Profil de l'utilisateur connecté", description = "Retourne le profil complet de l'utilisateur connecté en lisant l'access_token depuis les cookies HTTP-Only.")
+    @GetMapping("/me")
+    public ResponseEntity<java.util.Map<String, Object>> getMe(HttpServletRequest request) {
+        return ResponseEntity.ok(kcUserService.getMe(request));
+    }
+
     @PostMapping("/users/create")
     public ResponseEntity<KcUserDto> createUser(@RequestBody KcUserDto kcUserDto) {
         return ResponseEntity.ok(kcUserService.createUser(kcUserDto));

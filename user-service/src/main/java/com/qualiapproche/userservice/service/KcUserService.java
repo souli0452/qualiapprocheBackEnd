@@ -23,11 +23,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -429,6 +432,41 @@ public class KcUserService {
         result.put("modulesSubscribed", modulesSubscribed);
 
         return result;
+    }
+
+    /**
+     * Retourne le profil complet de l'utilisateur actuellement connecté.
+     * L'identité est extraite depuis l'access_token stocké dans le cookie HTTP-Only.
+     */
+    public Map<String, Object> getMe(HttpServletRequest request) {
+        String accessToken = CookieUtils.getAccessToken(request)
+                .orElseThrow(() -> new RuntimeException("Aucun access_token trouvé dans les cookies. Veuillez vous connecter."));
+
+        String userId = extractSubFromJwt(accessToken);
+        return getUserById(userId);
+    }
+
+    /**
+     * Extrait le claim {@code sub} (userId Keycloak) depuis le payload Base64 d'un JWT.
+     */
+    private String extractSubFromJwt(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) {
+                throw new RuntimeException("Format JWT invalide.");
+            }
+            String payloadJson = new String(Base64.getUrlDecoder().decode(parts[1]));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> claims = new ObjectMapper().readValue(payloadJson, Map.class);
+            Object sub = claims.get("sub");
+            if (sub == null) {
+                throw new RuntimeException("Claim 'sub' absent du token JWT.");
+            }
+            return sub.toString();
+        } catch (Exception e) {
+            log.error("Erreur lors du décodage du JWT : {}", e.getMessage());
+            throw new RuntimeException("Impossible de décoder le token JWT : " + e.getMessage());
+        }
     }
 
     private String generateRandomPassword(int length) {
