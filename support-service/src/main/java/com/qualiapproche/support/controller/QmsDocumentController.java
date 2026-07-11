@@ -1,8 +1,11 @@
 package com.qualiapproche.support.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.support.dto.DocumentQmsDto;
 import com.qualiapproche.support.dto.DocumentSearchCriteria;
 import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
+import com.qualiapproche.support.mapper.DocumentMapper;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.model.DocumentUserAccess;
 import com.qualiapproche.support.model.QmsAuditLog;
@@ -15,6 +18,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,6 +26,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_URL;
 
@@ -29,13 +34,21 @@ import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_URL;
 @RestController
 @RequestMapping(DOCUMENT_URL)
 @RequiredArgsConstructor
+@RequirePermissions(
+        create = {"document-write"},
+        update = {"document-write"},
+        read = {"document-read", "document-write"},
+        delete = {"document-write"}
+)
 public class QmsDocumentController {
 
     private final QmsDocumentService documentService;
     private final QmsAuditLogService auditLogService;
+    private final DocumentMapper documentMapper;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DocumentQms> createDocument(
+    @PreAuthorize("@perm.canCreate(this)")
+    public ResponseEntity<DocumentQmsDto> createDocument(
             @RequestPart("file") MultipartFile file,
             @RequestParam("titre") String titre,
             @RequestParam("documentType") String documentType,
@@ -58,10 +71,21 @@ public class QmsDocumentController {
                 file, titre, documentType, reference, description, serviceId, serviceLibelle, serviceSigle, redacteur, periodiciteMois,
                 confidentiel, documentExterne, organismeEmetteur, referenceOfficielle, domaine, statutLegal, workflowId
         );
-        return ResponseEntity.ok(doc);
+        return ResponseEntity.ok(documentMapper.toDto(doc));
+    }
+
+    @PostMapping("/{id}/workflow")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> assignWorkflow(
+            @PathVariable("id") UUID id,
+            @RequestParam("workflowId") UUID workflowId
+    ) {
+        DocumentQms doc = documentService.assignWorkflow(id, workflowId);
+        return ResponseEntity.ok(documentMapper.toDto(doc));
     }
 
     @PostMapping("/{id}/versions")
+    @PreAuthorize("@perm.canUpdate(this)")
     public ResponseEntity<QmsDocumentVersion> addVersion(
             @PathVariable("id") UUID id,
             @RequestPart("file") MultipartFile file,
@@ -72,26 +96,29 @@ public class QmsDocumentController {
     }
 
     @PostMapping("/{id}/transition")
-    public ResponseEntity<DocumentQms> transitionStatus(
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> transitionStatus(
             @PathVariable("id") UUID id,
             @RequestParam("nextStatus") String nextStatus,
             @RequestParam("reason") String reason
     ) {
         DocumentQms doc = documentService.transitionStatus(id, nextStatus, reason);
-        return ResponseEntity.ok(doc);
+        return ResponseEntity.ok(documentMapper.toDto(doc));
     }
 
     @PostMapping("/{id}/link-nc")
-    public ResponseEntity<DocumentQms> linkToNonConformity(
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> linkToNonConformity(
             @PathVariable("id") UUID id,
             @RequestParam("ncRef") String ncRef,
             @RequestParam("actionCorrective") String actionCorrective
     ) {
         DocumentQms doc = documentService.linkToNonConformity(id, ncRef, actionCorrective);
-        return ResponseEntity.ok(doc);
+        return ResponseEntity.ok(documentMapper.toDto(doc));
     }
 
     @GetMapping("/{id}/export-pdf")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<byte[]> exportSecuredPdf(@PathVariable("id") UUID id) throws IOException {
         QmsDocumentService.ExportedDocument exported = documentService.securedExportPdf(id);
         
@@ -102,18 +129,21 @@ public class QmsDocumentController {
     }
 
     @GetMapping("/{id}/versions")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<QmsDocumentVersion>> getVersionHistory(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getVersionHistory(id));
     }
 
     @GetMapping("/{id}/audit-logs")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<QmsAuditLog>> getAuditLogs(@PathVariable("id") UUID id) {
         DocumentQms doc = documentService.getDocumentById(id);
         return ResponseEntity.ok(auditLogService.getLogsForDocument(doc.getDocumentNumber()));
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<DocumentQms>> searchDocuments(
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<List<DocumentQmsDto>> searchDocuments(
             @RequestParam(value = "query",               required = false) String query,
             @RequestParam(value = "documentType",        required = false) String documentType,
             @RequestParam(value = "serviceId",           required = false) String serviceId,
@@ -172,7 +202,11 @@ public class QmsDocumentController {
                 .sortDirection(sortDirection)
                 .build();
 
-        return ResponseEntity.ok(documentService.searchDocuments(criteria));
+        List<DocumentQms> docs = documentService.searchDocuments(criteria);
+        List<DocumentQmsDto> dtos = docs.stream()
+                .map(documentMapper::toDto)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtos);
     }
 
     /**
@@ -181,13 +215,15 @@ public class QmsDocumentController {
      * - compteurs de documents en retard, confidentiels, externes
      */
     @GetMapping("/stats")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentStatsDto> getDocumentStats() {
         return ResponseEntity.ok(documentService.getDocumentStats());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<DocumentQms> getDocument(@PathVariable("id") UUID id) {
-        return ResponseEntity.ok(documentService.getDocumentById(id));
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<DocumentQmsDto> getDocument(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(documentMapper.toDto(documentService.getDocumentById(id)));
     }
 
     // -------------------------------------------------------------------------
@@ -205,6 +241,7 @@ public class QmsDocumentController {
      *   role        - READ_ONLY | WRITE
      */
     @PostMapping("/{id}/access")
+    @PreAuthorize("@perm.canUpdate(this)")
     public ResponseEntity<DocumentUserAccess> grantAccess(
             @PathVariable("id") UUID id,
             @RequestParam("userId") String userId,
@@ -220,6 +257,7 @@ public class QmsDocumentController {
      * Revoke access for a specific user from a document.
      */
     @DeleteMapping("/{id}/access/{userId}")
+    @PreAuthorize("@perm.canUpdate(this)")
     public ResponseEntity<Void> revokeAccess(
             @PathVariable("id") UUID id,
             @PathVariable("userId") String userId
@@ -232,6 +270,7 @@ public class QmsDocumentController {
      * List all users who have been granted access to a document.
      */
     @GetMapping("/{id}/access")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<DocumentUserAccess>> getDocumentAccess(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getDocumentAccess(id));
     }
@@ -246,6 +285,7 @@ public class QmsDocumentController {
      * Chaque utilisateur peut appeler cet endpoint pour voir ses propres partages.
      */
     @GetMapping("/shared/me")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<SharedDocumentDto>> getMySharedDocuments() {
         return ResponseEntity.ok(documentService.getMySharedDocuments());
     }
@@ -256,6 +296,7 @@ public class QmsDocumentController {
      * @param userId ID Keycloak (subject) de l'utilisateur cible
      */
     @GetMapping("/shared/{userId}")
+    @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<SharedDocumentDto>> getSharedDocumentsForUser(
             @PathVariable("userId") String userId) {
         return ResponseEntity.ok(documentService.getSharedDocuments(userId));

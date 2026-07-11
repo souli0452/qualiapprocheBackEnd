@@ -41,4 +41,7 @@ public class QmsDocumentVersion {
     private String originalFilename;
 
     private Long fileSize;
+
+    private String fileHash;
 }
+

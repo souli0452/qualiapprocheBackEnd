@@ -17,7 +17,9 @@ public interface DocumentQmsRepository extends JpaRepository<DocumentQms, UUID>,
 
     Optional<DocumentQms> findByDocumentNumber(String documentNumber);
 
-    List<DocumentQms> findByStatus(String status);
+    List<DocumentQms> findByEsTraiterTrueAndObsoleteFalseAndArchivedFalse();
+
+    boolean existsByCurrentStepId(Long currentStepId);
 
     @Query("SELECT MAX(d.documentNumber) FROM DocumentQms d WHERE d.documentNumber LIKE :prefix%")
     String findMaxDocumentNumberByPrefix(@Param("prefix") String prefix);
@@ -30,9 +32,17 @@ public interface DocumentQmsRepository extends JpaRepository<DocumentQms, UUID>,
     @Query("SELECT d.documentType, COUNT(d) FROM DocumentQms d WHERE d.archived = false GROUP BY d.documentType")
     List<Object[]> countByDocumentType();
 
-    /** Répartition par statut */
-    @Query("SELECT d.status, COUNT(d) FROM DocumentQms d WHERE d.archived = false GROUP BY d.status")
-    List<Object[]> countByStatus();
+    @Query("SELECT COUNT(d) FROM DocumentQms d WHERE d.archived = false AND d.esTraiter = false AND d.currentStep IS NULL AND d.obsolete = false")
+    long countBrouillon();
+
+    @Query("SELECT COUNT(d) FROM DocumentQms d WHERE d.archived = false AND d.currentStep IS NOT NULL")
+    long countEnApprobation();
+
+    @Query("SELECT COUNT(d) FROM DocumentQms d WHERE d.archived = false AND d.esTraiter = true AND d.obsolete = false")
+    long countValide();
+
+    @Query("SELECT COUNT(d) FROM DocumentQms d WHERE d.archived = false AND d.obsolete = true")
+    long countObsolete();
 
     /** Répartition par domaine */
     @Query("SELECT d.domaine, COUNT(d) FROM DocumentQms d WHERE d.archived = false AND d.domaine IS NOT NULL GROUP BY d.domaine")

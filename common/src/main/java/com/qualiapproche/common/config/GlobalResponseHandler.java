@@ -24,7 +24,21 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
         if (className.contains("springdoc") || className.contains("swagger")) {
             return false;
         }
-        return !returnType.getParameterType().equals(ApiResponse.class);
+        
+        Class<?> paramType = returnType.getParameterType();
+        if (paramType.equals(ApiResponse.class) || 
+            paramType.equals(byte[].class) || 
+            org.springframework.core.io.Resource.class.isAssignableFrom(paramType)) {
+            return false;
+        }
+
+        if (org.springframework.http.converter.ByteArrayHttpMessageConverter.class.isAssignableFrom(converterType) ||
+            org.springframework.http.converter.ResourceHttpMessageConverter.class.isAssignableFrom(converterType) ||
+            org.springframework.http.converter.ResourceRegionHttpMessageConverter.class.isAssignableFrom(converterType)) {
+            return false;
+        }
+
+        return true;
     }
 
     @Override

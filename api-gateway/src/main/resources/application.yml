@@ -4,6 +4,8 @@ server:
 spring:
   main:
     web-application-type: reactive
+  codec:
+    max-in-memory-size: 1048576000
   application:
     name: api-gateway
   cloud:

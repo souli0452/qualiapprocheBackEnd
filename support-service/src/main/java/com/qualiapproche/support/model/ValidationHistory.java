@@ -37,4 +37,7 @@ public class ValidationHistory {
 
     @Builder.Default
     private LocalDateTime decisionDate = LocalDateTime.now();
+
+    private String documentHash;
 }
+

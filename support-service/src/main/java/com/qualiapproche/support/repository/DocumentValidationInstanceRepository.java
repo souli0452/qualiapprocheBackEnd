@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface DocumentValidationInstanceRepository extends JpaRepository<DocumentValidationInstance, UUID> {
     Optional<DocumentValidationInstance> findByDocumentId(UUID documentId);
+
+    boolean existsByCurrentStepId(Long currentStepId);
 }

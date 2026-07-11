@@ -42,8 +42,13 @@ public class DocumentQms extends AuditEntity {
     @Column(nullable = false)
     private String redacteur;
 
-    @Column(nullable = false)
-    private String status; // brouillon, en_approbation, valide, archive, obsolete, en_retard_revision
+    private boolean esTraiter;
+    private boolean enRetardRevision;
+    private boolean obsolete;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "current_step_id")
+    private WorkflowStep currentStep;
 
     @Builder.Default
     private int versionMajeure = 1;
@@ -88,4 +93,13 @@ public class DocumentQms extends AuditEntity {
         }
         return null;
     }
+
+    @JsonProperty("currentFileHash")
+    public String getCurrentFileHash() {
+        if (versions != null && !versions.isEmpty()) {
+            return versions.get(versions.size() - 1).getFileHash();
+        }
+        return null;
+    }
 }
+

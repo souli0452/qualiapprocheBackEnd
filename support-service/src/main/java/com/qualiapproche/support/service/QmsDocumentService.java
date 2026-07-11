@@ -6,10 +6,12 @@ import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.model.DocumentUserAccess;
+import com.qualiapproche.support.model.DocumentWorkflow;
 import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.model.QmsDocumentVersion;
 import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.DocumentUserAccessRepository;
+import com.qualiapproche.support.repository.DocumentWorkflowRepository;
 import com.qualiapproche.support.repository.QmsDocumentVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -56,6 +59,7 @@ public class QmsDocumentService {
     private final QmsDocumentTypeService typeService;
     private final WorkflowService workflowService;
     private final MailService mailService;
+    private final DocumentWorkflowRepository workflowRepository;
 
     /**
      * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
@@ -81,6 +85,8 @@ public class QmsDocumentService {
             UUID workflowId
     ) {
         log.info("Creating new QMS document: type={}, serviceId={}", documentType, serviceId);
+
+        // No file extension restriction enforced here to allow any file type (png, pdf, word, etc.) up to 1GB.
 
         // 1. Resolve customizable Document Type config
         QmsDocumentType docType = typeService.getTypeByCode(documentType);
@@ -109,7 +115,6 @@ public class QmsDocumentService {
                 .serviceLibelle(serviceLibelle)
                 .serviceSigle(serviceSigle)
                 .redacteur(redacteur)
-                .status("brouillon")
                 .versionMajeure(1)
                 .versionMineure(0)
                 .periodiciteMois(periodiciteMois != null ? periodiciteMois : 12)
@@ -135,6 +140,7 @@ public class QmsDocumentService {
                 .objectName(objectName)
                 .originalFilename(file.getOriginalFilename())
                 .fileSize(file.getSize())
+                .fileHash(calculateChecksum(file))
                 .build();
 
         versionRepository.save(version);
@@ -142,20 +148,44 @@ public class QmsDocumentService {
         // 6. Register Audit log
         auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
 
-        // 7. Initiate validation workflow if workflowId is provided
-        if (workflowId != null) {
-            workflowService.initiateWorkflow(document, workflowId);
-            document.setStatus("en_approbation");
-            documentRepository.save(document);
+        // 7. Initiate validation workflow if workflowId is provided or found for this document type
+        UUID finalWorkflowId = workflowId;
+        if (finalWorkflowId == null && documentType != null) {
+            List<DocumentWorkflow> workflowsForType = workflowRepository.findByDocumentType(documentType);
+            if (!workflowsForType.isEmpty()) {
+                finalWorkflowId = workflowsForType.get(0).getId();
+            }
+        }
+
+        if (finalWorkflowId != null) {
+            workflowService.initiateWorkflow(document, finalWorkflowId);
         }
 
         return document;
     }
 
     @Transactional
+    public DocumentQms assignWorkflow(UUID documentId, UUID workflowId) {
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        if (document.getCurrentStep() != null || "EN_COURS".equalsIgnoreCase(document.getWorkflowStatus())) {
+            throw new IllegalStateException("Ce document est déjà soumis à un circuit de validation.");
+        }
+
+        workflowService.initiateWorkflow(document, workflowId);
+        
+        auditLogService.logAction("ASSIGNATION_WORKFLOW", document.getDocumentNumber(), "Un circuit de validation a été assigné au document.");
+        
+        return documentRepository.save(document);
+    }
+
+    @Transactional
     public QmsDocumentVersion addVersion(UUID documentId, MultipartFile file, String comments) throws Exception {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document introuvable"));
+
+        // No file extension restriction enforced here to allow any file type (png, pdf, word, etc.) up to 1GB.
 
         String objectName = minioService.uploadFile(file);
 
@@ -174,6 +204,7 @@ public class QmsDocumentService {
                 .objectName(objectName)
                 .originalFilename(file.getOriginalFilename())
                 .fileSize(file.getSize())
+                .fileHash(calculateChecksum(file))
                 .build();
 
         version = versionRepository.save(version);
@@ -183,22 +214,23 @@ public class QmsDocumentService {
         return version;
     }
 
-    /**
-     * State transition engine.
-     */
     @Transactional
     public DocumentQms transitionStatus(UUID id, String nextStatus, String reason) {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
 
-        String oldStatus = doc.getStatus();
-        log.info("Transitioning document '{}' status: {} -> {}", doc.getDocumentNumber(), oldStatus, nextStatus);
+        String oldState = getDocumentDisplayState(doc);
+        log.info("Transitioning document '{}' state: {} -> {}", doc.getDocumentNumber(), oldState, nextStatus);
 
-        doc.setStatus(nextStatus);
         doc.setLastModifiedBy(getCurrentUser());
         doc.setLastModifiedReason(reason);
 
-        if ("valide".equals(nextStatus)) {
+        if ("valide".equalsIgnoreCase(nextStatus) || "traite".equalsIgnoreCase(nextStatus)) {
+            doc.setEsTraiter(true);
+            doc.setCurrentStep(null);
+            doc.setObsolete(false);
+            doc.setEnRetardRevision(false);
+
             doc.setDateVigueur(LocalDateTime.now());
             if (doc.getPeriodiciteMois() != null) {
                 doc.setDateProchRevision(doc.getDateVigueur().plusMonths(doc.getPeriodiciteMois()));
@@ -207,11 +239,18 @@ public class QmsDocumentService {
             // Incrément version
             doc.setVersionMajeure(doc.getVersionMajeure() + 1);
             doc.setVersionMineure(0);
-
+        } else if ("obsolete".equalsIgnoreCase(nextStatus)) {
+            doc.setEsTraiter(false);
+            doc.setCurrentStep(null);
+            doc.setObsolete(true);
+        } else if ("brouillon".equalsIgnoreCase(nextStatus)) {
+            doc.setEsTraiter(false);
+            doc.setCurrentStep(null);
+            doc.setObsolete(false);
         }
 
         doc = documentRepository.save(doc);
-        auditLogService.logAction("TRANSITION_STATUT", doc.getDocumentNumber(), "Transition de " + oldStatus + " vers " + nextStatus + ". Raison : " + reason);
+        auditLogService.logAction("TRANSITION_STATUT", doc.getDocumentNumber(), "Transition de " + oldState + " vers " + nextStatus + ". Raison : " + reason);
 
         return doc;
     }
@@ -229,8 +268,10 @@ public class QmsDocumentService {
         doc.setNcReference(ncRef);
 
         if ("mise_a_jour_document".equalsIgnoreCase(actionCorrective)) {
-            // Trigger revision: update status to brouillon
-            doc.setStatus("brouillon");
+            // Trigger revision: reset step and esTraiter to back to draft
+            doc.setEsTraiter(false);
+            doc.setCurrentStep(null);
+            doc.setObsolete(false);
             doc.setVersionMineure(doc.getVersionMineure() + 1);
             doc.setLastModifiedReason("Modification initiée par Action Corrective suite à NC : " + ncRef);
         }
@@ -290,7 +331,15 @@ public class QmsDocumentService {
             isPdf = "%PDF".equals(header);
         }
 
-        String contentType = filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream";
+        String contentType = null;
+        try {
+            contentType = java.nio.file.Files.probeContentType(java.nio.file.Paths.get(filename));
+        } catch (Exception e) {
+            log.warn("Failed to probe content type for filename '{}'", filename, e);
+        }
+        if (contentType == null) {
+            contentType = filename.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream";
+        }
 
         if (!isPdf) {
             log.warn("Downloaded file for document '{}' is not a PDF. Skipping watermark and returning original content.", doc.getDocumentNumber());
@@ -302,7 +351,7 @@ public class QmsDocumentService {
         String versionLabel = doc.getVersionMajeure() + "." + doc.getVersionMineure();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
         String watermarkText = String.format("%s - V%s - IMPRIME PAR %s LE %s",
-                doc.getStatus().toUpperCase(), versionLabel, getCurrentUser().toUpperCase(), timestamp);
+                getDocumentDisplayState(doc), versionLabel, getCurrentUser().toUpperCase(), timestamp);
 
         try (PDDocument pdDoc = PDDocument.load(originalPdf)) {
             for (PDPage page : pdDoc.getPages()) {
@@ -327,10 +376,10 @@ public class QmsDocumentService {
                 AccessPermission ap = new AccessPermission();
                 ap.setCanPrint(true);
                 ap.setCanExtractContent(false);
-                StandardProtectionPolicy spp = new StandardProtectionPolicy("qmssecure", "qmssecure", ap);
+                StandardProtectionPolicy spp = new StandardProtectionPolicy("qmssecure", "", ap);
                 spp.setEncryptionKeyLength(128);
                 pdDoc.protect(spp);
-                log.info("Confidential document password-protected successfully");
+                log.info("Confidential document password-protected successfully (no open password prompt)");
             }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -460,7 +509,42 @@ public class QmsDocumentService {
 
             // ---- Filtres multi-valeurs ----
             if (criteria.getStatus() != null && !criteria.getStatus().isEmpty()) {
-                predicates.add(root.get("status").in(criteria.getStatus()));
+                List<Predicate> statusPredicates = new ArrayList<>();
+                for (String statusVal : criteria.getStatus()) {
+                    if ("brouillon".equalsIgnoreCase(statusVal)) {
+                        statusPredicates.add(cb.and(
+                            cb.isFalse(root.get("esTraiter")),
+                            cb.isNull(root.get("currentStep")),
+                            cb.isFalse(root.get("obsolete")),
+                            cb.isFalse(root.get("archived"))
+                        ));
+                    } else if ("en_approbation".equalsIgnoreCase(statusVal)) {
+                        statusPredicates.add(cb.and(
+                            cb.isNotNull(root.get("currentStep")),
+                            cb.isFalse(root.get("esTraiter")),
+                            cb.isFalse(root.get("obsolete")),
+                            cb.isFalse(root.get("archived"))
+                        ));
+                    } else if ("valide".equalsIgnoreCase(statusVal)) {
+                        statusPredicates.add(cb.and(
+                            cb.isTrue(root.get("esTraiter")),
+                            cb.isFalse(root.get("obsolete")),
+                            cb.isFalse(root.get("archived"))
+                        ));
+                    } else if ("obsolete".equalsIgnoreCase(statusVal)) {
+                        statusPredicates.add(cb.and(
+                            cb.isTrue(root.get("obsolete")),
+                            cb.isFalse(root.get("archived"))
+                        ));
+                    }
+                }
+                if (!statusPredicates.isEmpty()) {
+                    predicates.add(cb.or(statusPredicates.toArray(new Predicate[0])));
+                }
+            } else {
+                // Par défaut, exclure les documents obsolètes et archivés pour éviter des erreurs opérationnelles
+                predicates.add(cb.isFalse(root.get("obsolete")));
+                predicates.add(cb.isFalse(root.get("archived")));
             }
 
             // ---- Filtres booléens ----
@@ -474,6 +558,9 @@ public class QmsDocumentService {
 
             if (criteria.getArchived() != null) {
                 predicates.add(cb.equal(root.get("archived"), criteria.getArchived()));
+            } else {
+                // Par défaut, exclure les documents archivés
+                predicates.add(cb.equal(root.get("archived"), false));
             }
 
             // ---- Filtres de dates ----
@@ -533,13 +620,11 @@ public class QmsDocumentService {
                 ));
 
         // Répartition par statut
-        Map<String, Long> byStatus = documentRepository.countByStatus().stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (Long) row[1],
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ));
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        byStatus.put("brouillon", documentRepository.countBrouillon());
+        byStatus.put("en_approbation", documentRepository.countEnApprobation());
+        byStatus.put("valide", documentRepository.countValide());
+        byStatus.put("obsolete", documentRepository.countObsolete());
 
         // Répartition par domaine
         Map<String, Long> byDomaine = documentRepository.countByDomaine().stream()
@@ -697,7 +782,7 @@ public class QmsDocumentService {
                             .documentNumber(doc.getDocumentNumber())
                             .titre(doc.getTitre())
                             .documentType(doc.getDocumentType())
-                            .status(doc.getStatus())
+                            .status(getDocumentDisplayState(doc).toLowerCase())
                             .serviceLibelle(doc.getServiceLibelle())
                             .serviceSigle(doc.getServiceSigle())
                             .redacteur(doc.getRedacteur())
@@ -745,11 +830,46 @@ public class QmsDocumentService {
         return prefix + String.format("%03d", nextSeq);
     }
 
+    public String getDocumentDisplayState(DocumentQms doc) {
+        if (doc.isArchived()) return "ARCHIVE";
+        if (doc.isObsolete()) return "OBSOLETE";
+        if (doc.isEsTraiter()) return "VALIDE";
+        if (doc.getCurrentStep() != null) return "EN_COURS";
+        return "BROUILLON";
+    }
+
     private String getCurrentUser() {
         String fullName = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
         if ("Système".equalsIgnoreCase(fullName)) {
             return "system";
         }
         return fullName;
+    }
+
+    private String calculateChecksum(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+        try (InputStream is = file.getInputStream()) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int bytesCount;
+            while ((bytesCount = is.read(buffer)) != -1) {
+                digest.update(buffer, 0, bytesCount);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            log.error("Failed to calculate SHA-256 checksum for file: {}", file.getOriginalFilename(), e);
+            return null;
+        }
     }
 }

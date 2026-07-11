@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface ValidationHistoryRepository extends JpaRepository<ValidationHistory, Long> {
     List<ValidationHistory> findByValidationInstanceIdOrderByDecisionDateDesc(UUID validationInstanceId);
+
+    boolean existsByStepId(Long stepId);
 }
