@@ -1,3 +1,4 @@
+
 package com.qualiapproche.support.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
@@ -6,14 +7,17 @@ import com.qualiapproche.support.dto.DocumentWorkflowDto;
 import com.qualiapproche.support.mapper.WorkflowMapper;
 import com.qualiapproche.support.model.DocumentWorkflow;
 import com.qualiapproche.support.model.WorkflowStep;
+import com.qualiapproche.support.model.WorkflowStepTemplate;
 import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.DocumentValidationInstanceRepository;
 import com.qualiapproche.support.repository.DocumentWorkflowRepository;
 import com.qualiapproche.support.repository.ValidationHistoryRepository;
+import com.qualiapproche.support.repository.WorkflowStepTemplateRepository;
 import com.qualiapproche.support.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -40,6 +44,7 @@ public class WorkflowController {
     private final DocumentQmsRepository documentRepository;
     private final DocumentValidationInstanceRepository validationInstanceRepository;
     private final ValidationHistoryRepository validationHistoryRepository;
+    private final WorkflowStepTemplateRepository stepTemplateRepository;
 
     @GetMapping
     @PreAuthorize("@perm.canRead(this)")
@@ -49,16 +54,27 @@ public class WorkflowController {
 
     @PostMapping
     @PreAuthorize("@perm.canCreate(this)")
+    @Transactional
     public ResponseEntity<DocumentWorkflowDto> createWorkflow(@RequestBody DocumentWorkflowDto workflowDto) {
-        DocumentWorkflow workflow = workflowMapper.toEntity(workflowDto);
-        if (workflow.getSteps() != null) {
-            workflow.getSteps().forEach(step -> step.setWorkflow(workflow));
+        DocumentWorkflow newWorkflow = workflowMapper.toEntity(workflowDto);
+        if (newWorkflow.getSteps() != null && workflowDto.getSteps() != null) {
+            List<WorkflowStep> stepEntities = newWorkflow.getSteps();
+            List<WorkflowStepDto> stepDtos = workflowDto.getSteps();
+            for (int i = 0; i < stepEntities.size() && i < stepDtos.size(); i++) {
+                stepEntities.get(i).setWorkflow(newWorkflow);
+                stepEntities.get(i).setStepTemplate(resolveStepTemplate(stepDtos.get(i).getStepTemplateId()));
+            }
         }
-        return ResponseEntity.ok(workflowMapper.toDto(workflowRepository.save(workflow)));
+        DocumentWorkflow savedWorkflow = workflowRepository.save(newWorkflow);
+        // Les étapes ont désormais un ID : on peut résoudre/construire leurs transitions sortantes
+        // (explicites si fournies par le client, sinon défaut séquentiel historique).
+        workflowService.syncTransitions(savedWorkflow, workflowDto.getSteps());
+        return ResponseEntity.ok(workflowMapper.toDto(workflowRepository.findById(savedWorkflow.getId()).orElseThrow()));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.canUpdate(this)")
+    @Transactional
     public ResponseEntity<DocumentWorkflowDto> updateWorkflow(@PathVariable UUID id, @RequestBody DocumentWorkflowDto workflowDetails) {
         return workflowRepository.findById(id).map(workflow -> {
             workflow.setNom(workflowDetails.getNom());
@@ -80,11 +96,13 @@ public class WorkflowController {
                         step.setResponsableRole(stepDto.getResponsableRole());
                         step.setDescription(stepDto.getDescription());
                         step.setStepOrder(stepDto.getStepOrder());
+                        step.setStepTemplate(resolveStepTemplate(stepDto.getStepTemplateId()));
                         newSteps.add(step);
                     } else {
                         // Nouvelle étape
                         WorkflowStep step = workflowMapper.toEntity(stepDto);
                         step.setWorkflow(workflow);
+                        step.setStepTemplate(resolveStepTemplate(stepDto.getStepTemplateId()));
                         newSteps.add(step);
                     }
                 }
@@ -104,6 +122,10 @@ public class WorkflowController {
                     }
                 }
 
+                // Détacher les transitions d'AUTRES étapes qui ciblaient une étape supprimée
+                // (sinon référence orpheline) : elles deviennent des fins de circuit (toStep = null).
+                stepsToRemove.forEach(oldStep -> workflowService.detachStepTransitions(oldStep.getId()));
+
                 // Supprimer et ajouter/garder les étapes
                 workflow.getSteps().removeAll(stepsToRemove);
                 for (WorkflowStep ns : newSteps) {
@@ -115,7 +137,9 @@ public class WorkflowController {
                 workflow.getSteps().clear();
             }
 
-            return ResponseEntity.ok(workflowMapper.toDto(workflowRepository.save(workflow)));
+            workflow = workflowRepository.save(workflow);
+            workflowService.syncTransitions(workflow, workflowDetails.getSteps());
+            return ResponseEntity.ok(workflowMapper.toDto(workflowRepository.findById(workflow.getId()).orElseThrow()));
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -130,9 +154,8 @@ public class WorkflowController {
     @PreAuthorize("@perm.canValidate(this)")
     public ResponseEntity<Void> validateStep(
             @PathVariable UUID documentId,
-            @RequestParam String comments,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        workflowService.validateStep(documentId, userId != null ? userId : "system", comments);
+            @RequestParam String comments) {
+        workflowService.validateStep(documentId, currentUserId(), comments);
         return ResponseEntity.ok().build();
     }
 
@@ -140,9 +163,22 @@ public class WorkflowController {
     @PreAuthorize("@perm.canValidate(this)")
     public ResponseEntity<Void> rejectStep(
             @PathVariable UUID documentId,
-            @RequestParam String comments,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        workflowService.rejectStep(documentId, userId != null ? userId : "system", comments);
+            @RequestParam String comments) {
+        workflowService.rejectStep(documentId, currentUserId(), comments);
         return ResponseEntity.ok().build();
+    }
+
+    private WorkflowStepTemplate resolveStepTemplate(UUID templateId) {
+        return templateId != null ? stepTemplateRepository.findById(templateId).orElse(null) : null;
+    }
+
+    /**
+     * L'identité du validateur doit provenir exclusivement du JWT authentifié :
+     * un header client (ex. X-User-Id) serait falsifiable et invaliderait la
+     * traçabilité des approbations (ValidationHistory).
+     */
+    private String currentUserId() {
+        String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        return userId != null ? userId : "system";
     }
 }

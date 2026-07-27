@@ -95,3 +95,8 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
+
+gateway:
+  # Durée de mise en cache (par token) des permissions applicatives résolues via user-service
+  # avant de les ré-interroger. Voir AuthCookieFilter / UserPermissionsCache.
+  permissions-cache-ttl-seconds: ${GATEWAY_PERMISSIONS_CACHE_TTL_SECONDS:60}

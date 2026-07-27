@@ -5,6 +5,8 @@ import com.qualiapproche.support.repository.QmsDocumentTypeRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +20,7 @@ public class QmsDocumentTypeService {
 
     private final QmsDocumentTypeRepository typeRepository;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void initDefaultTypes() {
         if (typeRepository.count() == 0) {

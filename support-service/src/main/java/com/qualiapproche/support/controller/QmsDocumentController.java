@@ -3,6 +3,7 @@ package com.qualiapproche.support.controller;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.support.dto.DocumentQmsDto;
 import com.qualiapproche.support.dto.DocumentSearchCriteria;
+import com.qualiapproche.support.dto.DocumentStatDimension;
 import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
 import com.qualiapproche.support.mapper.DocumentMapper;
@@ -12,6 +13,7 @@ import com.qualiapproche.support.model.QmsAuditLog;
 import com.qualiapproche.support.model.QmsDocumentVersion;
 import com.qualiapproche.support.service.QmsAuditLogService;
 import com.qualiapproche.support.service.QmsDocumentService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -25,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -61,7 +64,8 @@ public class QmsDocumentController {
             @RequestParam(value = "periodiciteMois", required = false) Integer periodiciteMois,
             @RequestParam(value = "confidentiel", required = false, defaultValue = "false") boolean confidentiel,
             @RequestParam(value = "documentExterne", required = false, defaultValue = "false") boolean documentExterne,
-            @RequestParam(value = "organismeEmetteur", required = false) String organismeEmetteur,
+            @RequestParam(value = "processusDestId", required = false) String processusDestId,
+            @RequestParam(value = "processusDestLibelle", required = false) String processusDestLibelle,
             @RequestParam(value = "referenceOfficielle", required = false) String referenceOfficielle,
             @RequestParam(value = "domaine", required = false) String domaine,
             @RequestParam(value = "statutLegal", required = false) String statutLegal,
@@ -69,7 +73,7 @@ public class QmsDocumentController {
     ) {
         DocumentQms doc = documentService.createDocument(
                 file, titre, documentType, reference, description, serviceId, serviceLibelle, serviceSigle, redacteur, periodiciteMois,
-                confidentiel, documentExterne, organismeEmetteur, referenceOfficielle, domaine, statutLegal, workflowId
+                confidentiel, documentExterne, processusDestId, processusDestLibelle, referenceOfficielle, domaine, statutLegal, workflowId
         );
         return ResponseEntity.ok(documentMapper.toDto(doc));
     }
@@ -150,7 +154,8 @@ public class QmsDocumentController {
             @RequestParam(value = "serviceLibelle",      required = false) String serviceLibelle,
             @RequestParam(value = "serviceSigle",        required = false) String serviceSigle,
             @RequestParam(value = "redacteur",           required = false) String redacteur,
-            @RequestParam(value = "organismeEmetteur",   required = false) String organismeEmetteur,
+            @RequestParam(value = "processusDestId",      required = false) String processusDestId,
+            @RequestParam(value = "processusDestLibelle", required = false) String processusDestLibelle,
             @RequestParam(value = "domaine",             required = false) String domaine,
             @RequestParam(value = "statutLegal",         required = false) String statutLegal,
             @RequestParam(value = "reference",           required = false) String reference,
@@ -179,7 +184,8 @@ public class QmsDocumentController {
                 .serviceLibelle(serviceLibelle)
                 .serviceSigle(serviceSigle)
                 .redacteur(redacteur)
-                .organismeEmetteur(organismeEmetteur)
+                .processusDestId(processusDestId)
+                .processusDestLibelle(processusDestLibelle)
                 .domaine(domaine)
                 .statutLegal(statutLegal)
                 .reference(reference)
@@ -218,6 +224,27 @@ public class QmsDocumentController {
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentStatsDto> getDocumentStats() {
         return ResponseEntity.ok(documentService.getDocumentStats());
+    }
+
+    /**
+     * Statistique générique : regroupe et compte les documents visibles par l'utilisateur
+     * connecté (tous les documents si administrateur/manager) selon la dimension demandée.
+     * Ajouter une nouvelle statistique ne nécessite qu'une nouvelle constante dans
+     * {@link DocumentStatDimension}, ni contrôleur ni service à modifier.
+     *
+     * Dimensions disponibles : DOCUMENT_TYPE, STATUT, DOMAINE, SERVICE, STATUT_LEGAL,
+     * REDACTEUR, ORGANISME_EMETTEUR, WORKFLOW_STATUS, ANNEE_CREATION, MOIS_CREATION,
+     * CONFIDENTIALITE, DOCUMENT_EXTERNE.
+     */
+    @Operation(summary = "Statistique générique par dimension",
+            description = "Regroupe et compte les documents visibles par l'utilisateur connecté " +
+                    "(tous si administrateur/manager) selon la dimension demandée.")
+    @GetMapping("/stats/by/{dimension}")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<Map<String, Long>> getStatsByDimension(
+            @PathVariable DocumentStatDimension dimension,
+            @RequestParam(defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(documentService.getDocumentStatsByDimension(dimension, includeArchived));
     }
 
     @GetMapping("/{id}")

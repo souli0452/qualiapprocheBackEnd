@@ -34,7 +34,8 @@ public class DocumentQmsDto {
     private Integer periodiciteMois;
     private boolean confidentiel;
     private boolean documentExterne;
-    private String organismeEmetteur;
+    private String processusDestId;
+    private String processusDestLibelle;
     private String referenceOfficielle;
     private LocalDateTime datePublication;
     private String domaine;

@@ -2,15 +2,18 @@ package com.qualiapproche.support.service;
 
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.support.dto.DocumentSearchCriteria;
+import com.qualiapproche.support.dto.DocumentStatDimension;
 import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.model.DocumentUserAccess;
+import com.qualiapproche.support.model.DocumentValidationInstance;
 import com.qualiapproche.support.model.DocumentWorkflow;
 import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.model.QmsDocumentVersion;
 import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.DocumentUserAccessRepository;
+import com.qualiapproche.support.repository.DocumentValidationInstanceRepository;
 import com.qualiapproche.support.repository.DocumentWorkflowRepository;
 import com.qualiapproche.support.repository.QmsDocumentVersionRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +26,12 @@ import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.util.Matrix;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -40,11 +45,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 
 @Slf4j
 @Service
@@ -60,6 +69,7 @@ public class QmsDocumentService {
     private final WorkflowService workflowService;
     private final MailService mailService;
     private final DocumentWorkflowRepository workflowRepository;
+    private final DocumentValidationInstanceRepository validationInstanceRepository;
 
     /**
      * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
@@ -78,7 +88,8 @@ public class QmsDocumentService {
             Integer periodiciteMois,
             boolean confidentiel,
             boolean documentExterne,
-            String organismeEmetteur,
+            String processusDestId,
+            String processusDestLibelle,
             String referenceOfficielle,
             String domaine,
             String statutLegal,
@@ -86,25 +97,55 @@ public class QmsDocumentService {
     ) {
         log.info("Creating new QMS document: type={}, serviceId={}", documentType, serviceId);
 
-        // No file extension restriction enforced here to allow any file type (png, pdf, word, etc.) up to 1GB.
+        // 1. Verify and resolve workflow for the document type
+        UUID finalWorkflowId = workflowId;
+        if (finalWorkflowId == null && documentType != null) {
+            List<DocumentWorkflow> workflowsForType = workflowRepository.findByDocumentType(documentType);
+            if (!workflowsForType.isEmpty()) {
+                finalWorkflowId = workflowsForType.get(0).getId();
+            }
+        }
 
-        // 1. Resolve customizable Document Type config
+        if (finalWorkflowId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + documentType + "'. Veuillez d'abord créer et configurer un circuit de validation pour ce type de document."
+            );
+        }
+
+        DocumentWorkflow workflow = workflowRepository.findById(finalWorkflowId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Le circuit de validation (workflow) spécifié est introuvable."
+                ));
+
+        if (workflow.getSteps() == null || workflow.getSteps().isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Le circuit de validation '" + workflow.getNom() + "' n'a aucune étape configurée. Veuillez configurer les étapes du workflow avant de créer un document."
+            );
+        }
+
+        // 2. Resolve customizable Document Type config
         QmsDocumentType docType = typeService.getTypeByCode(documentType);
 
-        // 2. Auto-generate document number
+        // 3. Auto-generate document number
         String documentNumber = generateDocumentNumber(docType.getCode(), serviceSigle != null ? serviceSigle : "GEN");
         log.info("Generated document number: {}", documentNumber);
 
-        // 3. Upload file to Minio
+        // 4. Upload file to Minio, rangé sous {service}/{typeDocument}/
         String objectName;
         try {
-            objectName = minioService.uploadFile(file);
+            String processusFolder = (serviceSigle != null && !serviceSigle.isBlank()) ? serviceSigle : serviceLibelle;
+            String typeFolder = (docType.getFolderName() != null && !docType.getFolderName().isBlank())
+                    ? docType.getFolderName() : docType.getCode();
+            objectName = minioService.uploadFile(file, processusFolder, typeFolder);
         } catch (Exception e) {
             log.error("Failed to upload file to Minio", e);
             throw new RuntimeException("Échec du dépôt du fichier dans le stockage Minio.");
         }
 
-        // 4. Save metadata to local DB
+        // 5. Save metadata to local DB
         DocumentQms document = DocumentQms.builder()
                 .documentNumber(documentNumber)
                 .titre(titre != null && !titre.isBlank() ? titre : file.getOriginalFilename())
@@ -120,7 +161,8 @@ public class QmsDocumentService {
                 .periodiciteMois(periodiciteMois != null ? periodiciteMois : 12)
                 .confidentiel(confidentiel)
                 .documentExterne(documentExterne)
-                .organismeEmetteur(organismeEmetteur)
+                .processusDestId(processusDestId)
+                .processusDestLibelle(processusDestLibelle)
                 .referenceOfficielle(referenceOfficielle)
                 .datePublication(documentExterne ? LocalDateTime.now() : null)
                 .domaine(domaine)
@@ -130,7 +172,7 @@ public class QmsDocumentService {
 
         document = documentRepository.save(document);
 
-        // 5. Create version history record in local DB
+        // 6. Create version history record in local DB
         QmsDocumentVersion version = QmsDocumentVersion.builder()
                 .document(document)
                 .versionLabel("1.0")
@@ -145,21 +187,11 @@ public class QmsDocumentService {
 
         versionRepository.save(version);
 
-        // 6. Register Audit log
+        // 7. Register Audit log
         auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
 
-        // 7. Initiate validation workflow if workflowId is provided or found for this document type
-        UUID finalWorkflowId = workflowId;
-        if (finalWorkflowId == null && documentType != null) {
-            List<DocumentWorkflow> workflowsForType = workflowRepository.findByDocumentType(documentType);
-            if (!workflowsForType.isEmpty()) {
-                finalWorkflowId = workflowsForType.get(0).getId();
-            }
-        }
-
-        if (finalWorkflowId != null) {
-            workflowService.initiateWorkflow(document, finalWorkflowId);
-        }
+        // 8. Associate workflow immediately
+        workflowService.initiateWorkflow(document, finalWorkflowId);
 
         return document;
     }
@@ -187,7 +219,16 @@ public class QmsDocumentService {
 
         // No file extension restriction enforced here to allow any file type (png, pdf, word, etc.) up to 1GB.
 
-        String objectName = minioService.uploadFile(file);
+        QmsDocumentType docType = typeService.getTypeByCode(document.getDocumentType());
+        String processusFolder = (document.getServiceSigle() != null && !document.getServiceSigle().isBlank())
+                ? document.getServiceSigle() : document.getServiceLibelle();
+        String typeFolder = (docType.getFolderName() != null && !docType.getFolderName().isBlank())
+                ? docType.getFolderName() : docType.getCode();
+        String objectName = minioService.uploadFile(file, processusFolder, typeFolder);
+
+        // Le document était validé : le contenu change, il doit repasser par le circuit de validation
+        // avant de pouvoir de nouveau être considéré comme "VALIDE" (ISO 9001 §7.5.2).
+        boolean requiresRevalidation = document.isEsTraiter();
 
         // Nouvelle version mineure par défaut
         document.setVersionMineure(document.getVersionMineure() + 1);
@@ -210,6 +251,26 @@ public class QmsDocumentService {
         version = versionRepository.save(version);
 
         auditLogService.logAction("MISE_A_JOUR_VERSION", document.getDocumentNumber(), "Nouvelle version ajoutée: " + versionLabel);
+
+        if (requiresRevalidation) {
+            Optional<DocumentWorkflow> previousWorkflow = validationInstanceRepository
+                    .findTopByDocumentIdOrderByStartedAtDesc(documentId)
+                    .map(DocumentValidationInstance::getWorkflow);
+
+            if (previousWorkflow.isPresent()) {
+                workflowService.initiateWorkflow(document, previousWorkflow.get().getId());
+                auditLogService.logAction("REVALIDATION_REQUISE", document.getDocumentNumber(),
+                        "Nouvelle version déposée sur un document validé : le circuit de validation (" +
+                                previousWorkflow.get().getNom() + ") est relancé automatiquement.");
+            } else {
+                document.setEsTraiter(false);
+                document.setWorkflowStatus(null);
+                documentRepository.save(document);
+                auditLogService.logAction("REVALIDATION_REQUISE", document.getDocumentNumber(),
+                        "Nouvelle version déposée sur un document validé sans circuit associé : retour en brouillon, " +
+                                "une validation doit être assignée manuellement.");
+            }
+        }
 
         return version;
     }
@@ -406,9 +467,6 @@ public class QmsDocumentService {
      * (sauf administrateur / manager qui voit tout).
      */
     public List<DocumentQms> searchDocuments(DocumentSearchCriteria criteria) {
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
-        String currentUserId = SecurityUtils.getCurrentUserId();
-
         // Tri dynamique
         String sortField = (criteria.getSortBy() != null && !criteria.getSortBy().isBlank())
                 ? criteria.getSortBy() : "documentNumber";
@@ -420,14 +478,7 @@ public class QmsDocumentService {
             List<Predicate> predicates = new ArrayList<>();
 
             // ---- Contrôle d'accès (skip pour admin) ----
-            if (!isAdmin && currentUserId != null) {
-                Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
-                predicates.add(cb.or(
-                        cb.equal(root.get("createdById"), currentUserId),
-                        cb.equal(accessJoin.get("userId"), currentUserId)
-                ));
-                cq.distinct(true);
-            }
+            addVisibilityPredicates(predicates, root, cq, cb);
 
             // ---- Recherche texte libre ----
             if (criteria.getQuery() != null && !criteria.getQuery().isBlank()) {
@@ -438,7 +489,7 @@ public class QmsDocumentService {
                         cb.like(cb.lower(root.get("reference")), like),
                         cb.like(cb.lower(root.get("description")), like),
                         cb.like(cb.lower(root.get("redacteur")), like),
-                        cb.like(cb.lower(root.get("organismeEmetteur")), like),
+                        cb.like(cb.lower(root.get("processusDestLibelle")), like),
                         cb.like(cb.lower(root.get("referenceOfficielle")), like)
                 ));
             }
@@ -473,10 +524,14 @@ public class QmsDocumentService {
                 ));
             }
 
-            if (criteria.getOrganismeEmetteur() != null && !criteria.getOrganismeEmetteur().isBlank()) {
+            if (criteria.getProcessusDestId() != null && !criteria.getProcessusDestId().isBlank()) {
+                predicates.add(cb.equal(root.get("processusDestId"), criteria.getProcessusDestId()));
+            }
+
+            if (criteria.getProcessusDestLibelle() != null && !criteria.getProcessusDestLibelle().isBlank()) {
                 predicates.add(cb.like(
-                        cb.lower(root.get("organismeEmetteur")),
-                        "%" + criteria.getOrganismeEmetteur().toLowerCase() + "%"
+                        cb.lower(root.get("processusDestLibelle")),
+                        "%" + criteria.getProcessusDestLibelle().toLowerCase() + "%"
                 ));
             }
 
@@ -605,54 +660,79 @@ public class QmsDocumentService {
     }
 
     /**
+     * Ajoute la restriction de visibilité standard : un administrateur/manager voit tout,
+     * un utilisateur normal ne voit que les documents qu'il a créés ou auxquels un accès
+     * explicite lui a été accordé ({@link DocumentUserAccess}). Partagé par {@link #searchDocuments}
+     * et par les méthodes de statistiques pour qu'elles restent cohérentes entre elles.
+     */
+    private void addVisibilityPredicates(List<Predicate> predicates, Root<DocumentQms> root,
+                                          CriteriaQuery<?> cq, CriteriaBuilder cb) {
+        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
+        String currentUserId = SecurityUtils.getCurrentUserId();
+
+        if (!isAdmin && currentUserId != null) {
+            Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
+            predicates.add(cb.or(
+                    cb.equal(root.get("createdById"), currentUserId),
+                    cb.equal(accessJoin.get("userId"), currentUserId)
+            ));
+            cq.distinct(true);
+        }
+    }
+
+    /**
+     * Documents visibles par l'utilisateur connecté (tous si administrateur/manager), tels
+     * quels — sans aucun autre filtre — pour servir de base commune aux méthodes de statistiques.
+     */
+    private List<DocumentQms> visibleDocuments(boolean includeArchived) {
+        return documentRepository.findAll((root, cq, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            addVisibilityPredicates(predicates, root, cq, cb);
+            if (!includeArchived) {
+                predicates.add(cb.isFalse(root.get("archived")));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+
+    private Map<String, Long> groupBy(List<DocumentQms> documents, DocumentStatDimension dimension) {
+        return documents.stream().collect(Collectors.groupingBy(
+                doc -> {
+                    String value = dimension.extract(doc);
+                    return (value == null || value.isBlank()) ? "NON_RENSEIGNE" : value;
+                },
+                LinkedHashMap::new,
+                Collectors.counting()
+        ));
+    }
+
+    /**
+     * Méthode générique de statistiques : regroupe et compte les documents visibles par
+     * l'utilisateur connecté (tous si administrateur/manager) selon la dimension demandée.
+     * Ajouter une nouvelle statistique = ajouter une constante à {@link DocumentStatDimension},
+     * sans toucher à cette méthode.
+     */
+    public Map<String, Long> getDocumentStatsByDimension(DocumentStatDimension dimension, boolean includeArchived) {
+        return groupBy(visibleDocuments(includeArchived), dimension);
+    }
+
+    /**
      * Retourne les statistiques globales sur les documents.
-     * Les admins voient les stats globales ; les autres utilisateurs voient
-     * les stats filtrées sur leurs propres documents.
+     * Les admins/managers voient les stats sur tous les documents ; les autres utilisateurs
+     * ne voient que les stats sur leurs propres documents (créés ou partagés avec eux).
      */
     public DocumentStatsDto getDocumentStats() {
-        // Répartition par type
-        Map<String, Long> byType = documentRepository.countByDocumentType().stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (Long) row[1],
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ));
-
-        // Répartition par statut
-        Map<String, Long> byStatus = new LinkedHashMap<>();
-        byStatus.put("brouillon", documentRepository.countBrouillon());
-        byStatus.put("en_approbation", documentRepository.countEnApprobation());
-        byStatus.put("valide", documentRepository.countValide());
-        byStatus.put("obsolete", documentRepository.countObsolete());
-
-        // Répartition par domaine
-        Map<String, Long> byDomaine = documentRepository.countByDomaine().stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (Long) row[1],
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ));
-
-        // Répartition par service
-        Map<String, Long> byService = documentRepository.countByServiceLibelle().stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (Long) row[1],
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ));
+        List<DocumentQms> documents = visibleDocuments(false);
 
         return DocumentStatsDto.builder()
-                .totalDocuments(documentRepository.countActifs())
-                .countByDocumentType(byType)
-                .countByStatus(byStatus)
-                .countByDomaine(byDomaine)
-                .countByService(byService)
-                .documentsEnRetardRevision(documentRepository.countEnRetardRevision(LocalDateTime.now()))
-                .documentsConfidentiels(documentRepository.countConfidentiels())
-                .documentsExternes(documentRepository.countExternes())
+                .totalDocuments(documents.size())
+                .countByDocumentType(groupBy(documents, DocumentStatDimension.DOCUMENT_TYPE))
+                .countByStatus(groupBy(documents, DocumentStatDimension.STATUT))
+                .countByDomaine(groupBy(documents, DocumentStatDimension.DOMAINE))
+                .countByService(groupBy(documents, DocumentStatDimension.SERVICE))
+                .documentsEnRetardRevision(documents.stream().filter(DocumentQms::isEnRetardRevision).count())
+                .documentsConfidentiels(documents.stream().filter(DocumentQms::isConfidentiel).count())
+                .documentsExternes(documents.stream().filter(DocumentQms::isDocumentExterne).count())
                 .build();
     }
 

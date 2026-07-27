@@ -25,6 +25,14 @@
 
   { "label": "Lire la gestion documentaire", "value": "DOC_READ", "module": "Documentaire" },
   { "label": "Gérer les catégories de fichiers", "value": "DOC_CAT_MANAGE", "module": "Documentaire" },
+  { "label": "Consulter les documents QMS", "value": "document-read", "module": "Documentaire" },
+  { "label": "Gérer les documents QMS", "value": "document-write", "module": "Documentaire" },
+  { "label": "Consulter les types de documents QMS", "value": "document-type-read", "module": "Documentaire" },
+  { "label": "Gérer les types de documents QMS", "value": "document-type-write", "module": "Documentaire" },
+
+  { "label": "Consulter les circuits de validation", "value": "workflow-read", "module": "Workflow" },
+  { "label": "Gérer les circuits de validation", "value": "workflow-write", "module": "Workflow" },
+  { "label": "Valider/rejeter une étape de circuit", "value": "workflow-validate", "module": "Workflow" },
 
   { "label": "Accéder aux traitements des demandes", "value": "TRAITEMENT_DEMANDES", "module": "Traitements" },
   { "label": "Analyse initiale du pilote (NC)", "value": "RECEPTION_NC", "module": "Traitements" },

@@ -18,7 +18,7 @@ import java.util.List;
 @Builder
 public class DocumentSearchCriteria {
 
-    // ---- Recherche texte libre (documentNumber, titre, redacteur, organismeEmetteur) ----
+    // ---- Recherche texte libre (documentNumber, titre, redacteur, processusDestLibelle) ----
     private String query;
 
     // ---- Filtres exacts ----
@@ -37,8 +37,11 @@ public class DocumentSearchCriteria {
     /** Nom ou ID du rédacteur (recherche partielle) */
     private String redacteur;
 
-    /** Organisme émetteur, pour les documents externes (recherche partielle) */
-    private String organismeEmetteur;
+    /** ID du processus / structure destinateur */
+    private String processusDestId;
+
+    /** Libellé du processus / structure destinateur */
+    private String processusDestLibelle;
 
     /** Domaine fonctionnel du document (ex: "Qualité", "RH", ...) */
     private String domaine;

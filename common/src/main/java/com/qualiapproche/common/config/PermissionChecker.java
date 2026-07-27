@@ -3,14 +3,19 @@ package com.qualiapproche.common.config;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Arrays;
-import java.util.Objects;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class PermissionChecker {
+
+    private static final String PERMISSIONS_HEADER = "X-User-Permissions";
 
     public boolean canCreate(final Object controller) {
         return check(controller, RequirePermissions::create);
@@ -55,22 +60,54 @@ public class PermissionChecker {
             return true;
         }
 
-        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+        Set<String> userPerms = resolveUserPermissions();
+        if (userPerms.isEmpty()) {
             return false;
         }
 
-        Set<String> userPerms = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getAuthorities()
-                .stream()
-                .map(GrantedAuthority::getAuthority)
-                .map(String::toUpperCase)
-                .collect(Collectors.toSet());
-
         return Arrays.stream(required)
                 .map(String::toUpperCase)
-                .anyMatch(req -> userPerms.contains(req) 
-                        || userPerms.contains("ROLE_" + req) 
+                .anyMatch(req -> userPerms.contains(req)
+                        || userPerms.contains("ROLE_" + req)
                         || (req.startsWith("ROLE_") && userPerms.contains(req.substring(5))));
+    }
+
+    /**
+     * Combine deux sources de permissions :
+     * 1. Les rôles Keycloak du JWT ({@code realm_access.roles}, convertis en GrantedAuthority) ;
+     * 2. Les permissions applicatives (AppRole, base de user-service) que la gateway résout une
+     *    fois par requête et transmet via l'en-tête interne {@code X-User-Permissions}
+     *    (voir {@code AuthCookieFilter} côté api-gateway). Un appel direct à un service (sans
+     *    passer par la gateway) n'aura donc que la source 1.
+     */
+    private Set<String> resolveUserPermissions() {
+        Set<String> perms = new HashSet<>();
+
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null) {
+            authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .map(String::toUpperCase)
+                    .forEach(perms::add);
+        }
+
+        String header = currentRequestHeader(PERMISSIONS_HEADER);
+        if (header != null && !header.isBlank()) {
+            Arrays.stream(header.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(String::toUpperCase)
+                    .forEach(perms::add);
+        }
+
+        return perms;
+    }
+
+    private String currentRequestHeader(String name) {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return servletRequestAttributes.getRequest().getHeader(name);
+        }
+        return null;
     }
 }

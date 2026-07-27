@@ -20,6 +20,14 @@ import java.util.List;
 @SuperBuilder
 public class DocumentQms extends AuditEntity {
 
+    /**
+     * Verrou optimiste : protège contre deux transitions de workflow (ou deux dépôts de version)
+     * concurrents sur le même document — la seconde écriture échoue proprement au lieu de
+     * silencieusement écraser la première ou dupliquer un changement d'état.
+     */
+    @Version
+    private Long version;
+
     @Column(nullable = false, unique = true)
     private String documentNumber;
 
@@ -61,7 +69,8 @@ public class DocumentQms extends AuditEntity {
     private Integer periodiciteMois;
     private boolean confidentiel;
     private boolean documentExterne;
-    private String organismeEmetteur;
+    private String processusDestId;
+    private String processusDestLibelle;
     private String referenceOfficielle;
     private LocalDateTime datePublication;
     private String domaine;

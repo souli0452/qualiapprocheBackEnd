@@ -4,7 +4,7 @@ spring:
   application:
     name: referentiel-service
   datasource:
-    url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5433/qualiapproche_referentiel}
+    url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5432/qualisira_referentiel}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -23,7 +23,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET:UK1Jhhjmq0CKHYgR5qwzahk6ORdY1bKb}
+            client-secret: ${KC_CLIENT_SECRET:URd095w8aGdw1wJ53HLDd1cxkvJEJReC}
             authorization-grant-type: client_credentials
         provider:
           keycloak:
