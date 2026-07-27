@@ -2,6 +2,7 @@ package com.qualiapproche.userservice.controller;
 
 import com.qualiapproche.common.dto.auth.KcLoginRequestDto;
 import com.qualiapproche.common.dto.auth.KcUserDto;
+import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.userservice.service.KcUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -66,6 +67,18 @@ public class KcUserController {
     @GetMapping("/me")
     public ResponseEntity<java.util.Map<String, Object>> getMe(HttpServletRequest request) {
         return ResponseEntity.ok(kcUserService.getMe(request));
+    }
+
+    /**
+     * Retourne explicitement un {@link ApiResponse} (et non une {@code List} nue) pour échapper
+     * à {@code GlobalResponseHandler}, qui applique sinon une pagination automatique (page=0,
+     * size=10) à toute réponse de type List — inadapté ici : cette liste ne doit jamais être
+     * tronquée, la gateway a besoin de l'ensemble complet des permissions.
+     */
+    @Operation(summary = "Permissions de l'utilisateur connecté", description = "Usage interne : appelé par la gateway pour propager les permissions applicatives (AppRole) aux services en aval via l'en-tête X-User-Permissions.")
+    @GetMapping("/me/permissions")
+    public ResponseEntity<ApiResponse<List<String>>> getMyPermissions() {
+        return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyPermissions()));
     }
 
     @PostMapping("/users/create")

@@ -22,6 +22,8 @@ public class DocumentWorkflow extends AuditEntity {
 
     private String description;
 
+    private String documentType;
+
     @OneToMany(mappedBy = "workflow", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("stepOrder ASC")
     @Builder.Default

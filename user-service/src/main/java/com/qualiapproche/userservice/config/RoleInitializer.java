@@ -30,7 +30,9 @@ public class RoleInitializer implements CommandLineRunner {
                 "SUBMIT_NC", "NC_READ", "REGLEMENTATION_READ", "CRITERE_EVAL_READ",
                 "DOC_READ", "DOC_CAT_MANAGE", "TRAITEMENT_DEMANDES", "RECEPTION_NC",
                 "VALIDATION_RQ", "IMPUTATION_NC", "TRAITEMENT_NC", "VALIDATION_CHEF",
-                "RQ_NC", "CONSULTATION_NC", "TRAITEMENT_PLAN", "MANAGE_USER", "ROLE_MANAGE", "STRUCT_MANAGE"
+                "RQ_NC", "CONSULTATION_NC", "TRAITEMENT_PLAN", "MANAGE_USER", "ROLE_MANAGE", "STRUCT_MANAGE",
+                "document-read", "document-write", "document-type-read", "document-type-write",
+                "workflow-read", "workflow-write", "workflow-validate"
         ));
 
         log.info("Synchronisation des rôles terminée.");

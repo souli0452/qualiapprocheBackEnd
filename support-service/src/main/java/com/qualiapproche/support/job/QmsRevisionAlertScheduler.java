@@ -29,7 +29,7 @@ public class QmsRevisionAlertScheduler {
     public void checkDocumentRevisionDeadlines() {
         log.info("Starting QMS document revision deadlines check...");
 
-        List<DocumentQms> activeDocs = documentRepository.findByStatus("valide");
+        List<DocumentQms> activeDocs = documentRepository.findByEsTraiterTrueAndObsoleteFalseAndArchivedFalse();
         LocalDate today = LocalDate.now();
 
         for (DocumentQms doc : activeDocs) {
@@ -45,7 +45,7 @@ public class QmsRevisionAlertScheduler {
             if (daysRemaining < 0) {
                 log.warn("Document {} is overdue for revision!", doc.getDocumentNumber());
                 
-                doc.setStatus("en_retard_revision");
+                doc.setEnRetardRevision(true);
                 doc.setAlerteEnvoyee("expire");
                 documentRepository.save(doc);
 

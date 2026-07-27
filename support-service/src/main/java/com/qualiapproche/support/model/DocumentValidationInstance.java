@@ -19,6 +19,14 @@ public class DocumentValidationInstance {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
+    /**
+     * Verrou optimiste : si deux validateurs déclenchent une transition sur la même instance
+     * en même temps, la seconde écriture échoue (ObjectOptimisticLockingFailureException) au
+     * lieu de faire avancer l'étape deux fois ou de dupliquer une ligne d'historique.
+     */
+    @Version
+    private Long version;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "document_id", nullable = false)
     private DocumentQms document;

@@ -92,16 +92,7 @@ public class KcUserService {
             appRoles.add("SUPER_ADMIN");
         }
 
-        // Permissions
-        List<String> permissions;
-        if (isSuperAdmin) {
-            permissions = appRoleRepository.findAll().stream()
-                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
-        } else {
-            permissions = appRoleRepository.findAll().stream()
-                    .filter(role -> appRoles.contains(role.getName()))
-                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
-        }
+        List<String> permissions = computePermissions(appRoles, isSuperAdmin);
 
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("userId", user.getId());
@@ -403,16 +394,7 @@ public class KcUserService {
             appRoles.add("SUPER_ADMIN");
         }
 
-        // Permissions
-        List<String> permissions;
-        if (isSuperAdmin) {
-            permissions = appRoleRepository.findAll().stream()
-                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
-        } else {
-            permissions = appRoleRepository.findAll().stream()
-                    .filter(role -> appRoles.contains(role.getName()))
-                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
-        }
+        List<String> permissions = computePermissions(appRoles, isSuperAdmin);
 
         Map<String, Object> result = new HashMap<>();
         result.put("userId", user.getId());
@@ -444,6 +426,42 @@ public class KcUserService {
 
         String userId = extractSubFromJwt(accessToken);
         return getUserById(userId);
+    }
+
+    /**
+     * Union (ou intersection filtrée) des permissions des rôles applicatifs de l'utilisateur.
+     * SUPER_ADMIN reçoit l'union de toutes les permissions existantes, tous rôles confondus.
+     */
+    private List<String> computePermissions(List<String> appRoles, boolean isSuperAdmin) {
+        if (isSuperAdmin) {
+            return appRoleRepository.findAll().stream()
+                    .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+        }
+        return appRoleRepository.findAll().stream()
+                .filter(role -> appRoles.contains(role.getName()))
+                .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * Permissions applicatives (AppRole) de l'utilisateur actuellement authentifié.
+     * Appelé par la gateway (une fois par requête entrante vers un service protégé par
+     * {@code @RequirePermissions}) pour les injecter dans l'en-tête interne
+     * {@code X-User-Permissions} transmis aux services en aval.
+     */
+    public List<String> getMyPermissions() {
+        String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new RuntimeException("Utilisateur non authentifié.");
+        }
+
+        List<String> appRoles = userRoleAssignmentRepository.findByUserId(userId).stream()
+                .map(assignment -> assignment.getRole().getName())
+                .collect(Collectors.toList());
+
+        boolean isSuperAdmin = appRoles.stream()
+                .anyMatch(r -> r.equalsIgnoreCase("SUPER_ADMIN") || r.equalsIgnoreCase("SUPERADMIN"));
+
+        return computePermissions(appRoles, isSuperAdmin);
     }
 
     /**
