@@ -1,10 +1,10 @@
 import {
+  InputTextModule
+} from "./chunk-5XSYDKXE.js";
+import {
   Chip,
   ChipModule
 } from "./chunk-G5YSDZJQ.js";
-import {
-  InputTextModule
-} from "./chunk-5XSYDKXE.js";
 import {
   UniqueComponentId
 } from "./chunk-KHDC5QWA.js";

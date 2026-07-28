@@ -5,11 +5,11 @@ import {
   Overlay
 } from "./chunk-BKV7DS4H.js";
 import {
-  Chip
-} from "./chunk-G5YSDZJQ.js";
-import {
   InputText
 } from "./chunk-5XSYDKXE.js";
+import {
+  Chip
+} from "./chunk-G5YSDZJQ.js";
 import "./chunk-KHDC5QWA.js";
 import {
   Ripple
