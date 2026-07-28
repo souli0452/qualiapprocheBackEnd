@@ -1,0 +1,58 @@
+.logo-loader {
+    width: 140px;
+    height: 140px;
+    /* La couleur de fond quand le logo est "vide" */
+    background-color: rgba(4, 77, 138, 0.1); 
+    
+    /* Magie du CSS : on découpe la div à la forme exacte de votre SVG ! */
+    -webkit-mask-image: url('/assets/logo-quali-sira.svg');
+    mask-image: url('/assets/logo-quali-sira.svg');
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    
+    position: relative;
+    overflow: hidden;
+}
+
+.wave {
+    position: absolute;
+    /* Cercle géant pour toujours couvrir la largeur du conteneur en tournant */
+    width: 400px;
+    height: 400px;
+    
+    /* Dégradé Quali Sira vibrant (3 couleurs pour un bel effet liquide) */
+    background: linear-gradient(180deg, #0084ca 0%, #097480 50%, #045887 100%);
+    
+    /* Centrage horizontal absolu */
+    left: 50%;
+    margin-left: -200px;
+    
+    /* La montée est maintenant calculée en direct dans le HTML par Angular ([style.top.px]) */
+    
+    /* Transition CSS douce pour que le remplissage soit fluide entre chaque saut de pourcentage */
+    transition: top 0.1s ease-out;
+    
+    /* La forme asymétrique (border-radius) crée l'illusion de vagues en tournant */
+    border-radius: 40%;
+    
+    /* Animation de rotation infinie (le liquide bouge tout seul) */
+    animation: spin 6s linear infinite;
+}
+
+.wave-back {
+    /* La vague en arrière-plan utilise le bleu clair vibrant #0084ca avec opacité */
+    background: rgba(0, 132, 202, 0.4); 
+    border-radius: 45%;
+    /* La hauteur est calculée dans le HTML, légèrement plus haute pour créer la profondeur */
+    animation: spin 7s linear infinite;
+}
+
+/* La seule animation CSS est la rotation, la montée est gérée par Angular ! */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

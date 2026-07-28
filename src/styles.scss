@@ -1,0 +1,494 @@
+/* You can add global styles to this file, and also import other style files */
+@use './tailwind.css';
+@use './assets/layout/layout.scss';
+@use 'primeicons/primeicons.css';
+@use './assets/demo/demo.scss';
+/* styles.css ou styles.scss */
+:root {
+    --primary-color: #1e3a5f !important;
+    --secondary-color: #0084ca !important;
+    --info-color: #0084ca !important;
+}
+
+html {
+    font-size: 14px;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('./assets/fonts/Poppins-Light.ttf') format('truetype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('./assets/fonts/Poppins-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('./assets/fonts/Poppins-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('./assets/fonts/Poppins-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Poppins';
+    src: url('./assets/fonts/Poppins-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+}
+
+.font-bold,
+.p-dialog-title,
+.p-fieldset-legend-label,
+.p-step-title {
+    font-weight: 700;
+}
+
+.hidden{
+    display: none !important;
+}
+.layout-topbar-title {
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color) !important; 
+}
+.p-toolbar-end {
+    display: block;
+}
+.page-layout {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+.centrer-image {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.p-datepicker:has(.p-datepicker-input-icon-container) {
+    position: relative;
+    width: 100%;
+}
+
+.p-button-warning {
+    background-color: #f8b045 !important;
+    border-color: #f8b045 !important;
+}
+.p-badge-warning {
+    background-color: #f8b045 !important;
+    border-color: #f8b045 !important;
+}
+.p-step-title {
+    text-transform: lowercase !important;
+}
+.flex-component h5 {
+    text-transform: none;
+}
+.p-fieldset-legend {
+    padding-right: 30px !important;
+}
+.p-error {
+    color: red;
+}
+.text-warn {
+    color: #f8b045;
+}
+.p-ripple {
+    overflow: initial !important;
+    position: relative;
+}
+
+#password input.p-password-input {
+    padding: 15px;
+    padding-left: 35px;
+}
+
+// Styles globaux pour les menus d'actions (ellipsis)
+.p-menu {
+    border-radius: 8px !important;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1) !important;
+    padding: 0.5rem 0 !important;
+    border: 1px solid var(--surface-border) !important;
+
+    .p-menuitem-link {
+        padding: 0.75rem 1rem !important;
+        transition: background-color 0.2s !important;
+
+        &:hover {
+            background-color: var(--surface-hover)!important;
+        }
+
+        .p-menuitem-icon {
+            color: var(--text-color) !important;
+            margin-right: 0.75rem !important;
+            font-size: 1.1rem !important;
+        }
+
+        .p-menuitem-text {
+            color: var(--text-color) !important;
+            font-weight: 500 !important;
+        }
+    }
+
+    // Style spécifique pour l'action de suppression
+    .text-red-500 {
+        .p-menuitem-link {
+            .p-menuitem-icon, .p-menuitem-text {
+                color: #ef4444 !important;
+            }
+            &:hover {
+                background-color: var(--surface-hover) !important;
+            }
+        }
+    }
+}
+
+
+
+// Menu style pour les actions
+.menu-style {
+    font-size: 12px !important;
+    padding: 0px !important;
+    border-bottom: var(--surface-border)var(--text-color) !important;
+}
+
+.menu-style:last-child {
+    border: 0 !important;
+}
+// Drawer
+.p-drawer-header {
+    padding-bottom: 0 !important;
+    padding-top: 0 !important;
+}
+.drawer-subtitle-content {
+    font-size: 12px;
+    font-style: italic;
+}
+
+
+p-button .p-button-info {
+    background-color: var(--info-color) !important;
+    border-color: var(--info-color) !important;
+    color: white !important;
+}
+.p-divider-horizontal {
+    margin: 0 !important;
+}
+
+.drawer-nc {
+    .card {
+        padding: 0 !important;
+    }
+
+    // .p-datatable-sm {
+    //     .p-datatable-thead > tr > th,
+    //     .p-datatable-tbody > tr > td {
+    //         padding: 0.5rem 0.4rem !important;
+    //         font-size: 13px !important;
+    //         white-space: nowrap;
+    //         overflow: hidden;
+    //         text-overflow: ellipsis;
+    //     }
+
+    //     .p-datatable-tbody > tr > td:first-child {
+    //         max-width: 150px;
+    //     }
+        
+    //     th:last-child, td:last-child {
+    //         width: 80px !important;
+    //         text-align: center;
+    //     }
+    // }
+
+    /* On force l'adoucissement des bordures */
+    .p-datatable.p-datatable-gridlines {
+        border: none !important;
+
+        .p-datatable-thead > tr > th,
+        .p-datatable-tbody > tr > td {
+            border-color: #f1f5f9 !important; /* Gris ultra clair */
+            border-width: 0 0 1px 0 !important; /* Uniquement en bas */
+        }
+
+        .p-datatable-thead > tr > th {
+            background-color: transparent !important;
+            color: #64748b !important;
+            border-bottom: 2px solid #f1f5f9 !important;
+        }
+    }
+
+    .p-datatable-tbody > tr:last-child > td {
+        border-bottom: none !important;
+        }
+    }
+
+.p-dialog-header {
+    border-bottom: 1px dashed var(--surface-border);
+    margin-bottom: 5px;
+}
+
+
+/* Empêcher les textes longs d'élargir le tableau */
+.p-datatable-tbody > tr > td {
+    max-width: 0; /* Important pour que l'ellipsis fonctionne sur les cellules */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* On laisse quand même le bouton d'action bien visible */
+.p-datatable-tbody > tr > td:last-child {
+    overflow: visible;
+    max-width: none;
+    text-align: center;
+}
+.p-dialog{
+    border: 0 !important;
+}
+.card-main-details {
+    display: flex;
+}
+
+.card-left {
+    width: 160px !important;
+    background-color: var(--primary-color);
+    display: flex;
+    padding: 25px 10px;
+    justify-content: flex-start;
+    flex-direction: column;
+    align-items: center;
+    border-radius: 10px 0 0 10px;
+
+    .logo-popup {
+        height: 40px;
+        width: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50px;
+
+        img {
+            height: auto;
+            width: 30px;
+            filter: brightness(1.5);
+        }
+    }
+
+    .card-info {
+        color: white;
+        text-align: center;
+        margin-top: 25px;
+    }
+    .card-info-body p {
+        color: #24b5e0;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 15px;
+        font-size: 12px !important;
+        line-height: normal;
+    }
+    .p-divider-horizontal {
+        width: 60%;
+        text-align: center;
+        display: flex;
+        justify-content: center;
+        margin: auto !important;
+        border-color: #24b5e0 !important;
+        margin-bottom: 15px !important;
+        opacity: .5;
+
+        &:before{
+            border-block-start: 1px solid #24b5e0 !important;
+        }
+    }
+    .card-info-header p {
+        font-size: 12px;
+        font-weight: 100;
+    }
+}
+.card-info-footer {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+    opacity: .1;
+}
+.card-right {
+    width: 80%;
+    padding: 40px 30px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.card-right-footer {
+    text-align: right;
+}
+
+
+
+.card-table .card {
+    padding-top: 0 !important;
+}
+
+/* --- DESIGN SYSTEM: PREMIUM HUB --- */
+.premium-hub {
+    ::ng-deep {
+        .p-tabmenu {
+            .p-tabmenu-nav {
+                background: transparent !important;
+                border: none;
+                gap: 0.5rem;
+                padding: 0 1rem;
+            }
+
+            .p-tabmenu-nav .p-tabmenuitem .p-menuitem-link {
+                background: transparent !important;
+                border: none;
+                border-bottom: 3px solid transparent;
+                border-radius: 0;
+                padding: 1rem 1.5rem;
+                transition: all 0.3s ease;
+                
+                .p-menuitem-text, .p-menuitem-icon {
+                    color: var(--text-color-secondary);
+                    font-weight: 500;
+                }
+
+                &:hover {
+                    background: var(--surface-hover);
+                    border-bottom-color: var(--primary-200);
+
+                    .p-menuitem-text, .p-menuitem-icon {
+                        color: var(--primary-color);
+                    }
+                }
+            }
+
+            .p-tabmenu-nav .p-tabmenuitem.p-highlight .p-menuitem-link {
+                border-bottom-color: var(--primary-color);
+                background: transparent !important;
+
+                .p-menuitem-text, .p-menuitem-icon {
+                    color: var(--primary-color);
+                    font-weight: 700;
+                }
+            }
+        }
+    }
+}
+
+/* Fix for PrimeNG MonthPicker and YearPicker styling */
+// .p-datepicker .p-monthpicker,
+// .p-datepicker .p-yearpicker {
+//     display: grid !important;
+//     grid-template-columns: repeat(2, 1fr) !important;
+//     gap: 0.5rem !important;
+//     padding: 0.5rem !important;
+// }
+
+// /* On override pour le monthpicker à 3 colonnes pour que ce soit plus joli */
+// .p-datepicker .p-monthpicker {
+//     grid-template-columns: repeat(3, 1fr) !important;
+// }
+
+// .p-datepicker .p-monthpicker-month,
+// .p-datepicker .p-yearpicker-year {
+//     padding: 0.5rem !important;
+//     border-radius: 0.5rem !important;
+//     display: flex !important;
+//     align-items: center !important;
+//     justify-content: center !important;
+// }
+
+
+.select-structure {
+    padding: 0 !important;
+    background: transparent !important;
+    border-color: white !important;
+
+    span.p-select-label.p-placeholder {
+        color: white !important;
+        padding-right: 0 !important;
+    }
+
+    span.p-select-label {
+        color: white !important;
+    }
+
+    .p-select-dropdown .p-icon {
+        color: white !important;
+
+        &:hover {
+            color: white !important;
+        }    
+    }
+}
+
+
+.date-select {
+
+    .p-datepicker-clear-icon {
+        right: 25px !important;
+    }
+
+    .p-inputtext::placeholder {
+        color: white;
+    }
+    .p-icon{
+        color: white !important;
+
+        &:hover {
+            color: white !important;
+        } 
+    }
+
+    .p-inputtext {
+        background: transparent !important;
+        border-color: white !important;
+        color: white !important;
+        padding-right: 20px !important;
+
+
+
+        .p-datepicker-input-icon-container {
+            color: white !important;
+
+            .p-icon{
+                color: white !important;
+
+                &:hover {
+                    color: white !important;
+                }    
+            }
+        }
+    }
+}
+
+.mb-0, .pb-0{
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.uploader-container{
+  height: 145px !important;
+}

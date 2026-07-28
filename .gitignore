@@ -49,3 +49,4 @@ referentiel-service/src/main/resources/application.yml
 support-service/src/main/resources/application.yml
 user-service/src/main/resources/application.yml
 ``
+node_modules
