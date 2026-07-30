@@ -40,7 +40,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         log.info("Checking for default PLAN_ACTION workflow...");
         List<Workflow> existingPlanActionWorkflows = workflowRepository.findByResourceType("PLAN_ACTION");
-        
+
         if (existingPlanActionWorkflows.isEmpty()) {
             log.info("No default PLAN_ACTION workflow found. Creating one...");
             createDefaultPlanActionWorkflow();
@@ -49,7 +49,95 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             log.info("Default PLAN_ACTION workflow already exists.");
         }
 
+        log.info("Checking for default DOCUMENT workflow...");
+        List<Workflow> existingDocumentWorkflows = workflowRepository.findByResourceType("DOCUMENT");
 
+        if (existingDocumentWorkflows.isEmpty()) {
+            log.info("No default DOCUMENT workflow found. Creating one...");
+            createDefaultDocumentWorkflow();
+            log.info("Default DOCUMENT workflow created successfully.");
+        } else {
+            log.info("Default DOCUMENT workflow already exists.");
+        }
+    }
+
+    /**
+     * Circuit documentaire par défaut : rédaction, vérification, approbation.
+     *
+     * <p>Il manquait, alors que la création d'un document est refusée tant qu'aucun circuit n'est
+     * associé à son type : sur une base neuve, aucun document ne pouvait être créé avant qu'un
+     * circuit n'ait été monté à la main.</p>
+     *
+     * <p>L'approbation finale est volontairement <b>terminale</b> — sans étape de destination :
+     * c'est ce qui fait remonter un statut {@code APPROVED} à support-service, qui fait alors
+     * entrer le document en vigueur. Un rejet renvoie en rédaction plutôt que de clore le
+     * circuit, le document restant en cours de traitement.</p>
+     */
+    private void createDefaultDocumentWorkflow() {
+        Workflow workflow = Workflow.builder()
+                .nom("Workflow Défaut Document")
+                .description("Circuit de validation par défaut des documents qualité")
+                .resourceType("DOCUMENT")
+                .build();
+
+        WorkflowStep redaction = WorkflowStep.builder()
+                .code("REDACTION")
+                .nomEtape("Rédaction")
+                .stepOrder(1)
+                .etatTraitement("REDACTION")
+                .description("Rédaction et dépôt du document")
+                .responsableRole("ROLE_AGENT")
+                .emailTemplateCode("emailTemplate")
+                .build();
+
+        WorkflowStep verification = WorkflowStep.builder()
+                .code("VERIFICATION")
+                .nomEtape("Vérification")
+                .stepOrder(2)
+                .etatTraitement("VERIFICATION")
+                .description("Vérification de la forme et du fond")
+                .responsableRole("ROLE_PILOTE")
+                .emailTemplateCode("structureToStructure")
+                .build();
+        verification.getFields().add(WorkflowStepField.builder().step(verification)
+                .fieldName("observationsVerification").fieldLabel("Observations du vérificateur")
+                .type(FieldType.TEXT).isRequired(false).build());
+
+        WorkflowStep approbation = WorkflowStep.builder()
+                .code("APPROBATION")
+                .nomEtape("Approbation")
+                .stepOrder(3)
+                .etatTraitement("APPROBATION")
+                .description("Approbation et mise en vigueur")
+                .responsableRole("ROLE_RESPONSABLE_QUALITE")
+                .emailTemplateCode("validationRq")
+                .build();
+
+        redaction.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(redaction).toStep(verification)
+                .decision(StepDecision.APPROUVE).label("Soumettre pour vérification").build());
+
+        verification.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(verification).toStep(approbation)
+                .decision(StepDecision.APPROUVE).label("Transmettre pour approbation").build());
+        verification.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(verification).toStep(redaction)
+                .decision(StepDecision.REJETE).label("Retourner au rédacteur").build());
+
+        // Pas d'étape de destination : l'approbation clôt le circuit et fait entrer le document
+        // en vigueur côté support-service.
+        approbation.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(approbation)
+                .decision(StepDecision.APPROUVE).label("Approuver et mettre en vigueur").build());
+        approbation.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(approbation).toStep(redaction)
+                .decision(StepDecision.REJETE).label("Refuser et retourner au rédacteur").build());
+
+        workflow.addStep(redaction);
+        workflow.addStep(verification);
+        workflow.addStep(approbation);
+
+        workflowRepository.save(workflow);
     }
 
     private void createDefaultNonConformiteWorkflow() {
