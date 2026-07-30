@@ -26,6 +26,23 @@ public class WorkflowStep {
     @JsonIgnoreProperties("steps")
     private Workflow workflow;
 
+    /**
+     * Identifiant fonctionnel de l'étape, propre au circuit et <b>immuable</b>.
+     *
+     * <p>C'est la clé stable sur laquelle s'appuient le rattachement des transitions et le
+     * rapprochement des étapes lors d'une modification. Le nom de l'étape est un libellé
+     * d'affichage : le prendre pour identité rompait toutes les destinations dès qu'on le
+     * corrigeait.</p>
+     *
+     * <p>Colonne volontairement sans contrainte {@code NOT NULL} ni unicité en base : le schéma
+     * est géré par {@code ddl-auto: update}, qui échouerait sur les lignes existantes. Le
+     * caractère obligatoire, l'unicité au sein du circuit et l'immuabilité sont garantis par
+     * {@code WorkflowService}, et les circuits antérieurs sont complétés au démarrage par
+     * {@code WorkflowStepCodeInitializer}.</p>
+     */
+    @Column(name = "code")
+    private String code;
+
     @Column(nullable = false)
     private String nomEtape;
 

@@ -25,6 +25,7 @@ public class WorkflowMapper {
         if (entity == null) return null;
         return WorkflowStepDto.builder()
                 .id(entity.getId())
+                .code(entity.getCode())
                 .nomEtape(entity.getNomEtape())
                 .stepOrder(entity.getStepOrder())
                 .responsableRole(entity.getResponsableRole())
@@ -44,6 +45,7 @@ public class WorkflowMapper {
                 .label(entity.getLabel())
                 .decision(entity.getDecision() != null ? entity.getDecision().name() : null)
                 .requiredRole(entity.getRequiredRole())
+                .toStepCode(entity.getToStep() != null ? entity.getToStep().getCode() : null)
                 .toStepId(entity.getToStep() != null ? entity.getToStep().getId() : null)
                 .toStepName(entity.getToStep() != null ? entity.getToStep().getNomEtape() : null)
                 .toStepOrder(entity.getToStep() != null ? entity.getToStep().getStepOrder() : null)
@@ -86,6 +88,7 @@ public class WorkflowMapper {
         if (dto == null) return null;
         WorkflowStep step = WorkflowStep.builder()
                 .id(dto.getId())
+                .code(dto.getCode())
                 .nomEtape(dto.getNomEtape())
                 .stepOrder(dto.getStepOrder())
                 .responsableRole(dto.getResponsableRole())
