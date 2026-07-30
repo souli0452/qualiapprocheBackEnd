@@ -72,6 +72,25 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Restitue le statut porté par une {@link org.springframework.web.server.ResponseStatusException}.
+     *
+     * <p>Sans ce gestionnaire, ces exceptions tombaient dans le filet générique et repartaient
+     * toutes en 500 : un refus métier explicite — document déjà validé, circuit non configuré,
+     * ressource introuvable — devenait indiscernable d'une panne pour l'appelant, alors que le
+     * statut voulu était porté par l'exception elle-même.</p>
+     */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        String message = ex.getReason() != null ? ex.getReason() : status.getReasonPhrase();
+        return new ResponseEntity<>(ApiResponse.error(message, status.value()), status);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         ApiResponse<Void> response = ApiResponse.error("Une erreur interne est survenue: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value());
