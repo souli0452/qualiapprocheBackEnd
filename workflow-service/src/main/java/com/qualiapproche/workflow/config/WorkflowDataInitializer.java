@@ -61,6 +61,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 1. SOUMISSION
         WorkflowStep step1 = WorkflowStep.builder()
+                .code("SOUMISSION")
                 .nomEtape("Soumission")
                 .stepOrder(1)
                 .etatTraitement("SOUMISSION")
@@ -71,6 +72,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 2. RECEPTION
         WorkflowStep step2 = WorkflowStep.builder()
+                .code("RECEPTION")
                 .nomEtape("Réception")
                 .stepOrder(2)
                 .etatTraitement("RECEPTION")
@@ -81,6 +83,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 3. IMPUTATION
         WorkflowStep step3 = WorkflowStep.builder()
+                .code("IMPUTATION")
                 .nomEtape("Imputation")
                 .stepOrder(3)
                 .etatTraitement("IMPUTATION")
@@ -92,6 +95,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 4. TRAITEMENT
         WorkflowStep step4 = WorkflowStep.builder()
+                .code("TRAITEMENT")
                 .nomEtape("Traitement")
                 .stepOrder(4)
                 .etatTraitement("TRAITEMENT")
@@ -105,6 +109,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 5. VALIDATION
         WorkflowStep step5 = WorkflowStep.builder()
+                .code("VALIDATION")
                 .nomEtape("Validation")
                 .stepOrder(5)
                 .etatTraitement("VALIDATION")
@@ -117,6 +122,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 6. VALIDATION_RS
         WorkflowStep step6 = WorkflowStep.builder()
+                .code("VALIDATION_RS")
                 .nomEtape("Validation RS")
                 .stepOrder(6)
                 .etatTraitement("VALIDATION_RS")
@@ -129,6 +135,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 7. SUIVI_RQ
         WorkflowStep step7 = WorkflowStep.builder()
+                .code("SUIVI_RQ")
                 .nomEtape("Suivi RQ")
                 .stepOrder(7)
                 .etatTraitement("SUIVI_RQ")
@@ -141,6 +148,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 8. CLOTURE
         WorkflowStep step8 = WorkflowStep.builder()
+                .code("CLOTURE")
                 .nomEtape("Clôture")
                 .stepOrder(8)
                 .etatTraitement("CLOTURE")
@@ -198,6 +206,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 1. NON_TRAITER
         WorkflowStep step1 = WorkflowStep.builder()
+                .code("NON_TRAITER")
                 .nomEtape("À Traiter")
                 .stepOrder(1)
                 .etatTraitement("NON_TRAITER")
@@ -208,6 +217,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 2. TRAITER
         WorkflowStep step2 = WorkflowStep.builder()
+                .code("TRAITER")
                 .nomEtape("Traité")
                 .stepOrder(2)
                 .etatTraitement("TRAITER")
@@ -218,6 +228,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         // 3. REJECTED
         WorkflowStep step3 = WorkflowStep.builder()
+                .code("REJECTED")
                 .nomEtape("Rejeté")
                 .stepOrder(3)
                 .etatTraitement("REJECTED")
