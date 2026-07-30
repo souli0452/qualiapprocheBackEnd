@@ -22,8 +22,6 @@ public interface NonConformiteService {
 
     List<NcStats> getNcStats(String structureSoumissionId);
 
-    void changeStatus(UUID id, Status statut);
-
     NonConformiteDto updateNonConformite(UUID id, NonConformiteDto dto) throws IOException;
 
     List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException;
@@ -44,8 +42,6 @@ public interface NonConformiteService {
 
     Page<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid, Pageable pageable);
 
-    void changeManyStatus(List<NonConformiteDto> nonConformiteDtos, Status status);
-
     NonConformiteDto getNonConformiteById(UUID id);
 
     Page<NonConformiteDto> findAll(Status status, String structureSoumissionId, Pageable pageable);
@@ -53,8 +49,6 @@ public interface NonConformiteService {
     Page<NonConformiteDto> findAllByStructure(String structureSoumissionId, Pageable pageable);
 
     void delete(UUID id);
-
-    NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) throws IOException;
 
     Map<String, Long> getNonConformiteStatsByStructure(int anne);
 
@@ -98,4 +92,6 @@ public interface NonConformiteService {
             UUID typeNonConformiteId, UUID niveauNonConformiteId,
             LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
             Pageable pageable);
+
+    void updateWorkflowState(UUID nonConformiteId, String newStateName, String newEtatTraitement);
 }

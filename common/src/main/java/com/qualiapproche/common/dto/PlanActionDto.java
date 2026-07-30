@@ -48,4 +48,6 @@ public class PlanActionDto extends AuditEntityDto {
 
     private LocalDate dateRejet;
     private String critereEfficacite;
+    private UUID workflowId;
+    private String workflowStatus;
 }

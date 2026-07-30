@@ -18,8 +18,6 @@ public interface DocumentQmsRepository extends JpaRepository<DocumentQms, UUID>,
 
     List<DocumentQms> findByEsTraiterTrueAndObsoleteFalseAndArchivedFalse();
 
-    boolean existsByCurrentStepId(Long currentStepId);
-
     @Query("SELECT MAX(d.documentNumber) FROM DocumentQms d WHERE d.documentNumber LIKE :prefix%")
     String findMaxDocumentNumberByPrefix(@Param("prefix") String prefix);
 }

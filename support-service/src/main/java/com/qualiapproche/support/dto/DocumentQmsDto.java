@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Map;
+import com.qualiapproche.common.dto.WorkflowStateDto;
 
 @Data
 @Builder
@@ -22,11 +24,9 @@ public class DocumentQmsDto {
     private String serviceLibelle;
     private String serviceSigle;
     private String redacteur;
-    private String status;
     private boolean esTraiter;
     private boolean enRetardRevision;
     private boolean obsolete;
-    private WorkflowStepDto currentStep;
     private int versionMajeure;
     private int versionMineure;
     private LocalDateTime dateVigueur;
@@ -41,10 +41,12 @@ public class DocumentQmsDto {
     private String domaine;
     private String statutLegal;
     private String ncReference;
-    private String workflowStatus;
+    private String currentEtape;
+    private UUID workflowId;
     private String currentObjectName;
     private String currentFileHash;
     private LocalDateTime createdAt;
     private String createdById;
     private String currentUserfullName;
+    private WorkflowStateDto workflowState;
 }

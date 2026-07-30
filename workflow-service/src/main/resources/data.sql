@@ -1,0 +1,43 @@
+INSERT INTO workflow_email_template (id, code, subject, body, description, created_at)
+VALUES (
+    gen_random_uuid(),
+    'NOTIF_NON_CONFORMITE',
+    'Attribution d''une non-conformité',
+    '<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body style="margin: 0; padding: 0; min-width: 100%; width: 100% !important; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, ''Segoe UI'', Roboto, Helvetica, Arial, sans-serif;">
+<div style="width: 100%; background-color: #f3f4f6; padding: 40px 0;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); border: 1px solid #e5e7eb;">
+        <!-- Header -->
+        <div style="background-color: #1e3a8a; padding: 32px; text-align: center;">
+            <div style="color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">quali-sira</div>
+            <div style="color: #93c5fd; font-size: 11px; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Système d’Information & Gestion Qualité</div>
+        </div>
+        <!-- Body -->
+        <div style="padding: 40px 32px; color: #374151;">
+            <h1 style="font-size: 20px; font-weight: 700; color: #1e3a8a; margin-top: 0; margin-bottom: 20px; line-height: 1.4;">📄 {{subject}}</h1>
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Cher(e) {{user}},</p>
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Nous vous informons qu''une demande de traitement vous a été personnellement imputée.</p>
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 0; margin-bottom: 16px;">Nous vous prions de bien vouloir consulter les détails de ce dossier et d''engager les actions requises dans les plus brefs délais :</p>
+            <div style="margin: 32px 0; text-align: center;">
+                <a href="{{link}}" target="_blank" style="display: inline-block; background-color: #3b82f6; color: #ffffff !important; text-decoration: none; padding: 14px 28px; font-size: 15px; font-weight: 600; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);">Consulter la demande</a>
+            </div>
+            <p style="font-size: 15px; line-height: 1.6; color: #4b5563; margin-top: 24px; margin-bottom: 0;">Merci pour votre rigueur et votre confiance.</p>
+        </div>
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 24px 32px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #9ca3af; line-height: 1.5; text-align: center;">
+            <div style="margin-bottom: 6px;"><span style="color: #6b7280; font-weight: 600;">quali-sira</span> • Cabinet Conseil en Gestion de Qualité</div>
+            <div style="margin-bottom: 6px;">BURKINA FASO • Siège social : Ouagadougou</div>
+            <div style="margin-top: 12px; font-size: 10px; color: #d1d5db;">Ce message vous a été envoyé automatiquement. Merci de ne pas y répondre directement.</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>',
+    'Modèle par défaut pour l''attribution d''une tâche dans un workflow',
+    now()
+) ON CONFLICT (code) DO NOTHING;

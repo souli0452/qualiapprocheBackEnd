@@ -1,0 +1,49 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: workflow-service
+  datasource:
+    url: ${DB_URL_WORKFLOW:jdbc:postgresql://localhost:5432/qualisira_workflowdb}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
+      # Utilisé par FeignConfig pour authentifier les webhooks émis hors requête utilisateur
+      # (notifications publiées après commit d'une transition).
+      client:
+        registration:
+          keycloak:
+            client-id: ${KC_CLIENT_ID:quali-sira}
+            client-secret: ${KC_CLIENT_SECRET:URd095w8aGdw1wJ53HLDd1cxkvJEJReC}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${KC_TOKEN_URI:http://localhost:8080/realms/quali/protocol/openid-connect/token}
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:tachquali@gmail.com}
+    password: ${MAIL_PASSWORD:qpkcnamwhjfkundy}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
