@@ -8,4 +8,6 @@ import java.util.UUID;
 
 @Repository
 public interface WorkflowStepTemplateRepository extends JpaRepository<WorkflowStepTemplate, UUID> {
+
+    java.util.Optional<WorkflowStepTemplate> findByCode(String code);
 }
