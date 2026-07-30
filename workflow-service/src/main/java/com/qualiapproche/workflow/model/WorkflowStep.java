@@ -9,7 +9,9 @@ import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
-@Table(name = "workflow_step")
+@Table(name = "workflow_step",
+        uniqueConstraints = @UniqueConstraint(name = "uk_workflow_step_code",
+                columnNames = {"workflow_id", "code"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,13 +36,12 @@ public class WorkflowStep {
      * d'affichage : le prendre pour identité rompait toutes les destinations dès qu'on le
      * corrigeait.</p>
      *
-     * <p>Colonne volontairement sans contrainte {@code NOT NULL} ni unicité en base : le schéma
-     * est géré par {@code ddl-auto: update}, qui échouerait sur les lignes existantes. Le
-     * caractère obligatoire, l'unicité au sein du circuit et l'immuabilité sont garantis par
-     * {@code WorkflowService}, et les circuits antérieurs sont complétés au démarrage par
-     * {@code WorkflowStepCodeInitializer}.</p>
+     * <p>Obligatoire et unique au sein d'un circuit, garanti par la base autant que par
+     * {@code WorkflowService}. L'unicité est portée par le couple (circuit, code) et non par le
+     * code seul : deux circuits distincts peuvent légitimement comporter chacun une étape
+     * {@code VALIDATION}.</p>
      */
-    @Column(name = "code")
+    @Column(name = "code", nullable = false)
     private String code;
 
     @Column(nullable = false)

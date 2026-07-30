@@ -16,14 +16,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Complète les circuits antérieurs à l'introduction du code d'étape.
+ * Filet de sécurité pour les bases créées avant l'introduction du code d'étape.
  *
- * <p>Le code est l'identité fonctionnelle d'une étape, mais les circuits déjà en base ont été
- * créés sans. Ce rattrapage leur en attribue un, dérivé du nom, une seule fois : les étapes qui
- * en possèdent déjà un ne sont jamais touchées, le code étant immuable.</p>
+ * <p>La colonne est désormais obligatoire et unique par circuit, et les circuits par défaut
+ * portent leur code explicitement : sur une base neuve, ce rattrapage ne trouve rien à faire.
+ * Il ne sert qu'aux bases plus anciennes, dont les étapes n'ont pas encore de code, et leur en
+ * attribue un dérivé du nom — une seule fois, le code étant ensuite immuable.</p>
  *
- * <p>Exécuté après {@code WorkflowDataInitializer} pour que les circuits par défaut, créés au
- * premier démarrage, soient également couverts.</p>
+ * <p>Exécuté après {@code WorkflowDataInitializer} et avant toute écriture d'étape.</p>
  */
 @Component
 @RequiredArgsConstructor
