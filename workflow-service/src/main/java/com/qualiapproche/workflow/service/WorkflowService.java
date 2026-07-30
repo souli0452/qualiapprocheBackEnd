@@ -304,40 +304,81 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         step.getTransitions().addAll(merged);
     }
 
+    /**
+     * Rattache chaque transition à son étape de destination.
+     *
+     * <p>Deux défauts corrigés ici. D'une part la destination n'était cherchée que si
+     * {@code toStepId} était fourni : à la création d'un circuit, les étapes n'ont pas encore
+     * d'identifiant, si bien qu'<b>aucune</b> transition ne pouvait recevoir de destination et que
+     * tout le circuit se terminait dès la première décision. La résolution accepte donc aussi le
+     * nom et le rang de l'étape, les deux clés dont dispose l'appelant avant enregistrement.</p>
+     *
+     * <p>D'autre part l'appariement entre entités et DTO se faisait par position, alors que
+     * {@code mergeSteps} écarte au passage les doublons : les deux listes pouvaient diverger et
+     * décaler les destinations. L'appariement se fait maintenant par identité d'étape.</p>
+     */
     private void resolveTransitions(Workflow workflow, WorkflowDto dto) {
-        // Map toStepId to actual step entities for transitions
-        if (workflow.getSteps() != null && dto.getSteps() != null) {
-            for (int i = 0; i < workflow.getSteps().size(); i++) {
-                WorkflowStep step = workflow.getSteps().get(i);
-                WorkflowStepDto stepDto = dto.getSteps().get(i);
-                
-                if (step.getTransitions() != null && stepDto.getTransitions() != null) {
-                    for (int j = 0; j < step.getTransitions().size(); j++) {
-                        WorkflowTransition transition = step.getTransitions().get(j);
-                        WorkflowTransitionDto transitionDto = stepDto.getTransitions().get(j);
-                        
-                        if (transitionDto.getToStepId() != null) {
-                            // Find the step in the workflow by ID (if it exists) or assume they are created in the same transaction
-                            // For simplicity, we find it from the incoming list (this works if IDs are assigned, but for new steps they are not).
-                            // A better way is to find it by stepOrder or a temporary frontend ID.
-                            WorkflowStep toStep = workflow.getSteps().stream()
-                                    .filter(s -> s.getId() != null && s.getId().equals(transitionDto.getToStepId()))
-                                    .findFirst()
-                                    .orElse(null);
-                            
-                            // If toStepId doesn't match an existing ID (e.g., new step), fallback to finding by stepOrder if toStepName matches
-                            if (toStep == null && transitionDto.getToStepName() != null) {
-                                toStep = workflow.getSteps().stream()
-                                        .filter(s -> transitionDto.getToStepName().equals(s.getNomEtape()))
-                                        .findFirst()
-                                        .orElse(null);
-                            }
-                            transition.setToStep(toStep);
-                        }
-                    }
+        if (workflow.getSteps() == null || dto.getSteps() == null) {
+            return;
+        }
+
+        for (WorkflowStep step : workflow.getSteps()) {
+            WorkflowStepDto stepDto = dtoDeLEtape(dto, step);
+            if (stepDto == null || step.getTransitions() == null || stepDto.getTransitions() == null) {
+                continue;
+            }
+
+            for (WorkflowTransition transition : step.getTransitions()) {
+                WorkflowTransitionDto transitionDto = dtoDeLaTransition(stepDto, transition);
+                if (transitionDto != null) {
+                    transition.setToStep(etapeDestination(workflow, transitionDto));
                 }
             }
         }
+    }
+
+    private WorkflowStepDto dtoDeLEtape(WorkflowDto dto, WorkflowStep step) {
+        return dto.getSteps().stream()
+                .filter(s -> (step.getId() != null && step.getId().equals(s.getId()))
+                        || (step.getNomEtape() != null && step.getNomEtape().equals(s.getNomEtape())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private WorkflowTransitionDto dtoDeLaTransition(WorkflowStepDto stepDto, WorkflowTransition transition) {
+        return stepDto.getTransitions().stream()
+                .filter(t -> (transition.getId() != null && transition.getId().equals(t.getId()))
+                        || (transition.getDecision() != null && t.getDecision() != null
+                                && transition.getDecision().name().equals(t.getDecision())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Destination désignée par identifiant, à défaut par nom d'étape, à défaut par rang. */
+    private WorkflowStep etapeDestination(Workflow workflow, WorkflowTransitionDto transitionDto) {
+        if (transitionDto.getToStepId() != null) {
+            WorkflowStep parId = workflow.getSteps().stream()
+                    .filter(s -> transitionDto.getToStepId().equals(s.getId()))
+                    .findFirst().orElse(null);
+            if (parId != null) {
+                return parId;
+            }
+        }
+        if (transitionDto.getToStepName() != null) {
+            WorkflowStep parNom = workflow.getSteps().stream()
+                    .filter(s -> transitionDto.getToStepName().equals(s.getNomEtape()))
+                    .findFirst().orElse(null);
+            if (parNom != null) {
+                return parNom;
+            }
+        }
+        if (transitionDto.getToStepOrder() != null) {
+            return workflow.getSteps().stream()
+                    .filter(s -> transitionDto.getToStepOrder() == s.getStepOrder())
+                    .findFirst().orElse(null);
+        }
+        // Aucune destination désignée : transition terminale, l'état de fin est synthétisé.
+        return null;
     }
 
     @Override
