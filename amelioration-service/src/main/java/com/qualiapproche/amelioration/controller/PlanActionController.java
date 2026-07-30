@@ -21,10 +21,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 
 @RestController
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @RequestMapping(PLAN_ACTION_ROOT_URL)
 public class PlanActionController {
 
     private final PlanActionService planActionService;
+    private final com.qualiapproche.amelioration.client.WorkflowClient workflowClient;
 
     @PostMapping(CREATE_PLAN_ACTION)
     public ResponseEntity<PlanActionDto> create(@RequestBody PlanActionDto dto) throws IOException {
@@ -40,7 +42,21 @@ public class PlanActionController {
     @GetMapping(GET_PLAN_ACTION_BY_ID)
     public ResponseEntity<PlanActionDto> getById(@PathVariable UUID id) {
         PlanActionDto planActionDto  = planActionService.getPlanActionDtoById(id);
+        planActionDto.setWorkflowState(etatWorkflow(id));
         return new ResponseEntity<>(planActionDto, HttpStatus.OK);
+    }
+
+    /**
+     * Étape courante et actions autorisées du circuit de validation. Une indisponibilité du
+     * service de workflow ne doit pas empêcher la consultation du plan d'action.
+     */
+    private com.qualiapproche.common.dto.WorkflowStateDto etatWorkflow(UUID resourceId) {
+        try {
+            return workflowClient.getWorkflowState(resourceId);
+        } catch (Exception e) {
+            log.warn("État du workflow indisponible pour le plan d'action {} : {}", resourceId, e.getMessage());
+            return null;
+        }
     }
     @DeleteMapping(DELETE_PLAN_ACTION)
     public void deleteyId(@PathVariable UUID id) {

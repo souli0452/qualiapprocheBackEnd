@@ -50,4 +50,7 @@ public class PlanActionDto extends AuditEntityDto {
     private String critereEfficacite;
     private UUID workflowId;
     private String workflowStatus;
+
+    /** État du circuit de validation du plan d'action (cf. {@link NonConformiteDto#getWorkflowState()}). */
+    private WorkflowStateDto workflowState;
 }

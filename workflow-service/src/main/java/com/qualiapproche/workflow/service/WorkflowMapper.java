@@ -45,6 +45,7 @@ public class WorkflowMapper {
                 .requiredRole(entity.getRequiredRole())
                 .toStepId(entity.getToStep() != null ? entity.getToStep().getId() : null)
                 .toStepName(entity.getToStep() != null ? entity.getToStep().getNomEtape() : null)
+                .toStepOrder(entity.getToStep() != null ? entity.getToStep().getStepOrder() : null)
                 .build();
     }
 

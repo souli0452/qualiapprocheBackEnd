@@ -39,7 +39,7 @@ public class WorkflowController {
     }
 
     @GetMapping("/type/{documentType}")
-    public ResponseEntity<List<com.qualiapproche.workflow.model.Workflow>> getWorkflowsByType(@PathVariable String documentType) {
+    public ResponseEntity<List<com.qualiapproche.workflow.dto.WorkflowDto>> getWorkflowsByType(@PathVariable String documentType) {
         return ResponseEntity.ok(workflowService.getWorkflowsByType(documentType));
     }
 
@@ -53,7 +53,7 @@ public class WorkflowController {
     }
 
     @GetMapping("/{workflowId}")
-    public ResponseEntity<com.qualiapproche.workflow.model.Workflow> getWorkflowById(@PathVariable UUID workflowId) {
+    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> getWorkflowById(@PathVariable UUID workflowId) {
         return ResponseEntity.ok(workflowService.getWorkflowById(workflowId));
     }
 
@@ -72,6 +72,23 @@ public class WorkflowController {
                     .build();
         }
         return ResponseEntity.ok(state);
+    }
+
+    /**
+     * États de plusieurs ressources en un seul appel, pour l'affichage d'une liste : sans cela,
+     * une page de N documents déclenchait N requêtes.
+     */
+    @PostMapping("/instances/states")
+    public ResponseEntity<java.util.Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto>> getWorkflowStates(
+            @RequestBody List<UUID> resourceIds) {
+        return ResponseEntity.ok(workflowService.getWorkflowStatesForResources(resourceIds));
+    }
+
+    /** Traçabilité du circuit d'une ressource : décisions, auteurs, commentaires, valeurs saisies. */
+    @GetMapping("/instances/{resourceId}/history")
+    public ResponseEntity<List<com.qualiapproche.workflow.dto.ValidationHistoryDto>> getValidationHistory(
+            @PathVariable UUID resourceId) {
+        return ResponseEntity.ok(workflowService.getValidationHistory(resourceId));
     }
 
     @PostMapping("/initiate")
