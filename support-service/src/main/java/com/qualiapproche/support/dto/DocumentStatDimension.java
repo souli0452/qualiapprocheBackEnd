@@ -18,7 +18,7 @@ public enum DocumentStatDimension {
             if (d.isArchived()) return "ARCHIVE";
             if (d.isObsolete()) return "OBSOLETE";
             if (d.isEsTraiter()) return "VALIDE";
-            if (d.getCurrentStep() != null) return "EN_COURS";
+            if (d.getCurrentEtape() != null && !d.getCurrentEtape().isBlank()) return d.getCurrentEtape();
             return "BROUILLON";
         }
     },
@@ -37,8 +37,8 @@ public enum DocumentStatDimension {
     PROCESSUS_DEST {
         public String extract(DocumentQms d) { return d.getProcessusDestLibelle(); }
     },
-    WORKFLOW_STATUS {
-        public String extract(DocumentQms d) { return d.getWorkflowStatus(); }
+    CURRENT_ETAPE {
+        public String extract(DocumentQms d) { return d.getCurrentEtape(); }
     },
     ANNEE_CREATION {
         public String extract(DocumentQms d) {

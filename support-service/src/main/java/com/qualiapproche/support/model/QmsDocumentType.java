@@ -7,6 +7,8 @@ import jakarta.persistence.Table;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "qms_document_types")
 @Getter
@@ -24,4 +26,7 @@ public class QmsDocumentType extends AuditEntity {
 
     @Column(nullable = false)
     private String folderName;
+
+    @Column(name = "workflow_id")
+    private UUID workflowId;
 }

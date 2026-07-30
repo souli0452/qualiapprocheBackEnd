@@ -17,8 +17,6 @@ public interface PlanActionService {
     Page<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut, Pageable pageable);
     PlanActionDto getPlanActionDtoById(UUID id);
     Page<PlanActionDto> planActionByResponsableAll(String responsable, Pageable pageable);
-    PlanActionDto changeStatus(PlanActionDto dto) throws IOException ;
-    PlanActionDto rejet(PlanActionDto dto) throws IOException ;
     void delete(UUID id);
     Map<String, Map<String, Map<String, Long>>> getFrequenceTraitementParMois(int annee);
 
@@ -30,4 +28,6 @@ public interface PlanActionService {
             java.time.LocalDate dateEcheanceFrom, java.time.LocalDate dateEcheanceTo,
             java.time.LocalDate dateTraitementFrom, java.time.LocalDate dateTraitementTo,
             Pageable pageable);
+
+    void updateWorkflowState(UUID planActionId, String newStateName, String newEtatTraitement);
 }

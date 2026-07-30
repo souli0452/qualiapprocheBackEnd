@@ -96,4 +96,6 @@ public class NonConformiteDto extends AuditEntityDto {
     @Enumerated(EnumType.STRING)
     private Circuit circuit;
     private String actionPreventive;
+    private String workflowStatus;
+    private UUID workflowId;
 }

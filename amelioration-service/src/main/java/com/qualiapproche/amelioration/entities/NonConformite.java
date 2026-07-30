@@ -63,6 +63,13 @@ public class NonConformite extends AuditEntity {
   private UUID typeNonConformiteId;
   private UUID typeProcessusId;
   private String delaisMiseOeuvre;
+  
+  @Column(name = "workflow_status")
+  private String workflowStatus;
+  
+  @Column(name = "workflow_id")
+  private UUID workflowId;
+
   @Enumerated(EnumType.STRING)
   private Etat etatTraitement;
   @Enumerated(EnumType.STRING)

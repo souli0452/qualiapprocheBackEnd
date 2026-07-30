@@ -69,6 +69,13 @@ spring:
           filters:
             - RewritePath=/contexte-service/(?<segment>.*), /${segment}
 
+        - id: workflow-service
+          uri: lb://WORKFLOW-SERVICE
+          predicates:
+            - Path=/workflow-service/**
+          filters:
+            - RewritePath=/workflow-service/(?<segment>.*), /${segment}
+
 springdoc:
   swagger-ui:
     urls:
@@ -88,6 +95,8 @@ springdoc:
         url: /planification-service/v3/api-docs
       - name: contexte-service
         url: /contexte-service/v3/api-docs
+      - name: workflow-service
+        url: /workflow-service/v3/api-docs
 
 eureka:
   client:

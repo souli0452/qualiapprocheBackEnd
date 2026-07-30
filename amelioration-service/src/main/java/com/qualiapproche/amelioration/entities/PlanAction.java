@@ -111,4 +111,6 @@ public class PlanAction extends AuditEntity {
   private LocalDate dateRejet;
   @Column(columnDefinition = "TEXT")
   private String critereEfficacite;
+  private UUID workflowId;
+  private String workflowStatus;
 }

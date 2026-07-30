@@ -7,14 +7,13 @@ import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.model.DocumentUserAccess;
-import com.qualiapproche.support.model.DocumentValidationInstance;
-import com.qualiapproche.support.model.DocumentWorkflow;
 import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.model.QmsDocumentVersion;
 import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.DocumentUserAccessRepository;
-import com.qualiapproche.support.repository.DocumentValidationInstanceRepository;
-import com.qualiapproche.support.repository.DocumentWorkflowRepository;
+import com.qualiapproche.support.client.WorkflowClient;
+import com.qualiapproche.common.dto.WorkflowInstanceDto;
+import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.support.repository.QmsDocumentVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,10 +65,8 @@ public class QmsDocumentService {
     private final QmsAuditLogService auditLogService;
     private final MinioService minioService;
     private final QmsDocumentTypeService typeService;
-    private final WorkflowService workflowService;
     private final MailService mailService;
-    private final DocumentWorkflowRepository workflowRepository;
-    private final DocumentValidationInstanceRepository validationInstanceRepository;
+    private final WorkflowClient workflowClient;
 
     /**
      * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
@@ -97,37 +94,46 @@ public class QmsDocumentService {
     ) {
         log.info("Creating new QMS document: type={}, serviceId={}", documentType, serviceId);
 
-        // 1. Verify and resolve workflow for the document type
+        // 1. Resolve customizable Document Type config
+        QmsDocumentType docType = typeService.getTypeByCode(documentType);
+
+        // 2. Verify and resolve workflow for the document type
         UUID finalWorkflowId = workflowId;
-        if (finalWorkflowId == null && documentType != null) {
-            List<DocumentWorkflow> workflowsForType = workflowRepository.findByDocumentType(documentType);
-            if (!workflowsForType.isEmpty()) {
-                finalWorkflowId = workflowsForType.get(0).getId();
+        if (finalWorkflowId == null) {
+            finalWorkflowId = docType.getWorkflowId();
+            
+            // Fallback pour compatibilité ascendante si le champ n'est pas encore renseigné en base
+            if (finalWorkflowId == null && documentType != null) {
+                WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType(documentType);
+                if (activeWorkflow != null && activeWorkflow.getId() != null) {
+                    finalWorkflowId = activeWorkflow.getId();
+                }
             }
         }
 
         if (finalWorkflowId == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + documentType + "'. Veuillez d'abord créer et configurer un circuit de validation pour ce type de document."
+                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + docType.getLibelle() + "'. Veuillez d'abord configurer le type de document avec un workflow valide."
             );
         }
 
-        DocumentWorkflow workflow = workflowRepository.findById(finalWorkflowId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Le circuit de validation (workflow) spécifié est introuvable."
-                ));
-
-        if (workflow.getSteps() == null || workflow.getSteps().isEmpty()) {
+        Map<String, Object> workflow = null;
+        try {
+            workflow = workflowClient.getWorkflowById(finalWorkflowId);
+        } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Le circuit de validation '" + workflow.getNom() + "' n'a aucune étape configurée. Veuillez configurer les étapes du workflow avant de créer un document."
+                    "Le circuit de validation (workflow) spécifié est introuvable."
             );
         }
 
-        // 2. Resolve customizable Document Type config
-        QmsDocumentType docType = typeService.getTypeByCode(documentType);
+        if (workflow == null || workflow.get("steps") == null || ((List<?>) workflow.get("steps")).isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Le circuit de validation '" + workflow.get("nom") + "' n'a aucune étape configurée. Veuillez configurer les étapes du workflow avant de créer un document."
+            );
+        }
 
         // 3. Auto-generate document number
         String documentNumber = generateDocumentNumber(docType.getCode(), serviceSigle != null ? serviceSigle : "GEN");
@@ -191,7 +197,12 @@ public class QmsDocumentService {
         auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
 
         // 8. Associate workflow immediately
-        workflowService.initiateWorkflow(document, finalWorkflowId);
+        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", finalWorkflowId);
+        document.setWorkflowId(finalWorkflowId);
+        if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
+            document.setCurrentEtape(workflowInstance.getCurrentStateName());
+        }
+        document = documentRepository.save(document);
 
         return document;
     }
@@ -201,11 +212,15 @@ public class QmsDocumentService {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
 
-        if (document.getCurrentStep() != null || "EN_COURS".equalsIgnoreCase(document.getWorkflowStatus())) {
+        if (document.getCurrentEtape() != null && !document.getCurrentEtape().isBlank()) {
             throw new IllegalStateException("Ce document est déjà soumis à un circuit de validation.");
         }
 
-        workflowService.initiateWorkflow(document, workflowId);
+        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", workflowId);
+        document.setWorkflowId(workflowId);
+        if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
+            document.setCurrentEtape(workflowInstance.getCurrentStateName());
+        }
         
         auditLogService.logAction("ASSIGNATION_WORKFLOW", document.getDocumentNumber(), "Un circuit de validation a été assigné au document.");
         
@@ -253,18 +268,25 @@ public class QmsDocumentService {
         auditLogService.logAction("MISE_A_JOUR_VERSION", document.getDocumentNumber(), "Nouvelle version ajoutée: " + versionLabel);
 
         if (requiresRevalidation) {
-            Optional<DocumentWorkflow> previousWorkflow = validationInstanceRepository
-                    .findTopByDocumentIdOrderByStartedAtDesc(documentId)
-                    .map(DocumentValidationInstance::getWorkflow);
+            WorkflowInstanceDto previousInstance = null;
+            try {
+                previousInstance = workflowClient.getLastValidationInstance(documentId);
+            } catch (Exception ignored) {
+            }
 
-            if (previousWorkflow.isPresent()) {
-                workflowService.initiateWorkflow(document, previousWorkflow.get().getId());
+            if (previousInstance != null && previousInstance.getWorkflowId() != null) {
+                UUID prevWorkflowId = previousInstance.getWorkflowId();
+                WorkflowInstanceDto newInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", prevWorkflowId);
+                document.setWorkflowId(prevWorkflowId);
+                if (newInstance != null && newInstance.getCurrentStateName() != null) {
+                    document.setCurrentEtape(newInstance.getCurrentStateName());
+                }
+                documentRepository.save(document);
                 auditLogService.logAction("REVALIDATION_REQUISE", document.getDocumentNumber(),
-                        "Nouvelle version déposée sur un document validé : le circuit de validation (" +
-                                previousWorkflow.get().getNom() + ") est relancé automatiquement.");
+                        "Nouvelle version déposée sur un document validé : le circuit de validation est relancé automatiquement.");
             } else {
                 document.setEsTraiter(false);
-                document.setWorkflowStatus(null);
+                document.setCurrentEtape(null);
                 documentRepository.save(document);
                 auditLogService.logAction("REVALIDATION_REQUISE", document.getDocumentNumber(),
                         "Nouvelle version déposée sur un document validé sans circuit associé : retour en brouillon, " +
@@ -288,7 +310,6 @@ public class QmsDocumentService {
 
         if ("valide".equalsIgnoreCase(nextStatus) || "traite".equalsIgnoreCase(nextStatus)) {
             doc.setEsTraiter(true);
-            doc.setCurrentStep(null);
             doc.setObsolete(false);
             doc.setEnRetardRevision(false);
 
@@ -302,18 +323,70 @@ public class QmsDocumentService {
             doc.setVersionMineure(0);
         } else if ("obsolete".equalsIgnoreCase(nextStatus)) {
             doc.setEsTraiter(false);
-            doc.setCurrentStep(null);
             doc.setObsolete(true);
         } else if ("brouillon".equalsIgnoreCase(nextStatus)) {
             doc.setEsTraiter(false);
-            doc.setCurrentStep(null);
             doc.setObsolete(false);
+            doc.setCurrentEtape(null);
+        } else if ("en_approbation".equalsIgnoreCase(nextStatus) || "en_cours".equalsIgnoreCase(nextStatus)) {
+            if (doc.getWorkflowId() != null) {
+                WorkflowInstanceDto wfInstance = workflowClient.initiateWorkflow(doc.getId(), "DOCUMENT", doc.getWorkflowId());
+                if (wfInstance != null && wfInstance.getCurrentStateName() != null) {
+                    doc.setCurrentEtape(wfInstance.getCurrentStateName());
+                } else {
+                    doc.setCurrentEtape("EN_COURS");
+                }
+            } else {
+                doc.setCurrentEtape("EN_COURS");
+            }
         }
 
         doc = documentRepository.save(doc);
         auditLogService.logAction("TRANSITION_STATUT", doc.getDocumentNumber(), "Transition de " + oldState + " vers " + nextStatus + ". Raison : " + reason);
 
         return doc;
+    }
+
+    /**
+     * Applique au document l'issue d'une transition de workflow.
+     *
+     * <p>Le cycle de vie du document est piloté par {@code status}, valeur machine émise par
+     * workflow-service ({@code EN_COURS} / {@code APPROVED} / {@code REJECTED}), tandis que
+     * {@code statusName} n'est que le libellé de l'étape atteinte, affiché tel quel. La version
+     * précédente testait le libellé lui-même contre « APPROVED »/« VALIDE » : comme les étapes
+     * réelles s'appellent « Validation RS », « Suivi RQ »…, aucun test ne passait jamais et le
+     * document restait indéfiniment en brouillon.</p>
+     *
+     * @param status     issue machine de la transition
+     * @param statusName libellé de l'étape atteinte, à afficher
+     * @param comments   commentaire saisi lors de la décision
+     */
+    @Transactional
+    public void updateWorkflowStatus(UUID documentId, String status, String statusName, String comments) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        log.info("Received external workflow status update for document '{}': status={}, étape={}",
+                doc.getDocumentNumber(), status, statusName);
+
+        doc.setCurrentEtape(statusName);
+        if ("APPROVED".equalsIgnoreCase(status)) {
+            transitionStatus(documentId, "valide", comments != null ? comments : "Validation workflow complétée");
+        } else if ("REJECTED".equalsIgnoreCase(status)) {
+            transitionStatus(documentId, "brouillon", comments != null ? comments : "Validation workflow rejetée");
+        } else {
+            documentRepository.save(doc);
+        }
+    }
+
+    @Transactional
+    public void logWorkflowAudit(UUID documentId, String action, String details) {
+        DocumentQms doc = documentRepository.findById(documentId).orElse(null);
+        if (doc != null) {
+            auditLogService.logAction(action, doc.getDocumentNumber(), details != null ? details : "Action workflow exécutée");
+        } else {
+            log.warn("Cannot log workflow audit for non-existent document ID: {}", documentId);
+        }
     }
 
     /**
@@ -331,7 +404,6 @@ public class QmsDocumentService {
         if ("mise_a_jour_document".equalsIgnoreCase(actionCorrective)) {
             // Trigger revision: reset step and esTraiter to back to draft
             doc.setEsTraiter(false);
-            doc.setCurrentStep(null);
             doc.setObsolete(false);
             doc.setVersionMineure(doc.getVersionMineure() + 1);
             doc.setLastModifiedReason("Modification initiée par Action Corrective suite à NC : " + ncRef);
@@ -558,8 +630,8 @@ public class QmsDocumentService {
                 predicates.add(cb.equal(root.get("createdById"), criteria.getCreatedById()));
             }
 
-            if (criteria.getWorkflowStatus() != null && !criteria.getWorkflowStatus().isBlank()) {
-                predicates.add(cb.equal(root.get("workflowStatus"), criteria.getWorkflowStatus()));
+            if (criteria.getCurrentEtape() != null && !criteria.getCurrentEtape().isBlank()) {
+                predicates.add(cb.equal(root.get("currentEtape"), criteria.getCurrentEtape()));
             }
 
             // ---- Filtres multi-valeurs ----
@@ -569,13 +641,13 @@ public class QmsDocumentService {
                     if ("brouillon".equalsIgnoreCase(statusVal)) {
                         statusPredicates.add(cb.and(
                             cb.isFalse(root.get("esTraiter")),
-                            cb.isNull(root.get("currentStep")),
+                            cb.isNull(root.get("currentEtape")),
                             cb.isFalse(root.get("obsolete")),
                             cb.isFalse(root.get("archived"))
                         ));
                     } else if ("en_approbation".equalsIgnoreCase(statusVal)) {
                         statusPredicates.add(cb.and(
-                            cb.isNotNull(root.get("currentStep")),
+                            cb.isNotNull(root.get("currentEtape")),
                             cb.isFalse(root.get("esTraiter")),
                             cb.isFalse(root.get("obsolete")),
                             cb.isFalse(root.get("archived"))
@@ -914,7 +986,7 @@ public class QmsDocumentService {
         if (doc.isArchived()) return "ARCHIVE";
         if (doc.isObsolete()) return "OBSOLETE";
         if (doc.isEsTraiter()) return "VALIDE";
-        if (doc.getCurrentStep() != null) return "EN_COURS";
+        if (doc.getCurrentEtape() != null && !doc.getCurrentEtape().isBlank()) return doc.getCurrentEtape();
         return "BROUILLON";
     }
 
