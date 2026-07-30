@@ -646,7 +646,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             return; // état terminal : aucune saisie attendue
         }
 
-        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndRequiredTrue(stepId);
+        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndIsRequiredTrue(stepId);
         if (requis.isEmpty()) {
             return;
         }
