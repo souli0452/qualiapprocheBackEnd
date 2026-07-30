@@ -185,6 +185,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             step.setDescription(stepDto.getDescription());
             step.setEtatTraitement(stepDto.getEtatTraitement());
             step.setEmailTemplateCode(stepDto.getEmailTemplateCode());
+            step.setStepTemplateId(stepDto.getStepTemplateId());
             step.setWorkflow(existing);
             mergeTransitions(step, stepDto);
             mergeFields(step, stepDto);
@@ -580,6 +581,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         "Aucun circuit de validation en cours pour cette ressource.",
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
+        verifierEtapeAttendue(instance, request);
+        verifierChampsRequis(instance, request);
+
         String comments = request != null ? request.getComments() : null;
 
         // Perform transition using abstract service directly with the transition code
@@ -595,12 +599,74 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         "Aucun circuit de validation en cours pour cette ressource.",
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
+        verifierEtapeAttendue(instance, request);
+        verifierChampsRequis(instance, request);
+
         String comments = request != null ? request.getComments() : null;
 
         WorkflowValidationInstance updatedInstance =
                 this.executerTransition(instance.getId(), resoudreCodeTransition(instance, decision), comments);
 
         attachHistoryFields(updatedInstance, request);
+    }
+
+    /**
+     * Rejette une décision prise depuis un écran périmé — et, du même coup, le second envoi d'un
+     * double clic : la première demande a déjà changé l'étape courante, la seconde ne correspond
+     * donc plus à l'étape attendue.
+     *
+     * <p>Le contrôle ne s'applique que si l'appelant transmet {@code expectedStateCode}. Les
+     * franchissements concurrents qui passeraient malgré tout restent arbitrés par le verrouillage
+     * optimiste de l'instance ({@code @Version}), qui répond également en 409.</p>
+     */
+    private void verifierEtapeAttendue(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
+        String attendu = request != null ? request.getExpectedStateCode() : null;
+        if (attendu == null || attendu.isBlank()) {
+            return;
+        }
+        if (!attendu.equals(instance.getEtatCode())) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Ce dossier a changé d'étape entre-temps. Rechargez-le avant de décider à nouveau.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+    }
+
+    /**
+     * Contrôle que tous les champs obligatoires de l'étape courante sont renseignés.
+     *
+     * <p>La vérification n'existait que sur les champs effectivement transmis, et intervenait après
+     * le franchissement : un champ requis simplement omis passait sans erreur, et la transition
+     * était déjà jouée quand la validation échouait. Elle a donc lieu ici, avant toute exécution.</p>
+     */
+    private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
+        Long stepId;
+        try {
+            stepId = Long.valueOf(instance.getEtatCode());
+        } catch (NumberFormatException e) {
+            return; // état terminal : aucune saisie attendue
+        }
+
+        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndRequiredTrue(stepId);
+        if (requis.isEmpty()) {
+            return;
+        }
+
+        Map<Long, String> saisis = request != null && request.getFields() != null
+                ? request.getFields() : Map.of();
+
+        List<String> manquants = requis.stream()
+                .filter(field -> {
+                    String valeur = saisis.get(field.getId());
+                    return valeur == null || valeur.isBlank();
+                })
+                .map(WorkflowStepField::getFieldLabel)
+                .toList();
+
+        if (!manquants.isEmpty()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Champ(s) obligatoire(s) non renseigné(s) : " + String.join(", ", manquants) + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 
     /**

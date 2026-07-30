@@ -1,14 +1,14 @@
 package com.qualiapproche.workflow.event;
 
 import com.qualiapproche.workflow.model.EmailTemplate;
+import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.AmeliorationWebhookClient;
 import com.qualiapproche.workflow.service.SmtpEmailService;
-import com.qualiapproche.workflow.service.SupportWebhookClient;
+import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -53,24 +53,53 @@ public class WorkflowEventListener {
     private final EmailTemplateRepository emailTemplateRepository;
     private final SmtpEmailService emailService;
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
-    private final SupportWebhookClient supportWebhookClient;
-    private final AmeliorationWebhookClient ameliorationWebhookClient;
+    private final WorkflowNotificationService notificationService;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void handleTransitionFranchieEvent(TransitionFranchieEvent event) {
-        if (!INSTANCE_CLASS.equals(event.getEntityClass()) || event.getEtatApres() == null) {
-            return;
-        }
+    /**
+     * Passe l'identifiant de la notification enregistrée avant commit à la phase de remise, qui
+     * s'exécute sur le même fil.
+     */
+    private final ThreadLocal<UUID> notificationsAremettre = new ThreadLocal<>();
 
-        WorkflowValidationInstance instance = chargerInstance(event.getEntityId());
+    /**
+     * Enregistre la notification à remettre, dans la transaction de la transition : les deux sont
+     * ainsi committées ensemble, ou pas du tout. Aucun appel réseau ici — seulement une écriture.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void enregistrerNotification(TransitionFranchieEvent event) {
+        WorkflowValidationInstance instance = instanceConcernee(event);
         if (instance == null) {
             return;
         }
 
-        Optional<WorkflowStep> etapeAtteinte = etapeAtteinte(event.getEtatApres());
+        Map<String, Object> payload = construireCharge(event, etapeAtteinte(event.getEtatApres()));
+        WorkflowNotification notification =
+                notificationService.enregistrer(instance.getResourceId(), instance.getResourceType(), payload);
+        notificationsAremettre.set(notification.getId());
+    }
 
-        notifierServiceMetier(instance, construireCharge(event, etapeAtteinte));
-        etapeAtteinte.ifPresent(step -> notifierParEmail(step, event));
+    /**
+     * Tente la remise immédiatement après le commit, pour que le service métier soit à jour sans
+     * attendre le prochain passage de l'ordonnanceur. Un échec n'est pas grave : la notification
+     * reste en attente et sera rejouée.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void remettreNotification(TransitionFranchieEvent event) {
+        UUID notificationId = notificationsAremettre.get();
+        notificationsAremettre.remove();
+
+        if (notificationId != null) {
+            notificationService.remettre(notificationId);
+        }
+
+        etapeAtteinte(event.getEtatApres()).ifPresent(step -> notifierParEmail(step, event));
+    }
+
+    private WorkflowValidationInstance instanceConcernee(TransitionFranchieEvent event) {
+        if (!INSTANCE_CLASS.equals(event.getEntityClass()) || event.getEtatApres() == null) {
+            return null;
+        }
+        return chargerInstance(event.getEntityId());
     }
 
     private WorkflowValidationInstance chargerInstance(String entityId) {
@@ -118,46 +147,6 @@ public class WorkflowEventListener {
         payload.put("decision", event.getTransitionCode());
         payload.put("timestamp", LocalDateTime.now().toString());
         return payload;
-    }
-
-    private void notifierServiceMetier(WorkflowValidationInstance instance, Map<String, Object> payload) {
-        UUID resourceId;
-        try {
-            resourceId = UUID.fromString(instance.getResourceId());
-        } catch (IllegalArgumentException e) {
-            log.error("Ressource {} non notifiée : identifiant inexploitable.", instance.getResourceId());
-            return;
-        }
-
-        String resourceType = instance.getResourceType();
-        try {
-            if ("DOCUMENT".equalsIgnoreCase(resourceType)) {
-                supportWebhookClient.updateDocumentStatus(resourceId, payload);
-                supportWebhookClient.logDocumentAudit(resourceId, construireAudit(payload));
-            } else if ("NON_CONFORMITE".equalsIgnoreCase(resourceType)) {
-                ameliorationWebhookClient.updateNonConformiteStatus(resourceId, payload);
-            } else if ("PLAN_ACTION".equalsIgnoreCase(resourceType)) {
-                ameliorationWebhookClient.updatePlanActionStatus(resourceId, payload);
-            } else {
-                log.warn("Aucun service destinataire connu pour le type de ressource '{}'.", resourceType);
-            }
-        } catch (Exception e) {
-            // La transition est déjà committée : un échec ici laisse le service métier désynchronisé.
-            // À reprendre par un mécanisme de rejeu (outbox) ; tracé en ERROR pour être visible en
-            // supervision plutôt que silencieux.
-            log.error("Échec de la notification {} de la ressource {} (étape « {} ») : {}",
-                    resourceType, resourceId, payload.get("statusName"), e.getMessage(), e);
-        }
-    }
-
-    private Map<String, Object> construireAudit(Map<String, Object> payload) {
-        Object comments = payload.get("comments");
-        Map<String, Object> audit = new HashMap<>();
-        audit.put("action", "TRANSITION_" + payload.get("decision"));
-        audit.put("details", comments != null
-                ? comments
-                : "Passage à l'étape « " + payload.get("statusName") + " »");
-        return audit;
     }
 
     private void notifierParEmail(WorkflowStep step, TransitionFranchieEvent event) {

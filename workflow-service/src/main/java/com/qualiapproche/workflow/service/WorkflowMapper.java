@@ -31,6 +31,7 @@ public class WorkflowMapper {
                 .description(entity.getDescription())
                 .etatTraitement(entity.getEtatTraitement())
                 .emailTemplateCode(entity.getEmailTemplateCode())
+                .stepTemplateId(entity.getStepTemplateId())
                 .transitions(entity.getTransitions() != null ? entity.getTransitions().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .fields(entity.getFields() != null ? entity.getFields().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .build();
@@ -91,6 +92,7 @@ public class WorkflowMapper {
                 .description(dto.getDescription())
                 .etatTraitement(dto.getEtatTraitement())
                 .emailTemplateCode(dto.getEmailTemplateCode())
+                .stepTemplateId(dto.getStepTemplateId())
                 .build();
                 
         if (dto.getTransitions() != null) {
