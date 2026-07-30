@@ -107,6 +107,11 @@ public class WorkflowEngine<D extends IData, T extends Transition<D>, W extends 
         if (pData == null) {
             throw new DonneeInvalideException("La donnee objet du workflow est indefinie.");
         }
+        // Le catalogue est charge a la construction du moteur, avant que les initialiseurs de
+        // donnees n'aient pu creer les circuits par defaut : sur une base neuve il est donc vide,
+        // et toute ouverture de dossier echouait jusqu'au redemarrage suivant. Meme raisonnement
+        // qu'ailleurs pour un circuit cree par une autre instance.
+        this.rafraichirSiPerime();
         // Contrairement a l'implementation historique, l'absence de configuration est
         // signalee explicitement plutot que par un NullPointerException.
         WorkflowConfig<D, T, W> aConfig = this.configPour(pData);
@@ -198,6 +203,8 @@ public class WorkflowEngine<D extends IData, T extends Transition<D>, W extends 
      */
     @Override
     public W getWorkflowByCode(final String pCodeWorkflow) throws WorkflowException {
+        // Un dossier peut porter un circuit apparu apres le dernier chargement du catalogue.
+        this.rafraichirSiPerime();
         return this.workflows.get(pCodeWorkflow);
     }
 
