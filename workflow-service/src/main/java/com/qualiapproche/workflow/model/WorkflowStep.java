@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
@@ -40,9 +41,16 @@ public class WorkflowStep {
     @Column(name = "email_template_code")
     private String emailTemplateCode;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "step_template_id")
-    private WorkflowStepTemplate stepTemplate;
+    /**
+     * Modèle d'étape du catalogue ayant servi à pré-remplir cette étape.
+     *
+     * <p>Simple référence, sans association JPA : le catalogue est administré par support-service,
+     * dans une autre base. L'association {@code @ManyToOne} précédente pointait vers une table
+     * homonyme propre à ce service, que rien n'alimentait — l'identifiant choisi par l'utilisateur
+     * n'était donc jamais conservé.</p>
+     */
+    @Column(name = "step_template_id")
+    private UUID stepTemplateId;
 
     @OneToMany(mappedBy = "fromStep", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

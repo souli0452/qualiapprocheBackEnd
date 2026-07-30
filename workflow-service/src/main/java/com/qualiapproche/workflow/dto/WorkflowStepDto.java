@@ -20,6 +20,12 @@ public class WorkflowStepDto {
     private String description;
     private String etatTraitement;
     private String emailTemplateCode;
+    /**
+     * Modèle du catalogue d'étapes ayant servi à pré-remplir l'étape. Champ obligatoire côté écran
+     * de configuration, il n'existait pas ici : la valeur transmise était silencieusement écartée
+     * à la désérialisation.
+     */
+    private java.util.UUID stepTemplateId;
     @Builder.Default
     private List<WorkflowTransitionDto> transitions = new ArrayList<>();
     @Builder.Default

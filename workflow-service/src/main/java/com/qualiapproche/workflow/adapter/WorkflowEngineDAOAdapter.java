@@ -135,8 +135,20 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
         return responsableRole;
     }
 
+    /**
+     * Signature du catalogue, interrogée par le moteur avant chaque consultation pour détecter une
+     * modification survenue ailleurs.
+     *
+     * <p>Elle renvoyait {@code null}, ce qui neutralisait le rechargement : en multi-instance, seul
+     * le pod ayant reçu la création ou la modification d'un circuit voyait la nouvelle version, les
+     * autres servant un catalogue périmé jusqu'à leur redémarrage. La signature combine le nombre
+     * de circuits et la dernière date de modification connue — toute création, modification (y
+     * compris d'une étape ou d'une transition, qui passe par l'enregistrement du circuit parent) ou
+     * suppression la fait changer.</p>
+     */
     @Override
+    @Transactional(readOnly = true)
     public Object getCatalogueVersion() {
-        return null; // Pas de versionning pour l'instant
+        return workflowRepository.signatureCatalogue();
     }
 }
