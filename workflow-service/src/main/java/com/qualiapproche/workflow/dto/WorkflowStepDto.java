@@ -14,6 +14,11 @@ import java.util.List;
 @AllArgsConstructor
 public class WorkflowStepDto {
     private Long id;
+    /**
+     * Identifiant fonctionnel de l'étape, fixé à la création et non modifiable ensuite.
+     * Généré à partir du nom si l'appelant n'en fournit pas.
+     */
+    private String code;
     private String nomEtape;
     private int stepOrder;
     private String responsableRole;

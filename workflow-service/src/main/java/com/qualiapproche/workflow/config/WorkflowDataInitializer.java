@@ -19,6 +19,7 @@ import java.util.Map;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@org.springframework.core.annotation.Order(10) // avant WorkflowStepCodeInitializer, qui complète les codes
 public class WorkflowDataInitializer implements CommandLineRunner {
 
     private final WorkflowRepository workflowRepository;

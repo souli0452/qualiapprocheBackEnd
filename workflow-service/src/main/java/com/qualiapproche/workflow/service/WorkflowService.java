@@ -72,7 +72,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         WorkflowMapper mapper = new WorkflowMapper();
         Workflow workflow = mapper.toEntity(dto);
 
-        // Resolve toStepId for transitions
+        attribuerCodesEtapes(workflow);
         resolveTransitions(workflow, dto);
 
         workflow = workflowRepository.save(workflow);
@@ -120,6 +120,62 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /**
+     * Attribue à chaque étape son code fonctionnel et en garantit l'unicité au sein du circuit.
+     *
+     * <p>Le code fourni par l'appelant fait foi ; à défaut il est dérivé du nom de l'étape. Un
+     * doublon est refusé plutôt que corrigé en silence : deux étapes partageant un code rendraient
+     * toute destination de transition ambiguë.</p>
+     */
+    private void attribuerCodesEtapes(Workflow workflow) {
+        if (workflow.getSteps() == null) {
+            return;
+        }
+
+        java.util.Set<String> codesUtilises = new java.util.HashSet<>();
+        for (WorkflowStep step : workflow.getSteps()) {
+            String code = step.getCode() != null && !step.getCode().isBlank()
+                    ? normaliserCode(step.getCode())
+                    : codeDisponible(normaliserCode(step.getNomEtape()), codesUtilises);
+
+            if (!codesUtilises.add(code)) {
+                throw new com.qualiapproche.common.exception.BusinessException(
+                        "Le code d'étape « " + code + " » est utilisé deux fois dans ce circuit. "
+                                + "Chaque étape doit porter un code distinct.",
+                        org.springframework.http.HttpStatus.CONFLICT);
+            }
+            step.setCode(code);
+        }
+    }
+
+    /** Normalise un code : majuscules, séparateurs réduits au souligné, longueur bornée. */
+    private String normaliserCode(String valeur) {
+        if (valeur == null || valeur.isBlank()) {
+            return "ETAPE";
+        }
+        String normalise = java.text.Normalizer.normalize(valeur, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_|_$", "");
+        if (normalise.isBlank()) {
+            return "ETAPE";
+        }
+        return normalise.length() > 60 ? normalise.substring(0, 60) : normalise;
+    }
+
+    private String codeDisponible(String base, java.util.Set<String> dejaPris) {
+        if (!dejaPris.contains(base)) {
+            return base;
+        }
+        for (int suffixe = 2; ; suffixe++) {
+            String candidat = base + "_" + suffixe;
+            if (!dejaPris.contains(candidat)) {
+                return candidat;
+            }
+        }
+    }
+
+    /**
      * Met à jour les étapes existantes en place (par ID) plutôt que de les recréer, afin de
      * préserver les identifiants référencés par les instances de validation en cours
      * ({@code WorkflowValidationInstance.etatCode}). Les étapes retirées ne sont autorisées
@@ -153,32 +209,35 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         Map<Long, WorkflowStep> existingById = existing.getSteps().stream()
                 .filter(s -> s.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(WorkflowStep::getId, s -> s));
-                
-        Map<String, WorkflowStep> existingByName = existing.getSteps().stream()
-                .filter(s -> s.getNomEtape() != null)
-                .collect(java.util.stream.Collectors.toMap(WorkflowStep::getNomEtape, s -> s, (s1, s2) -> s1));
+
+        // Rapprochement par code fonctionnel et non plus par nom : le nom est un libellé, et le
+        // renommer d'une étape suffisait à la faire passer pour une nouvelle.
+        Map<String, WorkflowStep> existingByCode = existing.getSteps().stream()
+                .filter(s -> s.getCode() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStep::getCode, s -> s, (s1, s2) -> s1));
 
         List<WorkflowStep> merged = new java.util.ArrayList<>();
         java.util.Set<Long> seenStepIds = new java.util.HashSet<>();
-        java.util.Set<String> seenStepNames = new java.util.HashSet<>();
 
         for (WorkflowStepDto stepDto : incomingSteps) {
             if (stepDto.getId() != null && !seenStepIds.add(stepDto.getId())) {
                 continue;
             }
-            if (stepDto.getNomEtape() != null && !seenStepNames.add(stepDto.getNomEtape())) {
-                continue;
-            }
+            String codeDemande = stepDto.getCode() != null && !stepDto.getCode().isBlank()
+                    ? normaliserCode(stepDto.getCode()) : null;
+
             WorkflowStep step = null;
             if (stepDto.getId() != null) {
                 step = existingById.get(stepDto.getId());
             }
-            if (step == null && stepDto.getNomEtape() != null) {
-                step = existingByName.get(stepDto.getNomEtape());
+            if (step == null && codeDemande != null) {
+                step = existingByCode.get(codeDemande);
             }
             if (step == null) {
                 step = new WorkflowStep();
             }
+
+            verifierCodeImmuable(step, codeDemande);
             step.setNomEtape(stepDto.getNomEtape());
             step.setStepOrder(stepDto.getStepOrder());
             step.setResponsableRole(stepDto.getResponsableRole());
@@ -194,6 +253,32 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         existing.getSteps().clear();
         existing.getSteps().addAll(merged);
+        // Les étapes ajoutées lors de cette modification n'ont pas encore de code.
+        attribuerCodesEtapes(existing);
+    }
+
+    /**
+     * Interdit la réécriture du code d'une étape déjà enregistrée.
+     *
+     * <p>Le code est l'identité fonctionnelle de l'étape : les transitions des autres étapes le
+     * désignent, et les instances en cours s'y rapportent. Le laisser changer reviendrait à
+     * rompre silencieusement ces rattachements. Une étape nouvelle, elle, reçoit le code demandé.</p>
+     */
+    private void verifierCodeImmuable(WorkflowStep step, String codeDemande) {
+        if (step.getId() == null) {
+            step.setCode(codeDemande);
+            return;
+        }
+        if (codeDemande != null && step.getCode() != null && !codeDemande.equals(step.getCode())) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le code de l'étape « " + step.getNomEtape() + " » ne peut pas être modifié ("
+                            + step.getCode() + " → " + codeDemande + "). Créez une nouvelle étape "
+                            + "si le circuit doit changer.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (step.getCode() == null) {
+            step.setCode(codeDemande);
+        }
     }
 
     /**
@@ -354,22 +439,35 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .orElse(null);
     }
 
-    /** Destination désignée par identifiant, à défaut par nom d'étape, à défaut par rang. */
+    /**
+     * Destination désignée par code d'étape, à défaut par identifiant, à défaut par rang.
+     *
+     * <p>Le code prime : c'est la seule clé à la fois stable dans le temps et connue de l'appelant
+     * avant enregistrement. Le nom n'est plus une clé de résolution — le corriger cassait
+     * silencieusement toutes les transitions qui pointaient vers l'étape. Le rang ne subsiste que
+     * pour les appelants qui n'ont pas encore basculé sur le code, et il se décale dès qu'on
+     * réordonne le circuit.</p>
+     */
     private WorkflowStep etapeDestination(Workflow workflow, WorkflowTransitionDto transitionDto) {
+        if (transitionDto.getToStepCode() != null && !transitionDto.getToStepCode().isBlank()) {
+            String code = normaliserCode(transitionDto.getToStepCode());
+            WorkflowStep parCode = workflow.getSteps().stream()
+                    .filter(s -> code.equals(s.getCode()))
+                    .findFirst().orElse(null);
+            if (parCode != null) {
+                return parCode;
+            }
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Aucune étape de ce circuit ne porte le code « " + code + " », "
+                            + "désigné comme destination d'une transition.",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
         if (transitionDto.getToStepId() != null) {
             WorkflowStep parId = workflow.getSteps().stream()
                     .filter(s -> transitionDto.getToStepId().equals(s.getId()))
                     .findFirst().orElse(null);
             if (parId != null) {
                 return parId;
-            }
-        }
-        if (transitionDto.getToStepName() != null) {
-            WorkflowStep parNom = workflow.getSteps().stream()
-                    .filter(s -> transitionDto.getToStepName().equals(s.getNomEtape()))
-                    .findFirst().orElse(null);
-            if (parNom != null) {
-                return parNom;
             }
         }
         if (transitionDto.getToStepOrder() != null) {

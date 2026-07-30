@@ -14,7 +14,13 @@ public class WorkflowTransitionDto {
     private String label;
     private String decision;
     private String requiredRole;
+    /**
+     * Code de l'étape de destination : clé désignant la cible, stable dans le temps et connue de
+     * l'appelant avant même l'enregistrement du circuit.
+     */
+    private String toStepCode;
     private Long toStepId;
+    /** Libellé de la destination, pour l'affichage uniquement — jamais utilisé comme clé. */
     private String toStepName;
     /**
      * Rang de l'étape de destination. Exposé en plus de {@code toStepId} parce que les écrans de
