@@ -41,6 +41,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     private final WorkflowStepFieldRepository stepFieldRepository;
     private final WorkflowFieldValueRepository fieldValueRepository;
     private final WorkflowTransitionRepository transitionRepository;
+    private final WorkflowStepRepository stepRepository;
 
     public WorkflowService(
             IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> moteur,
@@ -50,13 +51,15 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             WorkflowValidationInstanceRepository validationInstanceRepository,
             WorkflowStepFieldRepository stepFieldRepository,
             WorkflowFieldValueRepository fieldValueRepository,
-            WorkflowTransitionRepository transitionRepository) {
+            WorkflowTransitionRepository transitionRepository,
+            WorkflowStepRepository stepRepository) {
         super(moteur, historyRepository, eventPublisher);
         this.workflowRepository = workflowRepository;
         this.validationInstanceRepository = validationInstanceRepository;
         this.stepFieldRepository = stepFieldRepository;
         this.fieldValueRepository = fieldValueRepository;
         this.transitionRepository = transitionRepository;
+        this.stepRepository = stepRepository;
     }
 
     public List<WorkflowDto> getAllWorkflows() {
@@ -184,11 +187,79 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             step.setEmailTemplateCode(stepDto.getEmailTemplateCode());
             step.setWorkflow(existing);
             mergeTransitions(step, stepDto);
+            mergeFields(step, stepDto);
             merged.add(step);
         }
 
         existing.getSteps().clear();
         existing.getSteps().addAll(merged);
+    }
+
+    /**
+     * Met à jour les champs de saisie d'une étape.
+     *
+     * <p>Ils étaient purement et simplement ignorés à la modification : seule la création les
+     * enregistrait, si bien qu'un circuit existant ne pouvait plus voir ses champs corrigés,
+     * ajoutés ou supprimés. Les champs sont appariés par identifiant, à défaut par nom, pour
+     * préserver les identifiants déjà référencés par les valeurs saisies en historique.</p>
+     */
+    private void mergeFields(WorkflowStep step, WorkflowStepDto stepDto) {
+        List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto> incoming =
+                stepDto.getFields() != null ? stepDto.getFields() : List.of();
+
+        Map<Long, WorkflowStepField> existingById = step.getFields().stream()
+                .filter(f -> f.getId() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStepField::getId, f -> f));
+
+        Map<String, WorkflowStepField> existingByName = step.getFields().stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStepField::getFieldName, f -> f, (f1, f2) -> f1));
+
+        List<WorkflowStepField> merged = new java.util.ArrayList<>();
+        java.util.Set<String> seenNames = new java.util.HashSet<>();
+
+        for (com.qualiapproche.workflow.dto.WorkflowStepFieldDto fieldDto : incoming) {
+            if (fieldDto.getFieldName() != null && !seenNames.add(fieldDto.getFieldName())) {
+                continue;
+            }
+
+            WorkflowStepField field = null;
+            if (fieldDto.getId() != null) {
+                field = existingById.get(fieldDto.getId());
+            }
+            if (field == null && fieldDto.getFieldName() != null) {
+                field = existingByName.get(fieldDto.getFieldName());
+            }
+            if (field == null) {
+                field = new WorkflowStepField();
+            }
+
+            field.setFieldName(fieldDto.getFieldName());
+            field.setFieldLabel(fieldDto.getFieldLabel());
+            field.setType(typeDeChamp(fieldDto.getType()));
+            field.setRequired(fieldDto.isRequired());
+            field.setOptions(fieldDto.getOptions());
+            field.setStep(step);
+            merged.add(field);
+        }
+
+        step.getFields().clear();
+        step.getFields().addAll(merged);
+    }
+
+    /** Type de champ, signalé en 400 explicite plutôt qu'en erreur serveur si le libellé est inconnu. */
+    private FieldType typeDeChamp(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        try {
+            return FieldType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Type de champ inconnu : '" + type + "'. Valeurs acceptées : "
+                            + java.util.Arrays.toString(FieldType.values()) + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 
     private void mergeTransitions(WorkflowStep step, WorkflowStepDto stepDto) {
@@ -284,8 +355,15 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         return SecurityUtils.getCurrentUserId();
     }
 
-    public List<Workflow> getWorkflowsByType(String documentType) {
-        return workflowRepository.findByResourceType(documentType);
+    /**
+     * Retourne des DTO et non les entités JPA : l'entité sérialise la destination d'une transition
+     * sous forme d'objet {@code toStep} imbriqué, sans {@code toStepId} ni {@code toStepOrder},
+     * donnant une forme différente de celle de {@code GET /workflows} pour la même ressource.
+     */
+    @Transactional(readOnly = true)
+    public List<WorkflowDto> getWorkflowsByType(String documentType) {
+        WorkflowMapper mapper = new WorkflowMapper();
+        return workflowRepository.findByResourceType(documentType).stream().map(mapper::toDto).toList();
     }
 
     /**
@@ -307,8 +385,17 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         return new WorkflowMapper().toDto(actifs.get(0));
     }
 
-    public Workflow getWorkflowById(UUID workflowId) {
-        return workflowRepository.findById(workflowId).orElse(null);
+    /**
+     * Même forme que {@code GET /workflows} (DTO, avec {@code toStepId} / {@code toStepOrder}),
+     * et 404 explicite : renvoyer {@code null} produisait un 200 au corps vide, que l'appelant ne
+     * pouvait pas distinguer d'un circuit réellement vide.
+     */
+    @Transactional(readOnly = true)
+    public WorkflowDto getWorkflowById(UUID workflowId) {
+        return workflowRepository.findById(workflowId)
+                .map(new WorkflowMapper()::toDto)
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
     }
 
     private WorkflowValidationInstance findLastValidationInstanceEntity(UUID resourceId) {
@@ -363,6 +450,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         .code(t.getCode())
                         .libelle(t.getLibelle())
                         .permission(t.getPermission())
+                        .decision(decisionDeTransition(t.getCode()))
                         .build())
                 .toList();
 
@@ -372,6 +460,89 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .currentStateCode(instance.getEtatCode())
                 .currentStateName(instance.getEtat() != null ? instance.getEtat().getLibelle() : null)
                 .allowedActions(actions)
+                .currentStepFields(champsDeLEtape(instance.getEtatCode()))
+                .build();
+    }
+
+    private String decisionDeTransition(String transitionCode) {
+        try {
+            return transitionRepository.findById(Long.valueOf(transitionCode))
+                    .map(t -> t.getDecision() != null ? t.getDecision().name() : null)
+                    .orElse(null);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Champs de saisie exigés par l'étape courante, pour que l'appelant puisse composer le
+     * formulaire de décision. Vide sur un état terminal, qui ne correspond à aucune étape.
+     */
+    private List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto> champsDeLEtape(String etatCode) {
+        WorkflowMapper mapper = new WorkflowMapper();
+        try {
+            return stepRepository.findById(Long.valueOf(etatCode))
+                    .map(step -> step.getFields().stream().map(mapper::toDto).toList())
+                    .orElseGet(List::of);
+        } catch (NumberFormatException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * États de plusieurs ressources en un appel : afficher une liste de N documents imposait
+     * jusqu'ici N requêtes. Les ressources sans circuit sont simplement absentes du résultat.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> getWorkflowStatesForResources(List<UUID> resourceIds) {
+        Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> etats = new java.util.LinkedHashMap<>();
+        if (resourceIds == null) {
+            return etats;
+        }
+        for (UUID resourceId : resourceIds) {
+            com.qualiapproche.workflow.dto.WorkflowStateDto etat = getWorkflowStateForResource(resourceId);
+            if (etat != null) {
+                etats.put(resourceId, etat);
+            }
+        }
+        return etats;
+    }
+
+    /**
+     * Traçabilité du circuit d'une ressource : décisions successives, auteurs, commentaires et
+     * valeurs saisies. Ces enregistrements existaient sans aucun point d'entrée pour les relire.
+     */
+    @Transactional(readOnly = true)
+    public List<com.qualiapproche.workflow.dto.ValidationHistoryDto> getValidationHistory(UUID resourceId) {
+        WorkflowValidationInstance instance = findLastValidationInstanceEntity(resourceId);
+        if (instance == null) {
+            return List.of();
+        }
+        return historyRepository.findByValidationInstance_IdOrderByDecisionDateAsc(instance.getId()).stream()
+                .map(this::toHistoryDto)
+                .toList();
+    }
+
+    private com.qualiapproche.workflow.dto.ValidationHistoryDto toHistoryDto(ValidationHistory history) {
+        List<com.qualiapproche.workflow.dto.ValidationHistoryDto.FieldValueDto> valeurs =
+                history.getFieldValues() == null ? List.of()
+                        : history.getFieldValues().stream()
+                                .map(v -> com.qualiapproche.workflow.dto.ValidationHistoryDto.FieldValueDto.builder()
+                                        .fieldCode(v.getFieldCode())
+                                        .fieldName(v.getFieldName())
+                                        .value(v.getValue())
+                                        .build())
+                                .toList();
+
+        return com.qualiapproche.workflow.dto.ValidationHistoryDto.builder()
+                .id(history.getId())
+                .stepCode(history.getStepCode())
+                .stepName(history.getStepName())
+                .decision(history.getDecision())
+                .comments(history.getComments())
+                .validatorUserId(history.getValidatorUserId())
+                .decisionDate(history.getDecisionDate())
+                .fieldValues(valeurs)
                 .build();
     }
 
