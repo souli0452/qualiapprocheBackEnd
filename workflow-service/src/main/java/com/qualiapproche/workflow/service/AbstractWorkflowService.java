@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.service;
 
+import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.workflow.core.exception.WorkflowException;
 import com.qualiapproche.workflow.core.model.Etat;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
@@ -11,6 +12,7 @@ import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
 import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -156,20 +158,31 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
             throw new RuntimeException("Erreur de resolution de transition", e);
         }
         if (aTransition == null) {
-            throw new RuntimeException("La transition " + pCodeTransition + " est inconnue.");
+            throw new BusinessException(
+                    "L'action demandée n'existe pas dans ce circuit de validation.", HttpStatus.NOT_FOUND);
         }
         return aTransition;
     }
 
+    /**
+     * Refuse le franchissement si l'utilisateur courant ne porte pas l'habilitation exigée par la
+     * transition. Rendu explicite en 403 : la levée d'une {@code RuntimeException} nue renvoyait un
+     * 500, indiscernable d'une panne pour l'appelant.
+     */
     protected void verifierHabilitation(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
         if (!this.transitionsAutorisees(pContexte).contains(pTransition)) {
-            throw new RuntimeException("Transition interdite pour l'utilisateur courant.");
+            throw new BusinessException(
+                    "Vous n'avez pas l'habilitation requise pour effectuer cette action"
+                            + (pTransition.getPermission() != null
+                                    ? " (rôle attendu : " + pTransition.getPermission() + ")." : "."),
+                    HttpStatus.FORBIDDEN);
         }
     }
 
     protected void verifierEtatOrigine(D pData, TransitionPersistante pTransition) {
         if (!pTransition.getEtatOrigine().equals(pData.getEtat())) {
-            throw new RuntimeException("Etat d'origine invalide pour cette transition.");
+            throw new BusinessException(
+                    "Cette action ne s'applique pas à l'étape courante du dossier.", HttpStatus.CONFLICT);
         }
     }
 

@@ -74,7 +74,7 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
 
                     TransitionPersistante transition = new TransitionPersistante(dbTrans.getId().toString(), origine, destination);
                     transition.setLibelle(dbTrans.getLabel() != null ? dbTrans.getLabel() : dbTrans.getDecision().name());
-                    transition.setPermission(dbTrans.getRequiredRole());
+                    transition.setPermission(habilitationDe(dbTrans, dbStep));
 
                     // Résoudre l'action via le bean factory (DefaultTransitionAction par défaut si non trouvé)
                     try {
@@ -111,8 +111,44 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
         return configs;
     }
     
+    /**
+     * Habilitation exigée pour franchir une transition.
+     *
+     * <p>{@code requiredRole} porté par la transition prime, mais il n'est renseigné dans aucun
+     * circuit existant : sans repli, {@code WorkflowConditionAdapter} autorisait alors tout le
+     * monde, et n'importe quel utilisateur authentifié pouvait imputer, valider ou clôturer un
+     * dossier. Le {@code responsableRole} de l'étape d'origine — déjà saisi dans les circuits —
+     * sert donc de valeur par défaut : c'est bien le rôle censé agir à cette étape.</p>
+     */
+    private String habilitationDe(WorkflowTransition pTransition, WorkflowStep pEtapeOrigine) {
+        String requiredRole = pTransition.getRequiredRole();
+        if (requiredRole != null && !requiredRole.isBlank()) {
+            return requiredRole;
+        }
+        String responsableRole = pEtapeOrigine.getResponsableRole();
+        if (responsableRole == null || responsableRole.isBlank()) {
+            log.warn("La transition {} de l'étape '{}' n'exige aucune habilitation : elle est ouverte "
+                            + "à tout utilisateur authentifié.",
+                    pTransition.getId(), pEtapeOrigine.getNomEtape());
+            return null;
+        }
+        return responsableRole;
+    }
+
+    /**
+     * Signature du catalogue, interrogée par le moteur avant chaque consultation pour détecter une
+     * modification survenue ailleurs.
+     *
+     * <p>Elle renvoyait {@code null}, ce qui neutralisait le rechargement : en multi-instance, seul
+     * le pod ayant reçu la création ou la modification d'un circuit voyait la nouvelle version, les
+     * autres servant un catalogue périmé jusqu'à leur redémarrage. La signature combine le nombre
+     * de circuits et la dernière date de modification connue — toute création, modification (y
+     * compris d'une étape ou d'une transition, qui passe par l'enregistrement du circuit parent) ou
+     * suppression la fait changer.</p>
+     */
     @Override
+    @Transactional(readOnly = true)
     public Object getCatalogueVersion() {
-        return null; // Pas de versionning pour l'instant
+        return workflowRepository.signatureCatalogue();
     }
 }

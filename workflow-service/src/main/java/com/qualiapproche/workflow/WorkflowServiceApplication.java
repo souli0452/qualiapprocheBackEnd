@@ -8,6 +8,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication
 @EnableDiscoveryClient
 @EnableFeignClients
+@org.springframework.scheduling.annotation.EnableScheduling
 public class WorkflowServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(WorkflowServiceApplication.class, args);

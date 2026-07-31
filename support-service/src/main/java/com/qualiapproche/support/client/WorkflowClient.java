@@ -41,6 +41,10 @@ public interface WorkflowClient {
     @GetMapping("/api/v1/workflows/instances/{resourceId}/state")
     WorkflowStateDto getWorkflowState(@PathVariable("resourceId") UUID resourceId);
 
+    /** États de plusieurs ressources en un appel, pour l'affichage d'une liste. */
+    @PostMapping("/api/v1/workflows/instances/states")
+    Map<UUID, WorkflowStateDto> getWorkflowStates(@RequestBody java.util.List<UUID> resourceIds);
+
     @PostMapping("/api/v1/workflows/validate/{resourceId}")
     void validateStep(@PathVariable("resourceId") UUID resourceId,
                       @RequestHeader(value = "X-User-Id", required = false) String userId,

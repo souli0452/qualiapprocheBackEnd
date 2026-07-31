@@ -244,14 +244,18 @@ public class PlanActionServiceImpl implements PlanActionService {
 
         planAction.setWorkflowStatus(newStateName);
 
-        try {
-            StatutEnum statut = StatutEnum.valueOf(newEtatTraitement);
-            planAction.setStatus(statut);
-            if (statut == StatutEnum.TRAITER && planAction.getDateTraitement() == null) {
-                planAction.setDateTraitement(LocalDate.now());
+        // etatCode est absent des notifications d'état terminal : sans ce garde,
+        // StatutEnum.valueOf(null) lèverait une NullPointerException, non couverte par le catch.
+        if (newEtatTraitement != null && !newEtatTraitement.isBlank()) {
+            try {
+                StatutEnum statut = StatutEnum.valueOf(newEtatTraitement);
+                planAction.setStatus(statut);
+                if (statut == StatutEnum.TRAITER && planAction.getDateTraitement() == null) {
+                    planAction.setDateTraitement(LocalDate.now());
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("EtatTraitement non reconnu dans le workflow: {}", newEtatTraitement);
             }
-        } catch (IllegalArgumentException e) {
-            log.warn("EtatTraitement non reconnu dans le workflow: {}", newEtatTraitement);
         }
 
         planActionRepository.save(planAction);

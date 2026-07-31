@@ -98,4 +98,12 @@ public class NonConformiteDto extends AuditEntityDto {
     private String actionPreventive;
     private String workflowStatus;
     private UUID workflowId;
+
+    /**
+     * État du circuit de validation : étape courante, actions autorisées pour l'utilisateur
+     * appelant et champs à saisir. Alimenté à la consultation d'une non-conformité, à l'image
+     * de ce que fait déjà le service documentaire — sans quoi les écrans ne pouvaient afficher
+     * aucune action de workflow.
+     */
+    private WorkflowStateDto workflowState;
 }

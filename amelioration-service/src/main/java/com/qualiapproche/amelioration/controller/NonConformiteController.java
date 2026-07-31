@@ -32,9 +32,11 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @Tag(name = "Non-Conformités", description = "Gestion des non-conformités, de leur création à leur validation")
 public class NonConformiteController {
     private final NonConformiteService nonConformiteService;
+    private final com.qualiapproche.amelioration.client.WorkflowClient workflowClient;
 
     /**
      * Endpoint pour créer une non-conformité
@@ -130,7 +132,25 @@ public class NonConformiteController {
     @GetMapping(GET_NON_CONFORMITE_BY_ID)
     public ResponseEntity<NonConformiteDto> getNonConformiteById(@PathVariable UUID id) {
         NonConformiteDto nonConformite = nonConformiteService.getNonConformiteById(id);
+        nonConformite.setWorkflowState(etatWorkflow(id));
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
+    }
+
+    /**
+     * Étape courante et actions autorisées pour l'utilisateur appelant, à l'image de ce que fait
+     * déjà le service documentaire : sans cette information, les écrans de non-conformité ne
+     * disposaient d'aucun moyen d'afficher les actions du circuit de validation.
+     *
+     * <p>Une indisponibilité du service de workflow ne doit pas empêcher la consultation de la
+     * non-conformité : l'état est alors simplement absent.</p>
+     */
+    private com.qualiapproche.common.dto.WorkflowStateDto etatWorkflow(UUID resourceId) {
+        try {
+            return workflowClient.getWorkflowState(resourceId);
+        } catch (Exception e) {
+            log.warn("État du workflow indisponible pour la non-conformité {} : {}", resourceId, e.getMessage());
+            return null;
+        }
     }
 
     /*-----------------------------------------------------------------------/

@@ -14,12 +14,23 @@ import java.util.List;
 @AllArgsConstructor
 public class WorkflowStepDto {
     private Long id;
+    /**
+     * Identifiant fonctionnel de l'étape, fixé à la création et non modifiable ensuite.
+     * Généré à partir du nom si l'appelant n'en fournit pas.
+     */
+    private String code;
     private String nomEtape;
     private int stepOrder;
     private String responsableRole;
     private String description;
     private String etatTraitement;
     private String emailTemplateCode;
+    /**
+     * Modèle du catalogue d'étapes ayant servi à pré-remplir l'étape. Champ obligatoire côté écran
+     * de configuration, il n'existait pas ici : la valeur transmise était silencieusement écartée
+     * à la désérialisation.
+     */
+    private java.util.UUID stepTemplateId;
     @Builder.Default
     private List<WorkflowTransitionDto> transitions = new ArrayList<>();
     @Builder.Default

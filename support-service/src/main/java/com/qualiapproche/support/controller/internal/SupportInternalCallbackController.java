@@ -24,13 +24,19 @@ public class SupportInternalCallbackController {
             @RequestBody Map<String, Object> payload) {
         
         log.info("Received workflow callback for document {}: {}", documentId, payload);
-        
-        // Example payload: { "status": "APPROVED", "decision": "APPROVE", "comments": "..." }
+
+        // Contrat unifié émis par workflow-service :
+        // { "status": "EN_COURS|APPROVED|REJECTED", "statusName": "<étape atteinte>",
+        //   "etatCode": "<état métier>", "comments": "...", "decision": "...", "timestamp": "..." }
+        // `status` est la valeur machine qui pilote le cycle de vie du document ; `statusName` n'est
+        // que le libellé de l'étape courante et ne doit plus servir de test (les libellés réels
+        // — « Validation RS », « Suivi RQ »… — ne correspondaient à aucun des cas attendus).
         String status = (String) payload.get("status");
+        String statusName = (String) payload.get("statusName");
         String comments = (String) payload.get("comments");
-        
-        documentService.updateWorkflowStatus(documentId, status, comments);
-        
+
+        documentService.updateWorkflowStatus(documentId, status, statusName, comments);
+
         return ResponseEntity.ok().build();
     }
 

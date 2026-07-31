@@ -2,6 +2,7 @@ package com.qualiapproche.support.service;
 
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.support.dto.DocumentSearchCriteria;
+import com.qualiapproche.support.dto.DocumentUpdateDto;
 import com.qualiapproche.support.dto.DocumentStatDimension;
 import com.qualiapproche.support.dto.DocumentStatsDto;
 import com.qualiapproche.support.dto.SharedDocumentDto;
@@ -362,6 +363,192 @@ public class QmsDocumentService {
         } else {
             documentRepository.save(doc);
         }
+    }
+
+    @Transactional
+    public void logWorkflowAudit(UUID documentId, String action, String details) {
+        DocumentQms doc = documentRepository.findById(documentId).orElse(null);
+        if (doc != null) {
+            auditLogService.logAction(action, doc.getDocumentNumber(), details != null ? details : "Action workflow exécutée");
+        } else {
+            log.warn("Cannot log workflow audit for non-existent document ID: {}", documentId);
+        }
+    }
+
+    /**
+     * Applique au document l'issue d'une transition de workflow.
+     *
+     * <p>Le cycle de vie du document est piloté par {@code status}, valeur machine émise par
+     * workflow-service ({@code EN_COURS} / {@code APPROVED} / {@code REJECTED}), tandis que
+     * {@code statusName} n'est que le libellé de l'étape atteinte, affiché tel quel. La version
+     * précédente testait le libellé lui-même contre « APPROVED »/« VALIDE » : comme les étapes
+     * réelles s'appellent « Validation RS », « Suivi RQ »…, aucun test ne passait jamais et le
+     * document restait indéfiniment en brouillon.</p>
+     *
+     * @param status     issue machine de la transition
+     * @param statusName libellé de l'étape atteinte, à afficher
+     * @param comments   commentaire saisi lors de la décision
+     */
+    @Transactional
+    public void updateWorkflowStatus(UUID documentId, String status, String statusName, String comments) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        log.info("Received external workflow status update for document '{}': status={}, étape={}",
+                doc.getDocumentNumber(), status, statusName);
+
+        doc.setCurrentEtape(statusName);
+        if ("APPROVED".equalsIgnoreCase(status)) {
+            transitionStatus(documentId, "valide", comments != null ? comments : "Validation workflow complétée");
+        } else if ("REJECTED".equalsIgnoreCase(status)) {
+            transitionStatus(documentId, "brouillon", comments != null ? comments : "Validation workflow rejetée");
+        } else {
+            documentRepository.save(doc);
+        }
+    }
+
+    /**
+     * Met à jour les métadonnées d'un document.
+     *
+     * <p>Aucun point d'entrée ne le permettait : une erreur de saisie sur le titre, le type, le
+     * domaine ou la périodicité de révision était définitive, seul le fichier pouvant évoluer via
+     * une nouvelle version. Chaque champ laissé à {@code null} est conservé, et la modification est
+     * journalisée dans la piste d'audit du document.</p>
+     */
+    @Transactional
+    public DocumentQms updateDocument(UUID documentId, DocumentUpdateDto dto) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        if (doc.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce document est archivé : désarchivez-le avant de le modifier.");
+        }
+
+        List<String> modifications = new ArrayList<>();
+        appliquer(dto.getTitre(), doc.getTitre(), "titre", modifications, doc::setTitre);
+        appliquer(dto.getReference(), doc.getReference(), "référence", modifications, doc::setReference);
+        appliquer(dto.getDescription(), doc.getDescription(), "description", modifications, doc::setDescription);
+        appliquer(dto.getServiceId(), doc.getServiceId(), "service", modifications, doc::setServiceId);
+        appliquer(dto.getServiceLibelle(), doc.getServiceLibelle(), "libellé du service", modifications, doc::setServiceLibelle);
+        appliquer(dto.getServiceSigle(), doc.getServiceSigle(), "sigle du service", modifications, doc::setServiceSigle);
+        appliquer(dto.getRedacteur(), doc.getRedacteur(), "rédacteur", modifications, doc::setRedacteur);
+        appliquer(dto.getProcessusDestId(), doc.getProcessusDestId(), "processus destinataire", modifications, doc::setProcessusDestId);
+        appliquer(dto.getProcessusDestLibelle(), doc.getProcessusDestLibelle(), "libellé du processus", modifications, doc::setProcessusDestLibelle);
+        appliquer(dto.getReferenceOfficielle(), doc.getReferenceOfficielle(), "référence officielle", modifications, doc::setReferenceOfficielle);
+        appliquer(dto.getDomaine(), doc.getDomaine(), "domaine", modifications, doc::setDomaine);
+        appliquer(dto.getStatutLegal(), doc.getStatutLegal(), "statut légal", modifications, doc::setStatutLegal);
+
+        if (dto.getConfidentiel() != null && dto.getConfidentiel() != doc.isConfidentiel()) {
+            doc.setConfidentiel(dto.getConfidentiel());
+            modifications.add("confidentialité");
+        }
+        if (dto.getDocumentExterne() != null && dto.getDocumentExterne() != doc.isDocumentExterne()) {
+            doc.setDocumentExterne(dto.getDocumentExterne());
+            modifications.add("document externe");
+        }
+        if (dto.getPeriodiciteMois() != null && !dto.getPeriodiciteMois().equals(doc.getPeriodiciteMois())) {
+            doc.setPeriodiciteMois(dto.getPeriodiciteMois());
+            modifications.add("périodicité de révision");
+            // La prochaine échéance de révision découle de la périodicité : la recalculer évite
+            // de laisser une date incohérente avec le rythme qui vient d'être choisi.
+            if (doc.getDateVigueur() != null) {
+                doc.setDateProchRevision(doc.getDateVigueur().plusMonths(dto.getPeriodiciteMois()));
+                doc.setEnRetardRevision(doc.getDateProchRevision().isBefore(LocalDateTime.now()));
+            }
+        }
+
+        if (modifications.isEmpty()) {
+            return doc;
+        }
+
+        doc.setLastModifiedBy(getCurrentUser());
+        doc.setLastModifiedReason(dto.getMotif());
+        doc = documentRepository.save(doc);
+
+        auditLogService.logAction("MODIFICATION_METADONNEES", doc.getDocumentNumber(),
+                "Champs modifiés : " + String.join(", ", modifications)
+                        + (dto.getMotif() != null ? ". Motif : " + dto.getMotif() : ""));
+        return doc;
+    }
+
+    /** Applique une valeur si elle est fournie et différente, en notant le champ touché. */
+    private void appliquer(String nouvelle, String actuelle, String libelle,
+                           List<String> modifications, java.util.function.Consumer<String> setter) {
+        if (nouvelle != null && !nouvelle.equals(actuelle)) {
+            setter.accept(nouvelle);
+            modifications.add(libelle);
+        }
+    }
+
+    /**
+     * Archive un document : il sort des recherches et des statistiques courantes sans être détruit.
+     *
+     * <p>Le champ {@code archived} était filtrable en recherche et compté dans les statistiques,
+     * mais n'était jamais positionné : toute la mécanique construite autour restait inerte.
+     * L'archivage est la réponse attendue en gestion documentaire, où un document ayant eu une
+     * existence officielle doit rester consultable et traçable.</p>
+     */
+    @Transactional
+    public DocumentQms archiveDocument(UUID documentId, String motif) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        if (doc.isArchived()) {
+            return doc;
+        }
+
+        doc.setArchived(true);
+        doc.setLastModifiedBy(getCurrentUser());
+        doc.setLastModifiedReason(motif);
+        doc = documentRepository.save(doc);
+
+        auditLogService.logAction("ARCHIVAGE", doc.getDocumentNumber(),
+                motif != null ? "Archivage. Motif : " + motif : "Archivage du document.");
+        return doc;
+    }
+
+    @Transactional
+    public DocumentQms unarchiveDocument(UUID documentId, String motif) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        if (!doc.isArchived()) {
+            return doc;
+        }
+
+        doc.setArchived(false);
+        doc.setLastModifiedBy(getCurrentUser());
+        doc.setLastModifiedReason(motif);
+        doc = documentRepository.save(doc);
+
+        auditLogService.logAction("DESARCHIVAGE", doc.getDocumentNumber(),
+                motif != null ? "Désarchivage. Motif : " + motif : "Désarchivage du document.");
+        return doc;
+    }
+
+    /**
+     * Supprime définitivement un document, uniquement s'il n'a jamais été validé.
+     *
+     * <p>Restriction volontaire : un document entré en vigueur a valeur de preuve et doit être
+     * archivé, pas effacé. Seul un brouillon — jamais validé, non archivé — peut être supprimé,
+     * typiquement une création erronée.</p>
+     */
+    @Transactional
+    public void deleteDocument(UUID documentId, String motif) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        if (doc.isEsTraiter() || doc.getDateVigueur() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce document a été validé et ne peut pas être supprimé. Archivez-le plutôt : "
+                            + "un document entré en vigueur doit rester traçable.");
+        }
+
+        String numero = doc.getDocumentNumber();
+        documentRepository.delete(doc);
+        auditLogService.logAction("SUPPRESSION", numero,
+                motif != null ? "Suppression du brouillon. Motif : " + motif : "Suppression du brouillon.");
     }
 
     @Transactional
