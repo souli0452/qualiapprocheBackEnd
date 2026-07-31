@@ -132,17 +132,27 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         }
 
         java.util.Set<String> codesUtilises = new java.util.HashSet<>();
-        for (WorkflowStep step : workflow.getSteps()) {
-            String code = step.getCode() != null && !step.getCode().isBlank()
-                    ? normaliserCode(step.getCode())
-                    : codeDisponible(normaliserCode(step.getNomEtape()), codesUtilises);
 
-            if (!codesUtilises.add(code)) {
-                throw new com.qualiapproche.common.exception.BusinessException(
-                        "Le code d'étape « " + code + " » est utilisé deux fois dans ce circuit. "
-                                + "Chaque étape doit porter un code distinct.",
-                        org.springframework.http.HttpStatus.CONFLICT);
+        // Les étapes déjà enregistrées gardent leur code — il est immuable — et le réservent.
+        for (WorkflowStep step : workflow.getSteps()) {
+            if (step.getId() != null && step.getCode() != null && !step.getCode().isBlank()) {
+                codesUtilises.add(step.getCode());
             }
+        }
+
+        for (WorkflowStep step : workflow.getSteps()) {
+            if (codesUtilises.contains(step.getCode()) && step.getId() != null) {
+                continue;
+            }
+            String souhaite = step.getCode() != null && !step.getCode().isBlank()
+                    ? normaliserCode(step.getCode())
+                    : normaliserCode(step.getNomEtape());
+
+            // Suffixé plutôt que refusé : la même entrée de catalogue peut légitimement servir
+            // deux fois dans un circuit — deux vérifications successives, par exemple — et le
+            // code venu du catalogue n'est qu'une valeur par défaut, pas une identité imposée.
+            String code = codeDisponible(souhaite, codesUtilises);
+            codesUtilises.add(code);
             step.setCode(code);
         }
     }
@@ -218,6 +228,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         List<WorkflowStep> merged = new java.util.ArrayList<>();
         java.util.Set<Long> seenStepIds = new java.util.HashSet<>();
+        /** Étapes existantes déjà reprises, pour qu'aucune ne soit rattachée deux fois. */
+        java.util.Set<Long> dejaRattachees = new java.util.HashSet<>();
 
         for (WorkflowStepDto stepDto : incomingSteps) {
             if (stepDto.getId() != null && !seenStepIds.add(stepDto.getId())) {
@@ -231,10 +243,19 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 step = existingById.get(stepDto.getId());
             }
             if (step == null && codeDemande != null) {
-                step = existingByCode.get(codeDemande);
+                // Une étape déjà rattachée à une entrée précédente ne peut pas l'être une seconde
+                // fois : sans ce garde, ajouter une étape reprenant le code d'une étape existante
+                // les fusionnait en une seule, écrasant son libellé et la dupliquant dans la liste.
+                WorkflowStep candidat = existingByCode.get(codeDemande);
+                if (candidat != null && !dejaRattachees.contains(candidat.getId())) {
+                    step = candidat;
+                }
             }
             if (step == null) {
+                // Étape nouvelle : son code sera suffixé s'il est déjà pris dans ce circuit.
                 step = new WorkflowStep();
+            } else {
+                dejaRattachees.add(step.getId());
             }
 
             verifierCodeImmuable(step, codeDemande);
