@@ -32,7 +32,11 @@ public class RoleInitializer implements CommandLineRunner {
                 "VALIDATION_RQ", "IMPUTATION_NC", "TRAITEMENT_NC", "VALIDATION_CHEF",
                 "RQ_NC", "CONSULTATION_NC", "TRAITEMENT_PLAN", "MANAGE_USER", "ROLE_MANAGE", "STRUCT_MANAGE",
                 "document-read", "document-write", "document-type-read", "document-type-write",
-                "workflow-read", "workflow-write", "workflow-validate"
+                "workflow-read", "workflow-write", "workflow-validate",
+                // Actions de la fiche document : chacune conditionne l'affichage du bouton
+                // correspondant, l'écran ne proposant que ce que l'utilisateur peut faire.
+                "document-history", "document-audit", "document-download",
+                "document-validate", "document-archive"
         ));
 
         log.info("Synchronisation des rôles terminée.");
