@@ -61,8 +61,8 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
 
                     if (dbTrans.getToStep() != null) {
                         destination = coreWf.getEtat(dbTrans.getToStep().getId().toString());
-                    } else {
-                        // Terminal state synthesis
+                    } else if (dbTrans.isTerminal()) {
+                        // Fin de circuit explicitement voulue : l'état de sortie est synthétisé.
                         String endStateCode = "TERMINATED_" + dbTrans.getDecision().name();
                         destination = coreWf.getEtat(endStateCode);
                         if (destination == null) {
@@ -70,6 +70,15 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
                             destination.setLibelle("Terminé (" + dbTrans.getDecision().name() + ")");
                             coreWf.addEtat(destination);
                         }
+                    } else {
+                        // Ni destination, ni fin de circuit déclarée : la transition n'a pas été
+                        // configurée. L'ignorer plutôt que d'en faire une sortie de circuit évite
+                        // de proposer une action que personne n'a voulue — et qui clôturerait le
+                        // dossier si elle était déclenchée.
+                        log.warn("Transition {} ({}) de l'étape « {} » ignorée : aucune étape de "
+                                        + "destination et fin de circuit non déclarée.",
+                                dbTrans.getId(), dbTrans.getDecision(), dbStep.getNomEtape());
+                        continue;
                     }
 
                     TransitionPersistante transition = new TransitionPersistante(dbTrans.getId().toString(), origine, destination);
