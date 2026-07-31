@@ -348,33 +348,6 @@ public class QmsDocumentService {
         return doc;
     }
 
-    @Transactional
-    public void updateWorkflowStatus(UUID documentId, String status, String comments) {
-        DocumentQms doc = documentRepository.findById(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
-        
-        log.info("Received external workflow status update for document '{}': status={}", doc.getDocumentNumber(), status);
-        
-        doc.setCurrentEtape(status);
-        if ("APPROVED".equalsIgnoreCase(status) || "VALIDE".equalsIgnoreCase(status)) {
-            transitionStatus(documentId, "valide", comments != null ? comments : "Validation workflow complétée");
-        } else if ("REJECTED".equalsIgnoreCase(status) || "REJETE".equalsIgnoreCase(status)) {
-            transitionStatus(documentId, "brouillon", comments != null ? comments : "Validation workflow rejetée");
-        } else {
-            documentRepository.save(doc);
-        }
-    }
-
-    @Transactional
-    public void logWorkflowAudit(UUID documentId, String action, String details) {
-        DocumentQms doc = documentRepository.findById(documentId).orElse(null);
-        if (doc != null) {
-            auditLogService.logAction(action, doc.getDocumentNumber(), details != null ? details : "Action workflow exécutée");
-        } else {
-            log.warn("Cannot log workflow audit for non-existent document ID: {}", documentId);
-        }
-    }
-
     /**
      * Applique au document l'issue d'une transition de workflow.
      *
