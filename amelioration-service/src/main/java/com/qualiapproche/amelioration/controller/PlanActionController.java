@@ -31,11 +31,6 @@ public class PlanActionController {
         PlanActionDto planActionDto = planActionService.createPlanActionDto(dto);
         return new ResponseEntity<>(planActionDto, HttpStatus.OK);
     }
-    @PutMapping(UPDATE_PLAN_ACTION)
-    public ResponseEntity<PlanActionDto> update(@RequestBody PlanActionDto dto) throws IOException {
-        PlanActionDto planActionDto = planActionService.changeStatus(dto);
-        return new ResponseEntity<>(planActionDto, HttpStatus.OK);
-    }
 
     @GetMapping(GET_ALL_PLAN_ACTION)
     public ResponseEntity<Page<PlanActionDto>> allActions(@ParameterObject Pageable pageable) {
@@ -61,11 +56,6 @@ public class PlanActionController {
     public ResponseEntity<Page<PlanActionDto>> getAllActionsByResponsbaleAll(@PathVariable String email, @ParameterObject Pageable pageable ) {
         Page<PlanActionDto> planActionDtos  = planActionService.planActionByResponsableAll(email, pageable);
         return new ResponseEntity<>(planActionDtos, HttpStatus.OK);
-    }
-    @PutMapping(REJET_PLAN_ACTION)
-    public ResponseEntity<PlanActionDto> rejet(@RequestBody PlanActionDto dto) throws IOException {
-        PlanActionDto planActionDto = planActionService.rejet(dto);
-        return new ResponseEntity<>(planActionDto, HttpStatus.OK);
     }
     @GetMapping(path = "/stats/status/{annee}")
     public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> statService(@PathVariable int annee) {

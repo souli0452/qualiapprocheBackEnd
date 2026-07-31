@@ -54,9 +54,6 @@ public class DocumentQms extends AuditEntity {
     private boolean enRetardRevision;
     private boolean obsolete;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "current_step_id")
-    private WorkflowStep currentStep;
 
     @Builder.Default
     private int versionMajeure = 1;
@@ -83,8 +80,9 @@ public class DocumentQms extends AuditEntity {
     private String alerteEnvoyee;
     private boolean archived;
 
-    // Workflow
-    private String workflowStatus; // EN_COURS, TERMINE, null
+    // Workflow — libellé de l'étape actuelle (null = brouillon, pas de workflow actif)
+    private String currentEtape;
+    private java.util.UUID workflowId;
 
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

@@ -11,7 +11,10 @@ import com.qualiapproche.amelioration.entities.*;
 import com.qualiapproche.common.dto.PieceJointeDTO;
 import com.qualiapproche.common.utils.StatutEnum;
 import com.qualiapproche.amelioration.client.ReferentielClient;
+import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.common.dto.StructureDto;
+import com.qualiapproche.common.dto.WorkflowSummaryDto;
+import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import feign.FeignException;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.transaction.Transactional;
@@ -43,6 +46,7 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final SendMailService sendMailService;
     private final ReferentielClient referentielClient;
     private final PieceJointeService fichierService;
+    private final WorkflowClient workflowClient;
 
     @org.springframework.beans.factory.annotation.Value("${frontend.url}")
     private String frontendUrl;
@@ -61,7 +65,20 @@ public class PlanActionServiceImpl implements PlanActionService {
                 .orElseThrow(() -> new RuntimeException("Ce plan d'action n'est associé à aucune non-conformité!"));
 
         planAction.setNonConformeId(nonConformite.getId()); // Associer la NonConformité à PlanAction
-        PlanActionDto result = planActionMapper.toDto((planAction));
+        planAction = planActionRepository.save(planAction);
+
+        try {
+            WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType("PLAN_ACTION");
+            if (activeWorkflow != null && activeWorkflow.getId() != null) {
+                workflowClient.initiateWorkflow(planAction.getId(), "PLAN_ACTION", activeWorkflow.getId());
+                planAction.setWorkflowId(activeWorkflow.getId());
+                planActionRepository.save(planAction);
+            }
+        } catch (Exception e) {
+            log.error("Erreur lors de l'initialisation du workflow PLAN_ACTION", e);
+        }
+
+        PlanActionDto result = planActionMapper.toDto(planAction);
         result.setFichiers(fichierService.getPjByEntityId(result.getId()));
         return result;
     }
@@ -103,84 +120,6 @@ public class PlanActionServiceImpl implements PlanActionService {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
                 });
-    }
-
-    @Override
-    public PlanActionDto changeStatus(PlanActionDto planActionDto) throws IOException {
-
-        PlanAction planAction = planActionRepository.getReferenceById(planActionDto.getId());
-        NonConformite nonConformite = nonConformiteRepository.getReferenceById(planActionDto.getNonConformeId());
-        
-        StructureDto structure = null;
-        try {
-            structure = referentielClient.getStructureById(UUID.fromString(nonConformite.getOrigineId()));
-        } catch (FeignException.NotFound e) {
-            log.warn("Structure introuvable via Feign client pour l'origineId: {}", nonConformite.getOrigineId());
-        } catch (Exception e) {
-            log.error("Erreur lors de la récupération de la structure", e);
-        }
-        String subject = "Traitement terminé – Non-conformité N°" + nonConformite.getNumeroReference()
-                + " prête à être validée ";
-        String object = "Suivi qualité – Plan d’action réalisé par l’agent " + planAction.getResponsableNomComplet();
-        String link = frontendUrl + "/page/validation";
-        String linkPlan = frontendUrl + "/traitement-action/non-traiter";
-        planAction.setStatus(planActionDto.getStatus());
-        planAction.setObservation(planActionDto.getObservation());
-        planAction.setCauseIdentifiees(planActionDto.getCauseIdentifiees());
-        planAction.setSolutionRetenues(planActionDto.getSolutionRetenues());
-
-        if (planActionDto.getStatus() == StatutEnum.TRAITER) {
-            planAction.setDateTraitement(LocalDate.now());
-        }
-
-        if (planActionDto.getFichiers() != null) {
-            fichierService.savePj(planActionDto.getFichiers(), planActionDto.getId());
-        }
-        PlanAction savedPlanAction = planActionRepository.save(planAction);
-        
-        if (structure != null && structure.getEmail() != null) {
-            sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), object, linkPlan, "emailRqPlan",
-                    structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), "");
-        } else {
-            log.warn("Structure introuvable ou email manquant pour l'origineId: {}", nonConformite.getOrigineId());
-        }
-
-        List<PlanAction> allPlans = planActionRepository.findPlanActionsByNonConformeId(nonConformite.getId());
-
-        boolean allTreated = allPlans.stream()
-                .allMatch(plan -> plan.getStatus() == StatutEnum.TRAITER);
-
-        if (allTreated) {
-            if (structure != null && structure.getEmail() != null) {
-                sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link, "validationAfterPlan",
-                        structure.getAutoriteSignataire(), nonConformite.getNumeroReference(), "");
-            }
-        }
-        PlanActionDto result = planActionMapper.toDto(savedPlanAction);
-        result.setFichiers(fichierService.getPjByEntityId(result.getId()));
-        return result;
-    }
-
-    @Override
-    public PlanActionDto rejet(PlanActionDto dto) throws IOException {
-        PlanAction planAction = planActionRepository.getReferenceById(dto.getId());
-        planAction.setStatus(StatutEnum.REJECTED);
-        planAction.setObservationRejet(dto.getObservationRejet());
-        planAction.setDateRejet(dto.getDateRejet());
-        String link = frontendUrl + "/page/traitement-actions/rejeter";
-        String object = " Rejet de l’évaluation d’efficacité – Non-conformité " + planAction.getNumeroNc();
-        List<PieceJointeDTO> fichiers = new ArrayList<>();
-        if (dto.getDocRejet() != null) {
-            fichiers.add(dto.getDocRejet());
-            fichierService.savePj(fichiers, dto.getId());
-        }
-        sendMailService.sendMailToUserAfterDemandImputed(planAction.getResponsableEmail(), object, link,
-                "rejectPlanAction", planAction.getResponsableNomComplet(), planAction.getNumeroNc(),
-                planAction.getObservationRejet());
-
-        PlanActionDto result = planActionMapper.toDto((planAction));
-        result.setFichiers(fichierService.getPjByEntityId(result.getId()));
-        return result;
     }
 
     @Override
@@ -296,5 +235,42 @@ public class PlanActionServiceImpl implements PlanActionService {
         // Assuming a method doesn't exist yet, we will just return a basic findAll to satisfy the interface temporarily
         return planActionRepository.findAll(pageable)
                 .map(planActionMapper::toDto);
+    }
+
+    @Override
+    public void updateWorkflowState(UUID planActionId, String newStateName, String newEtatTraitement) {
+        PlanAction planAction = planActionRepository.findById(planActionId)
+                .orElseThrow(() -> new RuntimeException("Plan d'action introuvable: " + planActionId));
+
+        planAction.setWorkflowStatus(newStateName);
+
+        try {
+            StatutEnum statut = StatutEnum.valueOf(newEtatTraitement);
+            planAction.setStatus(statut);
+            if (statut == StatutEnum.TRAITER && planAction.getDateTraitement() == null) {
+                planAction.setDateTraitement(LocalDate.now());
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("EtatTraitement non reconnu dans le workflow: {}", newEtatTraitement);
+        }
+
+        planActionRepository.save(planAction);
+
+        if (planAction.getStatus() == StatutEnum.TRAITER) {
+            List<PlanAction> allPlans = planActionRepository.findPlanActionsByNonConformeId(planAction.getNonConformeId());
+            boolean allTreated = allPlans.stream()
+                    .allMatch(plan -> plan.getStatus() == StatutEnum.TRAITER);
+
+            if (allTreated) {
+                try {
+                    WorkflowValidationRequestDto req = WorkflowValidationRequestDto.builder()
+                            .comments("Tous les plans d'action ont été traités.")
+                            .build();
+                    workflowClient.validateStep(planAction.getNonConformeId(), "SYSTEM", req);
+                } catch (Exception e) {
+                    log.error("Erreur lors de la validation du parent NonConformite", e);
+                }
+            }
+        }
     }
 }

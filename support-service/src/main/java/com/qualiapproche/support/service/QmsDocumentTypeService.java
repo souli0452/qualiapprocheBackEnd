@@ -65,6 +65,7 @@ public class QmsDocumentTypeService {
         QmsDocumentType existing = getTypeById(id);
         existing.setLibelle(updated.getLibelle());
         existing.setFolderName(updated.getFolderName());
+        existing.setWorkflowId(updated.getWorkflowId());
         return typeRepository.save(existing);
     }
 

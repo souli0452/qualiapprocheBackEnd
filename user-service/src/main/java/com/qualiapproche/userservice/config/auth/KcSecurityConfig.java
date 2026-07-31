@@ -13,6 +13,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.annotation.web.builders.WebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -56,7 +58,7 @@ public class KcSecurityConfig {
                 .anonymous(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/actuator/**").permitAll();
-                    auth.requestMatchers(HttpMethod.OPTIONS, "/*").permitAll();
+                    auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
                     auth.requestMatchers(
                             "/js/**",
                             "/images/**",
@@ -81,6 +83,20 @@ public class KcSecurityConfig {
                         .bearerTokenResolver(cookieBearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
+    }
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring().requestMatchers(
+                "/api/v1/login",
+                "/api/v1/refresh",
+                "/api/v1/logout",
+                "/api/v1/verify-email",
+                "/api/v1/initiate-reset-pwd",
+                "/api/v1/reinitialize-pwd",
+                "/swagger-ui/**",
+                "/v3/api-docs/**"
+        );
     }
 
     @Bean

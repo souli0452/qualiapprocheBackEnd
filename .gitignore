@@ -50,3 +50,6 @@ support-service/src/main/resources/application.yml
 user-service/src/main/resources/application.yml
 ``
 node_modules
+
+# Espaces de travail temporaires des agents
+.claude/

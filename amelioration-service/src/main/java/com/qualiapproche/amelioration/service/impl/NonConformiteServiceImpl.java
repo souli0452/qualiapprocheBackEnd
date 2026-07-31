@@ -12,8 +12,10 @@ import com.qualiapproche.amelioration.entities.mappers.*;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
+import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.amelioration.repository.*;
 import com.qualiapproche.amelioration.client.ReferentielClient;
+import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.common.utils.StatutEnum;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.persistence.EntityNotFoundException;
@@ -46,6 +48,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final PieceJointeService fichierService;
     private final SendMailService sendMailService;
     private final PlanActionRepository planActionRepository;
+    private final WorkflowClient workflowClient;
 
     @org.springframework.beans.factory.annotation.Value("${frontend.url}")
     private String frontendUrl;
@@ -119,6 +122,31 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
         NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
+
+        // Initialiser le workflow : une indisponibilité de workflow-service ne doit pas bloquer
+        // la création de la non-conformité (aligné sur la politique déjà utilisée pour PlanAction).
+        // La non-conformité reste alors sans workflowId ; un correctif ultérieur pourra prévoir
+        // une reprise automatique (ex. tâche planifiée) sur les dossiers sans workflow associé.
+        try {
+            WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType("NON_CONFORMITE");
+            UUID workflowId = activeWorkflow.getId();
+            savedNonConformite.setWorkflowId(workflowId);
+
+            WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
+                    savedNonConformite.getId(),
+                    "NON_CONFORMITE",
+                    workflowId
+            );
+
+            if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
+                savedNonConformite.setWorkflowStatus(workflowInstance.getCurrentStateName());
+            }
+            savedNonConformite = nonConformiteRepository.save(savedNonConformite);
+        } catch (Exception e) {
+            log.error("Erreur lors de l'initialisation du workflow NON_CONFORMITE pour {} : {}",
+                    savedNonConformite.getId(), e.getMessage());
+        }
+
         fichierService.savePj(dto.getFichiers(), savedNonConformite.getId());
 
         return populateAttachments(nonConformiteMapper.toDto(savedNonConformite));
@@ -135,13 +163,6 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         existingNonConformite.setActionId(findActionById(dto.getActionId()));
         existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
         existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-        existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
-        if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
-            if (dto.getCircuit() == null || dto.getOrigineId() == null ) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
-            }
-        }
         existingNonConformite.setCircuit(dto.getCircuit());
         existingNonConformite.setOrigineId(dto.getOrigineId());
         existingNonConformite.setOrigineService(dto.getOrigineService());
@@ -192,118 +213,31 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
             existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
             existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
-            existingNonConformite.setEtatTraitement(dto.getEtatTraitement());
-            if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-                if (dto.getCircuit() == null || dto.getOrigineId() == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit, la structure destination (origineId) et le type d'action sont obligatoires pour la validation RS.");
-                }
-                existingNonConformite.setCircuit(dto.getCircuit());
-                existingNonConformite.setOrigineId(dto.getOrigineId());
-                existingNonConformite.setOrigineService(dto.getOrigineService());
-                existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
-            }
+            if (dto.getCircuit() != null) existingNonConformite.setCircuit(dto.getCircuit());
+            if (dto.getOrigineId() != null) existingNonConformite.setOrigineId(dto.getOrigineId());
+            if (dto.getOrigineService() != null) existingNonConformite.setOrigineService(dto.getOrigineService());
+            if (dto.getOrigineServiceLibelleCourt() != null) existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
 
-
-          //  existingNonConformite.setActionLibelle(dto.getActionLibelle());
             existingNonConformite.setUserImputId(dto.getUserImputId());
             existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
-            existingNonConformite.setStatus(dto.getStatus());
             existingNonConformite.setActionPreventive(dto.getActionPreventive());
             existingNonConformite.setPertinanceRsSuivi(dto.getPertinanceRsSuivi());
             existingNonConformite.setNumeroFdac(dto.getNumeroFdac());
-            ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
-            StructureDto structure = null;
-            if (dto.getOrigineId() != null) {
-                structure = referentielClient.getStructureById(UUID.fromString(dto.getOrigineId()));
-            }
-            StructureDto structureSoumission = null;
-            if (dto.getStructureSoumissionId() != null) {
-                structureSoumission = referentielClient
-                        .getStructureById(UUID.fromString(dto.getStructureSoumissionId()));
-            }
+            
             if (dto.getFichiers() != null) {
                 fichierService.deleteAllByEntityId(dto.getId());
                 nonConformiteRepository.flush();
                 fichierService.savePj(dto.getFichiers(), dto.getId());
             }
-            if (dto.getEtatTraitement() == Etat.CLOTURE) {
-                existingNonConformite.setDateSuivi(LocalDateTime.now());
-            }
-            if (dto.getEtatTraitement() == Etat.TRAITEMENT) {
-                String subject = "Taitement d'une non conformité ";
-                String link = frontendUrl + "/traitement";
-                sendMailService.sendMailToUserAfterDemandImputed(dto.getUserImputeEmail(), subject, link,
-                        "emailTemplate", dto.getUserImputFullName(), dto.getNumeroReference(),
-                        dto.getObservationRejet());
 
-            }
-            if (dto.getEtatTraitement() == Etat.IMPUTATION) {
-
-                    String subject = "Non-conformité signalée – Action attendue de votre part ";
-                    String link = frontendUrl + "/imputation";
-                    if (structure != null) {
-                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
-                                "structureToStructure", structure.getAutoriteSignataire(), dto.getNumeroReference(),
-                                dto.getStructureSoumissionLibelle());
-
-                }
-            }
-            /*
-             * if (dto.getEtatTraitement()==Etat.VALIDATION_PLAN){
-             * String subject = "Non-conformité signalée – Action attendue de votre part ";
-             * String link = frontendUrl + "/validation-plan";
-             * sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(),
-             * subject,link,"validationPlanRequise",structure.getAutoriteSignataire(),dto.
-             * getNumeroReference(),dto.getCurrentUserfullName());
-             * 
-             * }
-             */
-            if (dto.getEtatTraitement() == Etat.VALIDATION_RS) {
-                String subject = "Validation d'une non conformité ";
-                String link = frontendUrl + "/validation_rs";
-                if (configGlobal != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
-                            "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
-                }
-            }
-            if (dto.getEtatTraitement() == Etat.SUIVI_RQ) {
-                String subject = "Suivi d'une non conformité ";
-                String link = frontendUrl + "/suivi_rq";
-                if (configGlobal != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(configGlobal.getEmailRq(), subject, link,
-                            "validationRq", configGlobal.getNomCompletRq(), dto.getNumeroReference(), "");
-                }
-            }
-            if (dto.getEtatTraitement() == Etat.CLOTURE) {
-                String subject = "Cloture  non conformité ";
-                String link = frontendUrl + "/consultation";
-                if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
-                            "traitementReussi", structure.getAutoriteSignataire(), dto.getNumeroReference(),
-                            dto.getStructureSoumissionLibelle());
-                }
-                if (structureSoumission != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structureSoumission.getEmail(), subject, link,
-                            "traitementReussi", structureSoumission.getAutoriteSignataire(), dto.getNumeroReference(),
-                            dto.getStructureSoumissionLibelle());
-                }
-            }
             existingNonConformite.setDelaisMiseOeuvre(dto.getDelaisMiseOeuvre());
-            if (dto.getEtatTraitement() == Etat.VALIDATION) {
-                String subject = "Validation de la non-conformité N°" + dto.getNumeroReference();
-                String link = frontendUrl + "/validation";
-                if (structure != null) {
-                    sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
-                            "validationNonConformite", structure.getAutoriteSignataire(), dto.getNumeroReference(),
-                            dto.getObservationRejet());
-                }
-                if (!dto.getParticipants().isEmpty()) {
-                    dto.getParticipants().forEach(participant -> {
-                        existingNonConformite.getParticipants().getFullNames().add(participant);
-                    });
-                }
+            
+            if (dto.getParticipants() != null && !dto.getParticipants().isEmpty()) {
+                dto.getParticipants().forEach(participant -> {
+                    existingNonConformite.getParticipants().getFullNames().add(participant);
+                });
             }
             existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
             if (dto.getPlanActions() != null && !dto.getPlanActions().isEmpty()) {
@@ -409,55 +343,6 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         }
     }
 
-    @Override
-    public NonConformiteDto rejectNonConformite(RejectNonConformiteDto rejectNonConformiteDto) throws IOException {
-        NonConformite nonConformite = nonConformiteRepository.getReferenceById(rejectNonConformiteDto.getId());
-        nonConformite.setEtatTraitement(rejectNonConformiteDto.getEtapeTraitement());
-        nonConformite.setObservationRejet(rejectNonConformiteDto.getRejectReason());
-        nonConformite.setStatus(Status.REJECTED);
-        /*
-         * List<Fichier> fichiers=
-                new ArrayList<>();
-         * if (rejectNonConformiteDto.getDocRejet() != null) {
-         * Fichier fichier=fichierMapper.toEntity(rejectNonConformiteDto.getDocRejet());
-         * fichiers.add(fichier);
-         * nonConformite.setDocRejet(fichierService.convertBase64(fichiers).stream().
-         * findFirst().get());
-         * 
-         * }
-         */
-        String subject = "Taitement d'une non conformité N°" + nonConformite.getNumeroReference();
-
-        ConfigGlobalDto configGlobal = referentielClient.getConfigGlobal();
-        if (rejectNonConformiteDto.getEtapeTraitement() == Etat.SOUMISSION) {
-            String link = frontendUrl + "/reception";
-            try {
-                if (nonConformite.getStructureSoumissionId() != null) {
-                    StructureDto structure = referentielClient
-                            .getStructureById(UUID.fromString(nonConformite.getStructureSoumissionId()));
-                    if (structure != null) {
-                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, link,
-                
-                                "rejectNonConformite", structure.getAutoriteSignataire(),
-                                nonConformite.getNumeroReference(), nonConformite.getObservationRejet());
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Erreur envoi mail rejet : {}", e.getMessage());
-            }
-        }
-        if (rejectNonConformiteDto.getEtapeTraitement() == Etat.TRAITEMENT) {
-            String link = frontendUrl;
-            sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getUserImputeEmail(), subject, link,
-                    "rejectNonConformite", nonConformite.getUserImputFullName(), nonConformite.getNumeroReference(),
-                    nonConformite.getObservationRejet());
-        }
-        String link = frontendUrl;
-        sendMailService.sendMailToUserAfterDemandImputed(nonConformite.getCurrentUserEmail(), subject, link,
-                "rejectNonConformite", nonConformite.getCurrentUserfullName(), nonConformite.getNumeroReference(),
-                nonConformite.getObservationRejet());
-        return populateAttachments(nonConformiteMapper.toDto((nonConformite)));}
-
     public void deleteMultiple(List<NonConformiteDto> nonConformiteDtos) {
         nonConformiteDtos.forEach(actualityDto -> {
             if (!nonConformiteRepository.existsById(actualityDto.getId())) {
@@ -465,67 +350,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                         "Actualité invalide, impossible de supprimer.");
             }
             nonConformiteRepository.deleteById(actualityDto.getId());
-            // fichierServiceImpl.removePjByEntity(actualityDto.getId(), this.pjDirectory);
         });
-
     }
 
     @Transactional(readOnly = true)
     public List<NcStats> getNcStats(String structureSoumissionId) {
         return nonConformiteRepository.countByStatusForStructure(structureSoumissionId);
-    }
-
-    public void changeStatus(UUID id, Status status) {
-        log.debug("Request to change status of Actuality : {}", id);
-        if (!nonConformiteRepository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Actualité invalide, impossible de changer le statut.");
-        }
-        NonConformite nc = nonConformiteRepository.getReferenceById(id);
-        if (nc.getStatus() == Status.DRAFT) {
-            nc.setPublicationDate(LocalDateTime.now());
-            nc.setEtatTraitement(Etat.RECEPTION);
-            String subject = "Taitement d'une non conformité N°" + nc.getNumeroReference();
-            try {
-                if (nc.getStructureSoumissionId() != null) {
-                    StructureDto structure = referentielClient
-                            .getStructureById(UUID.fromString(nc.getStructureSoumissionId()));
-                    if (structure != null) {
-                        sendMailService.sendMailToUserAfterDemandImputed(structure.getEmail(), subject, "",
-                                "validationNonConformite", structure.getAutoriteSignataire(), nc.getNumeroReference(),
-                                nc.getObservationRejet());
-                    }
-                }
-            } catch (Exception e) {
-                log.error("Erreur lors de l'envoi du mail de changement de statut : {}", e.getMessage());
-            }
-        }
-        if (nc.getStatus() == Status.PUBLISHED) {
-            nc.setArchivageDate(LocalDateTime.now());
-        }
-        nc.setStatus(status);
-        nonConformiteRepository.save(nc);
-    }
-
-    public void changeManyStatus(List<NonConformiteDto> nonConformiteDtos, Status status) {
-        nonConformiteDtos.forEach(act -> {
-            if (!nonConformiteRepository.existsById(act.getId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Actualité invalide, impossible de changer le statut.");
-            }
-            NonConformite nc = nonConformiteRepository.getReferenceById(act.getId());
-            if (nc.getStatus() == Status.DRAFT) {
-                nc.setPublicationDate(LocalDateTime.now());
-                nc.setEtatTraitement(Etat.RECEPTION);
-            }
-            if (nc.getStatus() == Status.PUBLISHED) {
-
-                nc.setArchivageDate(LocalDateTime.now());
-            }
-            nc.setStatus(status);
-            nonConformiteRepository.save(nc);
-        });
-
     }
 
     @Transactional(readOnly = true)
@@ -1092,10 +922,10 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     public Page<NonConformiteDto> search(
             String numeroReference, String nomProcessus, String origineId, String origineService,
             String structureSoumissionId, String structureResponsableId,
-            com.qualiapproche.common.enumeration.Etat etatTraitement,
-            com.qualiapproche.common.enumeration.Status status,
-            com.qualiapproche.common.enumeration.TypeDemande typeDemande,
-            com.qualiapproche.common.enumeration.Circuit circuit,
+            Etat etatTraitement,
+            Status status,
+            TypeDemande typeDemande,
+            Circuit circuit,
             String userImputeEmail, String typeNonConformiteLibelle, String niveauNonConformiteLibelle,
             UUID typeNonConformiteId, UUID niveauNonConformiteId,
             LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
@@ -1110,5 +940,52 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         );
         return nonConformiteRepository.findAll(spec, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
+    }
+
+    /**
+     * Met à jour l'état de la non-conformité suite à un webhook du service de workflow.
+     * Cette méthode est appelée par le contrôleur interne (AmeliorationInternalCallbackController).
+     *
+     * @param nonConformiteId Identifiant de la non conformité
+     * @param newStateName    Le nom du nouvel état (ex: "Validation RS", "Clôture")
+     * @param newEtatTraitement L'énumération Etat correspondante si définie (ex: "VALIDATION_RS", "CLOTURE")
+     */
+    @Override
+    @Transactional
+    public void updateWorkflowState(UUID nonConformiteId, String newStateName, String newEtatTraitement) {
+        log.info("Mise à jour de l'état du workflow pour la non conformité {}: statut={}, etat={}", nonConformiteId, newStateName, newEtatTraitement);
+        NonConformite nc = nonConformiteRepository.findById(nonConformiteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Non conformité introuvable"));
+        
+        nc.setWorkflowStatus(newStateName);
+
+        Status oldStatus = nc.getStatus();
+
+        if ("BROUILLON".equalsIgnoreCase(newStateName) || "DRAFT".equalsIgnoreCase(newStateName)) {
+            nc.setStatus(Status.DRAFT);
+        } else if ("REJETE".equalsIgnoreCase(newStateName) || "REJECTED".equalsIgnoreCase(newStateName) || "REJECT".equalsIgnoreCase(newStateName)) {
+            nc.setStatus(Status.REJECTED);
+        } else if ("APPROUVE".equalsIgnoreCase(newStateName) || "APPROVED".equalsIgnoreCase(newStateName) || "TRAITEE".equalsIgnoreCase(newEtatTraitement)) {
+            nc.setStatus(Status.APPROVED);
+        } else if ("PUBLIE".equalsIgnoreCase(newStateName) || "PUBLISHED".equalsIgnoreCase(newStateName) || "CLOTURE".equalsIgnoreCase(newEtatTraitement)) {
+            nc.setStatus(Status.PUBLISHED);
+        } else {
+            // Tous les autres états intermédiaires (EN_TRAITEMENT, VALIDATION, etc.)
+            nc.setStatus(Status.IN_PROGRESS);
+        }
+
+        if (nc.getStatus() == Status.PUBLISHED && (oldStatus == Status.DRAFT || oldStatus == Status.REJECTED)) {
+            nc.setPublicationDate(LocalDateTime.now());
+        }
+
+        if (newEtatTraitement != null && !newEtatTraitement.isEmpty()) {
+            try {
+                nc.setEtatTraitement(Etat.valueOf(newEtatTraitement));
+            } catch (IllegalArgumentException e) {
+                log.warn("L'état de traitement reçu du workflow n'est pas reconnu: {}", newEtatTraitement);
+            }
+        }
+        
+        nonConformiteRepository.save(nc);
     }
 }

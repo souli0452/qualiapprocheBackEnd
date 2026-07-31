@@ -22,6 +22,8 @@
 		<module>discovery</module>
 		<module>api-gateway</module>
 		<module>support-service</module>
+		<module>workflow-service</module>
+
 		<module>evaluation-service</module>
 		<module>realisation-service</module>
 		<module>planification-service</module>

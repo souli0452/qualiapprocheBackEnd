@@ -48,6 +48,7 @@ public class QmsDocumentController {
     private final QmsDocumentService documentService;
     private final QmsAuditLogService auditLogService;
     private final DocumentMapper documentMapper;
+    private final com.qualiapproche.support.client.WorkflowClient workflowClient;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.canCreate(this)")
@@ -161,7 +162,7 @@ public class QmsDocumentController {
             @RequestParam(value = "reference",           required = false) String reference,
             @RequestParam(value = "ncReference",         required = false) String ncReference,
             @RequestParam(value = "createdById",         required = false) String createdById,
-            @RequestParam(value = "workflowStatus",      required = false) String workflowStatus,
+            @RequestParam(value = "currentEtape",       required = false) String currentEtape,
             @RequestParam(value = "status",              required = false) List<String> status,
             @RequestParam(value = "confidentiel",        required = false) Boolean confidentiel,
             @RequestParam(value = "documentExterne",     required = false) Boolean documentExterne,
@@ -191,7 +192,7 @@ public class QmsDocumentController {
                 .reference(reference)
                 .ncReference(ncReference)
                 .createdById(createdById)
-                .workflowStatus(workflowStatus)
+                .currentEtape(currentEtape)
                 .status(status)
                 .confidentiel(confidentiel)
                 .documentExterne(documentExterne)
@@ -250,7 +251,15 @@ public class QmsDocumentController {
     @GetMapping("/{id}")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentQmsDto> getDocument(@PathVariable("id") UUID id) {
-        return ResponseEntity.ok(documentMapper.toDto(documentService.getDocumentById(id)));
+        DocumentQms doc = documentService.getDocumentById(id);
+        DocumentQmsDto dto = documentMapper.toDto(doc);
+        try {
+            com.qualiapproche.common.dto.WorkflowStateDto state = workflowClient.getWorkflowState(id);
+            dto.setWorkflowState(state);
+        } catch(Exception e) {
+            log.warn("Could not fetch workflow state for document {}: {}", id, e.getMessage());
+        }
+        return ResponseEntity.ok(dto);
     }
 
     // -------------------------------------------------------------------------

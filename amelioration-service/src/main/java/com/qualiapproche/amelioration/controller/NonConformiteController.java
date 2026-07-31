@@ -7,7 +7,10 @@ import java.util.UUID;
 
 import com.qualiapproche.common.dto.NcStats;
 import com.qualiapproche.common.dto.NcEvolutionDto;
+import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.common.dto.RejectNonConformiteDto;
+import com.qualiapproche.common.dto.NcCountsDto;
+import com.qualiapproche.common.dto.NcDashboardDto;
 import com.qualiapproche.common.dto.ValidatePlanActionDto;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
@@ -101,12 +104,7 @@ public class NonConformiteController {
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
 
-    @PutMapping(REJECT_NON_CONFORMITE)
-    public ResponseEntity<NonConformiteDto> rejectNf(@RequestBody RejectNonConformiteDto rejectNonConformiteDto)
-            throws IOException {
-        NonConformiteDto nonConformite = nonConformiteService.rejectNonConformite(rejectNonConformiteDto);
-        return new ResponseEntity<>(nonConformite, HttpStatus.OK);
-    }
+
 
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de toutes les NonConformités              /
@@ -168,18 +166,7 @@ public class NonConformiteController {
         return ResponseEntity.ok(nonConformiteService.getNcStats(id));
     }
 
-    @PatchMapping(path = "/change-status")
-    public ResponseEntity<Void> changeStatus(@RequestParam UUID id, @RequestParam Status status) {
-        nonConformiteService.changeStatus(id, status);
-        return ResponseEntity.ok().build();
-    }
 
-    @PatchMapping(path = "/change-many-status")
-    public ResponseEntity<Void> changeManyStatus(@RequestBody List<NonConformiteDto> actualityDtos,
-            @RequestParam Status status) {
-        nonConformiteService.changeManyStatus(actualityDtos, status);
-        return ResponseEntity.ok().build();
-    }
 
     @GetMapping(path = "/stats/nf-struct/{annee}")
     public ResponseEntity<Map<String, Long>> StatStruct(@PathVariable int annee) {
@@ -267,7 +254,7 @@ public class NonConformiteController {
 
     @Operation(summary = "Nombres de NC pour les pastilles", description = "Renvoie les comptes (brouillons, imputées, archivées) pour l'utilisateur")
     @GetMapping("/user/{userId}/counts")
-    public ResponseEntity<com.qualiapproche.common.dto.NcCountsDto> getNCCountsByUser(@PathVariable String userId) {
+    public ResponseEntity<NcCountsDto> getNCCountsByUser(@PathVariable String userId) {
         return ResponseEntity.ok(nonConformiteService.getCountsByUser(userId));
     }
 
@@ -289,19 +276,19 @@ public class NonConformiteController {
 
     @Operation(summary = "Dashboard pour RQ", description = "Statistiques globales des NC pour le dashboard RQ")
     @GetMapping("/dashboard/rq")
-    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardRQ() {
+    public ResponseEntity<NcDashboardDto> getDashboardRQ() {
         return ResponseEntity.ok(nonConformiteService.getDashboardRQ());
     }
 
     @Operation(summary = "Dashboard pour Pilote", description = "Statistiques des NC par structure pour le dashboard Pilote")
     @GetMapping("/dashboard/pilot/{structureId}")
-    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardPilot(@PathVariable String structureId) {
+    public ResponseEntity<NcDashboardDto> getDashboardPilot(@PathVariable String structureId) {
         return ResponseEntity.ok(nonConformiteService.getDashboardPilot(structureId));
     }
 
     @Operation(summary = "Dashboard pour Utilisateur", description = "Statistiques des NC liées à l'utilisateur (soumis ou imputé)")
     @GetMapping("/dashboard/user/{userId}")
-    public ResponseEntity<com.qualiapproche.common.dto.NcDashboardDto> getDashboardUser(@PathVariable String userId) {
+    public ResponseEntity<NcDashboardDto> getDashboardUser(@PathVariable String userId) {
         return ResponseEntity.ok(nonConformiteService.getDashboardUser(userId));
     }
 

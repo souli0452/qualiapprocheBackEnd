@@ -58,8 +58,8 @@ public class DocumentSearchCriteria {
     /** Statut(s) du document — peut contenir plusieurs valeurs (OR) */
     private List<String> status;
 
-    /** Statut du workflow (EN_COURS, TERMINE) */
-    private String workflowStatus;
+    /** Étape actuelle du workflow */
+    private String currentEtape;
 
     // ---- Filtres booléens ----
     /** null = pas de filtre, true/false = filtre strict */
