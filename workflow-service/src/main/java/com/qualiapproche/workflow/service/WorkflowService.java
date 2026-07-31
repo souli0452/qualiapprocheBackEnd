@@ -40,10 +40,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
     private final WorkflowStepFieldRepository stepFieldRepository;
     private final WorkflowFieldValueRepository fieldValueRepository;
-    
-    // Webhooks might be used via EventListener instead, but kept for context if needed
-    private final SupportWebhookClient supportWebhookClient;
-    private final AmeliorationWebhookClient ameliorationWebhookClient;
+    private final WorkflowTransitionRepository transitionRepository;
+    private final WorkflowStepRepository stepRepository;
 
     public WorkflowService(
             IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> moteur,
@@ -53,15 +51,15 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             WorkflowValidationInstanceRepository validationInstanceRepository,
             WorkflowStepFieldRepository stepFieldRepository,
             WorkflowFieldValueRepository fieldValueRepository,
-            SupportWebhookClient supportWebhookClient,
-            AmeliorationWebhookClient ameliorationWebhookClient) {
+            WorkflowTransitionRepository transitionRepository,
+            WorkflowStepRepository stepRepository) {
         super(moteur, historyRepository, eventPublisher);
         this.workflowRepository = workflowRepository;
         this.validationInstanceRepository = validationInstanceRepository;
         this.stepFieldRepository = stepFieldRepository;
         this.fieldValueRepository = fieldValueRepository;
-        this.supportWebhookClient = supportWebhookClient;
-        this.ameliorationWebhookClient = ameliorationWebhookClient;
+        this.transitionRepository = transitionRepository;
+        this.stepRepository = stepRepository;
     }
 
     public List<WorkflowDto> getAllWorkflows() {
@@ -74,7 +72,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         WorkflowMapper mapper = new WorkflowMapper();
         Workflow workflow = mapper.toEntity(dto);
 
-        // Resolve toStepId for transitions
+        attribuerCodesEtapes(workflow);
         resolveTransitions(workflow, dto);
 
         workflow = workflowRepository.save(workflow);
@@ -122,6 +120,72 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /**
+     * Attribue à chaque étape son code fonctionnel et en garantit l'unicité au sein du circuit.
+     *
+     * <p>Le code fourni par l'appelant fait foi ; à défaut il est dérivé du nom de l'étape. Un
+     * doublon est refusé plutôt que corrigé en silence : deux étapes partageant un code rendraient
+     * toute destination de transition ambiguë.</p>
+     */
+    private void attribuerCodesEtapes(Workflow workflow) {
+        if (workflow.getSteps() == null) {
+            return;
+        }
+
+        java.util.Set<String> codesUtilises = new java.util.HashSet<>();
+
+        // Les étapes déjà enregistrées gardent leur code — il est immuable — et le réservent.
+        for (WorkflowStep step : workflow.getSteps()) {
+            if (step.getId() != null && step.getCode() != null && !step.getCode().isBlank()) {
+                codesUtilises.add(step.getCode());
+            }
+        }
+
+        for (WorkflowStep step : workflow.getSteps()) {
+            if (codesUtilises.contains(step.getCode()) && step.getId() != null) {
+                continue;
+            }
+            String souhaite = step.getCode() != null && !step.getCode().isBlank()
+                    ? normaliserCode(step.getCode())
+                    : normaliserCode(step.getNomEtape());
+
+            // Suffixé plutôt que refusé : la même entrée de catalogue peut légitimement servir
+            // deux fois dans un circuit — deux vérifications successives, par exemple — et le
+            // code venu du catalogue n'est qu'une valeur par défaut, pas une identité imposée.
+            String code = codeDisponible(souhaite, codesUtilises);
+            codesUtilises.add(code);
+            step.setCode(code);
+        }
+    }
+
+    /** Normalise un code : majuscules, séparateurs réduits au souligné, longueur bornée. */
+    private String normaliserCode(String valeur) {
+        if (valeur == null || valeur.isBlank()) {
+            return "ETAPE";
+        }
+        String normalise = java.text.Normalizer.normalize(valeur, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_|_$", "");
+        if (normalise.isBlank()) {
+            return "ETAPE";
+        }
+        return normalise.length() > 60 ? normalise.substring(0, 60) : normalise;
+    }
+
+    private String codeDisponible(String base, java.util.Set<String> dejaPris) {
+        if (!dejaPris.contains(base)) {
+            return base;
+        }
+        for (int suffixe = 2; ; suffixe++) {
+            String candidat = base + "_" + suffixe;
+            if (!dejaPris.contains(candidat)) {
+                return candidat;
+            }
+        }
+    }
+
+    /**
      * Met à jour les étapes existantes en place (par ID) plutôt que de les recréer, afin de
      * préserver les identifiants référencés par les instances de validation en cours
      * ({@code WorkflowValidationInstance.etatCode}). Les étapes retirées ne sont autorisées
@@ -155,45 +219,154 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         Map<Long, WorkflowStep> existingById = existing.getSteps().stream()
                 .filter(s -> s.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(WorkflowStep::getId, s -> s));
-                
-        Map<String, WorkflowStep> existingByName = existing.getSteps().stream()
-                .filter(s -> s.getNomEtape() != null)
-                .collect(java.util.stream.Collectors.toMap(WorkflowStep::getNomEtape, s -> s, (s1, s2) -> s1));
+
+        // Rapprochement par code fonctionnel et non plus par nom : le nom est un libellé, et le
+        // renommer d'une étape suffisait à la faire passer pour une nouvelle.
+        Map<String, WorkflowStep> existingByCode = existing.getSteps().stream()
+                .filter(s -> s.getCode() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStep::getCode, s -> s, (s1, s2) -> s1));
 
         List<WorkflowStep> merged = new java.util.ArrayList<>();
         java.util.Set<Long> seenStepIds = new java.util.HashSet<>();
-        java.util.Set<String> seenStepNames = new java.util.HashSet<>();
+        /** Étapes existantes déjà reprises, pour qu'aucune ne soit rattachée deux fois. */
+        java.util.Set<Long> dejaRattachees = new java.util.HashSet<>();
 
         for (WorkflowStepDto stepDto : incomingSteps) {
             if (stepDto.getId() != null && !seenStepIds.add(stepDto.getId())) {
                 continue;
             }
-            if (stepDto.getNomEtape() != null && !seenStepNames.add(stepDto.getNomEtape())) {
-                continue;
-            }
+            String codeDemande = stepDto.getCode() != null && !stepDto.getCode().isBlank()
+                    ? normaliserCode(stepDto.getCode()) : null;
+
             WorkflowStep step = null;
             if (stepDto.getId() != null) {
                 step = existingById.get(stepDto.getId());
             }
-            if (step == null && stepDto.getNomEtape() != null) {
-                step = existingByName.get(stepDto.getNomEtape());
+            if (step == null && codeDemande != null) {
+                // Une étape déjà rattachée à une entrée précédente ne peut pas l'être une seconde
+                // fois : sans ce garde, ajouter une étape reprenant le code d'une étape existante
+                // les fusionnait en une seule, écrasant son libellé et la dupliquant dans la liste.
+                WorkflowStep candidat = existingByCode.get(codeDemande);
+                if (candidat != null && !dejaRattachees.contains(candidat.getId())) {
+                    step = candidat;
+                }
             }
             if (step == null) {
+                // Étape nouvelle : son code sera suffixé s'il est déjà pris dans ce circuit.
                 step = new WorkflowStep();
+            } else {
+                dejaRattachees.add(step.getId());
             }
+
+            verifierCodeImmuable(step, codeDemande);
             step.setNomEtape(stepDto.getNomEtape());
             step.setStepOrder(stepDto.getStepOrder());
             step.setResponsableRole(stepDto.getResponsableRole());
             step.setDescription(stepDto.getDescription());
             step.setEtatTraitement(stepDto.getEtatTraitement());
             step.setEmailTemplateCode(stepDto.getEmailTemplateCode());
+            step.setStepTemplateId(stepDto.getStepTemplateId());
             step.setWorkflow(existing);
             mergeTransitions(step, stepDto);
+            mergeFields(step, stepDto);
             merged.add(step);
         }
 
         existing.getSteps().clear();
         existing.getSteps().addAll(merged);
+        // Les étapes ajoutées lors de cette modification n'ont pas encore de code.
+        attribuerCodesEtapes(existing);
+    }
+
+    /**
+     * Interdit la réécriture du code d'une étape déjà enregistrée.
+     *
+     * <p>Le code est l'identité fonctionnelle de l'étape : les transitions des autres étapes le
+     * désignent, et les instances en cours s'y rapportent. Le laisser changer reviendrait à
+     * rompre silencieusement ces rattachements. Une étape nouvelle, elle, reçoit le code demandé.</p>
+     */
+    private void verifierCodeImmuable(WorkflowStep step, String codeDemande) {
+        if (step.getId() == null) {
+            step.setCode(codeDemande);
+            return;
+        }
+        if (codeDemande != null && step.getCode() != null && !codeDemande.equals(step.getCode())) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le code de l'étape « " + step.getNomEtape() + " » ne peut pas être modifié ("
+                            + step.getCode() + " → " + codeDemande + "). Créez une nouvelle étape "
+                            + "si le circuit doit changer.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (step.getCode() == null) {
+            step.setCode(codeDemande);
+        }
+    }
+
+    /**
+     * Met à jour les champs de saisie d'une étape.
+     *
+     * <p>Ils étaient purement et simplement ignorés à la modification : seule la création les
+     * enregistrait, si bien qu'un circuit existant ne pouvait plus voir ses champs corrigés,
+     * ajoutés ou supprimés. Les champs sont appariés par identifiant, à défaut par nom, pour
+     * préserver les identifiants déjà référencés par les valeurs saisies en historique.</p>
+     */
+    private void mergeFields(WorkflowStep step, WorkflowStepDto stepDto) {
+        List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto> incoming =
+                stepDto.getFields() != null ? stepDto.getFields() : List.of();
+
+        Map<Long, WorkflowStepField> existingById = step.getFields().stream()
+                .filter(f -> f.getId() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStepField::getId, f -> f));
+
+        Map<String, WorkflowStepField> existingByName = step.getFields().stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowStepField::getFieldName, f -> f, (f1, f2) -> f1));
+
+        List<WorkflowStepField> merged = new java.util.ArrayList<>();
+        java.util.Set<String> seenNames = new java.util.HashSet<>();
+
+        for (com.qualiapproche.workflow.dto.WorkflowStepFieldDto fieldDto : incoming) {
+            if (fieldDto.getFieldName() != null && !seenNames.add(fieldDto.getFieldName())) {
+                continue;
+            }
+
+            WorkflowStepField field = null;
+            if (fieldDto.getId() != null) {
+                field = existingById.get(fieldDto.getId());
+            }
+            if (field == null && fieldDto.getFieldName() != null) {
+                field = existingByName.get(fieldDto.getFieldName());
+            }
+            if (field == null) {
+                field = new WorkflowStepField();
+            }
+
+            field.setFieldName(fieldDto.getFieldName());
+            field.setFieldLabel(fieldDto.getFieldLabel());
+            field.setType(typeDeChamp(fieldDto.getType()));
+            field.setRequired(fieldDto.isRequired());
+            field.setOptions(fieldDto.getOptions());
+            field.setStep(step);
+            merged.add(field);
+        }
+
+        step.getFields().clear();
+        step.getFields().addAll(merged);
+    }
+
+    /** Type de champ, signalé en 400 explicite plutôt qu'en erreur serveur si le libellé est inconnu. */
+    private FieldType typeDeChamp(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        try {
+            return FieldType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Type de champ inconnu : '" + type + "'. Valeurs acceptées : "
+                            + java.util.Arrays.toString(FieldType.values()) + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 
     private void mergeTransitions(WorkflowStep step, WorkflowStepDto stepDto) {
@@ -237,40 +410,94 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         step.getTransitions().addAll(merged);
     }
 
+    /**
+     * Rattache chaque transition à son étape de destination.
+     *
+     * <p>Deux défauts corrigés ici. D'une part la destination n'était cherchée que si
+     * {@code toStepId} était fourni : à la création d'un circuit, les étapes n'ont pas encore
+     * d'identifiant, si bien qu'<b>aucune</b> transition ne pouvait recevoir de destination et que
+     * tout le circuit se terminait dès la première décision. La résolution accepte donc aussi le
+     * nom et le rang de l'étape, les deux clés dont dispose l'appelant avant enregistrement.</p>
+     *
+     * <p>D'autre part l'appariement entre entités et DTO se faisait par position, alors que
+     * {@code mergeSteps} écarte au passage les doublons : les deux listes pouvaient diverger et
+     * décaler les destinations. L'appariement se fait maintenant par identité d'étape.</p>
+     */
     private void resolveTransitions(Workflow workflow, WorkflowDto dto) {
-        // Map toStepId to actual step entities for transitions
-        if (workflow.getSteps() != null && dto.getSteps() != null) {
-            for (int i = 0; i < workflow.getSteps().size(); i++) {
-                WorkflowStep step = workflow.getSteps().get(i);
-                WorkflowStepDto stepDto = dto.getSteps().get(i);
-                
-                if (step.getTransitions() != null && stepDto.getTransitions() != null) {
-                    for (int j = 0; j < step.getTransitions().size(); j++) {
-                        WorkflowTransition transition = step.getTransitions().get(j);
-                        WorkflowTransitionDto transitionDto = stepDto.getTransitions().get(j);
-                        
-                        if (transitionDto.getToStepId() != null) {
-                            // Find the step in the workflow by ID (if it exists) or assume they are created in the same transaction
-                            // For simplicity, we find it from the incoming list (this works if IDs are assigned, but for new steps they are not).
-                            // A better way is to find it by stepOrder or a temporary frontend ID.
-                            WorkflowStep toStep = workflow.getSteps().stream()
-                                    .filter(s -> s.getId() != null && s.getId().equals(transitionDto.getToStepId()))
-                                    .findFirst()
-                                    .orElse(null);
-                            
-                            // If toStepId doesn't match an existing ID (e.g., new step), fallback to finding by stepOrder if toStepName matches
-                            if (toStep == null && transitionDto.getToStepName() != null) {
-                                toStep = workflow.getSteps().stream()
-                                        .filter(s -> transitionDto.getToStepName().equals(s.getNomEtape()))
-                                        .findFirst()
-                                        .orElse(null);
-                            }
-                            transition.setToStep(toStep);
-                        }
-                    }
+        if (workflow.getSteps() == null || dto.getSteps() == null) {
+            return;
+        }
+
+        for (WorkflowStep step : workflow.getSteps()) {
+            WorkflowStepDto stepDto = dtoDeLEtape(dto, step);
+            if (stepDto == null || step.getTransitions() == null || stepDto.getTransitions() == null) {
+                continue;
+            }
+
+            for (WorkflowTransition transition : step.getTransitions()) {
+                WorkflowTransitionDto transitionDto = dtoDeLaTransition(stepDto, transition);
+                if (transitionDto != null) {
+                    transition.setToStep(etapeDestination(workflow, transitionDto));
                 }
             }
         }
+    }
+
+    private WorkflowStepDto dtoDeLEtape(WorkflowDto dto, WorkflowStep step) {
+        return dto.getSteps().stream()
+                .filter(s -> (step.getId() != null && step.getId().equals(s.getId()))
+                        || (step.getNomEtape() != null && step.getNomEtape().equals(s.getNomEtape())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private WorkflowTransitionDto dtoDeLaTransition(WorkflowStepDto stepDto, WorkflowTransition transition) {
+        return stepDto.getTransitions().stream()
+                .filter(t -> (transition.getId() != null && transition.getId().equals(t.getId()))
+                        || (transition.getDecision() != null && t.getDecision() != null
+                                && transition.getDecision().name().equals(t.getDecision())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Destination désignée par code d'étape, à défaut par identifiant, à défaut par rang.
+     *
+     * <p>Le code prime : c'est la seule clé à la fois stable dans le temps et connue de l'appelant
+     * avant enregistrement. Le nom n'est plus une clé de résolution — le corriger cassait
+     * silencieusement toutes les transitions qui pointaient vers l'étape. Le rang ne subsiste que
+     * pour les appelants qui n'ont pas encore basculé sur le code, et il se décale dès qu'on
+     * réordonne le circuit.</p>
+     */
+    private WorkflowStep etapeDestination(Workflow workflow, WorkflowTransitionDto transitionDto) {
+        if (transitionDto.getToStepCode() != null && !transitionDto.getToStepCode().isBlank()) {
+            String code = normaliserCode(transitionDto.getToStepCode());
+            WorkflowStep parCode = workflow.getSteps().stream()
+                    .filter(s -> code.equals(s.getCode()))
+                    .findFirst().orElse(null);
+            if (parCode != null) {
+                return parCode;
+            }
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Aucune étape de ce circuit ne porte le code « " + code + " », "
+                            + "désigné comme destination d'une transition.",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+        if (transitionDto.getToStepId() != null) {
+            WorkflowStep parId = workflow.getSteps().stream()
+                    .filter(s -> transitionDto.getToStepId().equals(s.getId()))
+                    .findFirst().orElse(null);
+            if (parId != null) {
+                return parId;
+            }
+        }
+        if (transitionDto.getToStepOrder() != null) {
+            return workflow.getSteps().stream()
+                    .filter(s -> transitionDto.getToStepOrder() == s.getStepOrder())
+                    .findFirst().orElse(null);
+        }
+        // Aucune destination désignée : transition terminale, l'état de fin est synthétisé.
+        return null;
     }
 
     @Override
@@ -289,8 +516,15 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         return SecurityUtils.getCurrentUserId();
     }
 
-    public List<Workflow> getWorkflowsByType(String documentType) {
-        return workflowRepository.findByResourceType(documentType);
+    /**
+     * Retourne des DTO et non les entités JPA : l'entité sérialise la destination d'une transition
+     * sous forme d'objet {@code toStep} imbriqué, sans {@code toStepId} ni {@code toStepOrder},
+     * donnant une forme différente de celle de {@code GET /workflows} pour la même ressource.
+     */
+    @Transactional(readOnly = true)
+    public List<WorkflowDto> getWorkflowsByType(String documentType) {
+        WorkflowMapper mapper = new WorkflowMapper();
+        return workflowRepository.findByResourceType(documentType).stream().map(mapper::toDto).toList();
     }
 
     /**
@@ -312,8 +546,17 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         return new WorkflowMapper().toDto(actifs.get(0));
     }
 
-    public Workflow getWorkflowById(UUID workflowId) {
-        return workflowRepository.findById(workflowId).orElse(null);
+    /**
+     * Même forme que {@code GET /workflows} (DTO, avec {@code toStepId} / {@code toStepOrder}),
+     * et 404 explicite : renvoyer {@code null} produisait un 200 au corps vide, que l'appelant ne
+     * pouvait pas distinguer d'un circuit réellement vide.
+     */
+    @Transactional(readOnly = true)
+    public WorkflowDto getWorkflowById(UUID workflowId) {
+        return workflowRepository.findById(workflowId)
+                .map(new WorkflowMapper()::toDto)
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
     }
 
     private WorkflowValidationInstance findLastValidationInstanceEntity(UUID resourceId) {
@@ -368,6 +611,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         .code(t.getCode())
                         .libelle(t.getLibelle())
                         .permission(t.getPermission())
+                        .decision(decisionDeTransition(t.getCode()))
                         .build())
                 .toList();
 
@@ -377,6 +621,89 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .currentStateCode(instance.getEtatCode())
                 .currentStateName(instance.getEtat() != null ? instance.getEtat().getLibelle() : null)
                 .allowedActions(actions)
+                .currentStepFields(champsDeLEtape(instance.getEtatCode()))
+                .build();
+    }
+
+    private String decisionDeTransition(String transitionCode) {
+        try {
+            return transitionRepository.findById(Long.valueOf(transitionCode))
+                    .map(t -> t.getDecision() != null ? t.getDecision().name() : null)
+                    .orElse(null);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Champs de saisie exigés par l'étape courante, pour que l'appelant puisse composer le
+     * formulaire de décision. Vide sur un état terminal, qui ne correspond à aucune étape.
+     */
+    private List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto> champsDeLEtape(String etatCode) {
+        WorkflowMapper mapper = new WorkflowMapper();
+        try {
+            return stepRepository.findById(Long.valueOf(etatCode))
+                    .map(step -> step.getFields().stream().map(mapper::toDto).toList())
+                    .orElseGet(List::of);
+        } catch (NumberFormatException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * États de plusieurs ressources en un appel : afficher une liste de N documents imposait
+     * jusqu'ici N requêtes. Les ressources sans circuit sont simplement absentes du résultat.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> getWorkflowStatesForResources(List<UUID> resourceIds) {
+        Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> etats = new java.util.LinkedHashMap<>();
+        if (resourceIds == null) {
+            return etats;
+        }
+        for (UUID resourceId : resourceIds) {
+            com.qualiapproche.workflow.dto.WorkflowStateDto etat = getWorkflowStateForResource(resourceId);
+            if (etat != null) {
+                etats.put(resourceId, etat);
+            }
+        }
+        return etats;
+    }
+
+    /**
+     * Traçabilité du circuit d'une ressource : décisions successives, auteurs, commentaires et
+     * valeurs saisies. Ces enregistrements existaient sans aucun point d'entrée pour les relire.
+     */
+    @Transactional(readOnly = true)
+    public List<com.qualiapproche.workflow.dto.ValidationHistoryDto> getValidationHistory(UUID resourceId) {
+        WorkflowValidationInstance instance = findLastValidationInstanceEntity(resourceId);
+        if (instance == null) {
+            return List.of();
+        }
+        return historyRepository.findByValidationInstance_IdOrderByDecisionDateAsc(instance.getId()).stream()
+                .map(this::toHistoryDto)
+                .toList();
+    }
+
+    private com.qualiapproche.workflow.dto.ValidationHistoryDto toHistoryDto(ValidationHistory history) {
+        List<com.qualiapproche.workflow.dto.ValidationHistoryDto.FieldValueDto> valeurs =
+                history.getFieldValues() == null ? List.of()
+                        : history.getFieldValues().stream()
+                                .map(v -> com.qualiapproche.workflow.dto.ValidationHistoryDto.FieldValueDto.builder()
+                                        .fieldCode(v.getFieldCode())
+                                        .fieldName(v.getFieldName())
+                                        .value(v.getValue())
+                                        .build())
+                                .toList();
+
+        return com.qualiapproche.workflow.dto.ValidationHistoryDto.builder()
+                .id(history.getId())
+                .stepCode(history.getStepCode())
+                .stepName(history.getStepName())
+                .decision(history.getDecision())
+                .comments(history.getComments())
+                .validatorUserId(history.getValidatorUserId())
+                .decisionDate(history.getDecisionDate())
+                .fieldValues(valeurs)
                 .build();
     }
 
@@ -410,7 +737,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     public void executeDynamicTransition(UUID resourceId, String userId, String transitionCode, WorkflowValidationRequestDto request) {
         WorkflowValidationInstance instance = validationInstanceRepository
                 .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
-                .orElseThrow(() -> new RuntimeException("Instance de validation introuvable"));
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Aucun circuit de validation en cours pour cette ressource.",
+                        org.springframework.http.HttpStatus.NOT_FOUND));
+
+        verifierEtapeAttendue(instance, request);
+        verifierChampsRequis(instance, request);
 
         String comments = request != null ? request.getComments() : null;
 
@@ -423,14 +755,106 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     private void processStepDecision(UUID resourceId, String userId, WorkflowValidationRequestDto request, StepDecision decision) {
         WorkflowValidationInstance instance = validationInstanceRepository
                 .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
-                .orElseThrow(() -> new RuntimeException("Instance de validation introuvable"));
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Aucun circuit de validation en cours pour cette ressource.",
+                        org.springframework.http.HttpStatus.NOT_FOUND));
+
+        verifierEtapeAttendue(instance, request);
+        verifierChampsRequis(instance, request);
 
         String comments = request != null ? request.getComments() : null;
 
-        // Perform transition using abstract service
-        WorkflowValidationInstance updatedInstance = this.executerTransition(instance.getId(), decision.name(), comments);
+        WorkflowValidationInstance updatedInstance =
+                this.executerTransition(instance.getId(), resoudreCodeTransition(instance, decision), comments);
 
         attachHistoryFields(updatedInstance, request);
+    }
+
+    /**
+     * Rejette une décision prise depuis un écran périmé — et, du même coup, le second envoi d'un
+     * double clic : la première demande a déjà changé l'étape courante, la seconde ne correspond
+     * donc plus à l'étape attendue.
+     *
+     * <p>Le contrôle ne s'applique que si l'appelant transmet {@code expectedStateCode}. Les
+     * franchissements concurrents qui passeraient malgré tout restent arbitrés par le verrouillage
+     * optimiste de l'instance ({@code @Version}), qui répond également en 409.</p>
+     */
+    private void verifierEtapeAttendue(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
+        String attendu = request != null ? request.getExpectedStateCode() : null;
+        if (attendu == null || attendu.isBlank()) {
+            return;
+        }
+        if (!attendu.equals(instance.getEtatCode())) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Ce dossier a changé d'étape entre-temps. Rechargez-le avant de décider à nouveau.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+    }
+
+    /**
+     * Contrôle que tous les champs obligatoires de l'étape courante sont renseignés.
+     *
+     * <p>La vérification n'existait que sur les champs effectivement transmis, et intervenait après
+     * le franchissement : un champ requis simplement omis passait sans erreur, et la transition
+     * était déjà jouée quand la validation échouait. Elle a donc lieu ici, avant toute exécution.</p>
+     */
+    private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
+        Long stepId;
+        try {
+            stepId = Long.valueOf(instance.getEtatCode());
+        } catch (NumberFormatException e) {
+            return; // état terminal : aucune saisie attendue
+        }
+
+        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndIsRequiredTrue(stepId);
+        if (requis.isEmpty()) {
+            return;
+        }
+
+        Map<Long, String> saisis = request != null && request.getFields() != null
+                ? request.getFields() : Map.of();
+
+        List<String> manquants = requis.stream()
+                .filter(field -> {
+                    String valeur = saisis.get(field.getId());
+                    return valeur == null || valeur.isBlank();
+                })
+                .map(WorkflowStepField::getFieldLabel)
+                .toList();
+
+        if (!manquants.isEmpty()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Champ(s) obligatoire(s) non renseigné(s) : " + String.join(", ", manquants) + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Traduit une décision métier (APPROUVE / REJETE) en code de transition compris par le moteur.
+     *
+     * <p>Le moteur identifie une transition par son identifiant en base
+     * (cf. {@code WorkflowEngineDAOAdapter}), alors que ce service raisonnait en
+     * {@code decision.name()} : {@code getTransitionByCode} ne trouvait jamais de correspondance
+     * et {@code /validate} comme {@code /reject} échouaient systématiquement sur
+     * « La transition APPROUVE est inconnue ». La décision est donc résolue ici en transition
+     * réelle, à partir de l'étape courante de l'instance.</p>
+     */
+    private String resoudreCodeTransition(WorkflowValidationInstance instance, StepDecision decision) {
+        Long stepId;
+        try {
+            stepId = Long.valueOf(instance.getEtatCode());
+        } catch (NumberFormatException e) {
+            // Les états terminaux synthétiques (TERMINATED_*) ne portent pas d'étape : plus rien à décider.
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le circuit de validation de cette ressource est terminé : aucune décision n'est possible.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+
+        return transitionRepository.findByFromStepIdAndDecision(stepId, decision)
+                .map(transition -> transition.getId().toString())
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "L'action « " + decision.name() + " » n'est pas prévue à l'étape courante de ce circuit.",
+                        org.springframework.http.HttpStatus.CONFLICT));
     }
 
     private void attachHistoryFields(WorkflowValidationInstance updatedInstance, WorkflowValidationRequestDto request) {

@@ -20,4 +20,12 @@ public class WorkflowStateDto {
     private String currentStateName;
     @Builder.Default
     private List<WorkflowActionDto> allowedActions = new ArrayList<>();
+
+    /**
+     * Champs à saisir pour décider à l'étape courante. Sans eux, l'appelant n'avait aucun moyen
+     * de construire le formulaire de validation ni de renseigner
+     * {@code WorkflowValidationRequestDto.fields}, indexé par identifiant de champ.
+     */
+    @Builder.Default
+    private List<WorkflowStepFieldDto> currentStepFields = new ArrayList<>();
 }

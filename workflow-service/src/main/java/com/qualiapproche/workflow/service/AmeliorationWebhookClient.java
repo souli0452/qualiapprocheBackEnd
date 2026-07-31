@@ -13,4 +13,11 @@ public interface AmeliorationWebhookClient {
 
     @PostMapping("/api/v1/internal/callbacks/non-conformites/{ncId}/status")
     void updateNonConformiteStatus(@PathVariable("ncId") UUID ncId, @RequestBody Map<String, Object> payload);
+
+    /**
+     * Le point de rappel côté amelioration-service existait déjà mais n'était appelé par personne :
+     * les instances de workflow PLAN_ACTION étaient créées puis jamais reflétées dans le plan d'action.
+     */
+    @PostMapping("/api/v1/internal/callbacks/plan-actions/{paId}/status")
+    void updatePlanActionStatus(@PathVariable("paId") UUID paId, @RequestBody Map<String, Object> payload);
 }

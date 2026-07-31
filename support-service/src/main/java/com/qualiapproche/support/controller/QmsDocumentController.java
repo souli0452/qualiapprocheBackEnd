@@ -248,6 +248,48 @@ public class QmsDocumentController {
         return ResponseEntity.ok(documentService.getDocumentStatsByDimension(dimension, includeArchived));
     }
 
+    @Operation(summary = "Modifier les métadonnées d'un document",
+            description = "Met à jour les champs descriptifs. Le fichier évolue, lui, par le dépôt "
+                    + "d'une nouvelle version. Les champs omis sont conservés.")
+    @PutMapping("/{id}")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> updateDocument(
+            @PathVariable("id") UUID id,
+            @RequestBody com.qualiapproche.support.dto.DocumentUpdateDto dto) {
+        return ResponseEntity.ok(documentMapper.toDto(documentService.updateDocument(id, dto)));
+    }
+
+    @Operation(summary = "Archiver un document",
+            description = "Le retire des recherches et statistiques courantes sans le détruire.")
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> archiveDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "motif", required = false) String motif) {
+        return ResponseEntity.ok(documentMapper.toDto(documentService.archiveDocument(id, motif)));
+    }
+
+    @Operation(summary = "Désarchiver un document")
+    @PostMapping("/{id}/unarchive")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<DocumentQmsDto> unarchiveDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "motif", required = false) String motif) {
+        return ResponseEntity.ok(documentMapper.toDto(documentService.unarchiveDocument(id, motif)));
+    }
+
+    @Operation(summary = "Supprimer un brouillon",
+            description = "Réservé aux documents jamais validés. Un document entré en vigueur "
+                    + "doit être archivé afin de rester traçable.")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@perm.canDelete(this)")
+    public ResponseEntity<Void> deleteDocument(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "motif", required = false) String motif) {
+        documentService.deleteDocument(id, motif);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentQmsDto> getDocument(@PathVariable("id") UUID id) {
