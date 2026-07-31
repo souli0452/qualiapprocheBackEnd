@@ -1,50 +1,232 @@
 [
-  { "label": "Lire les configurations globales", "value": "CONFIG_READ", "module": "Configuration" },
-  { "label": "Gérer les services/processus", "value": "SERVICE_MANAGE", "module": "Configuration" },
-  { "label": "Gérer la configuration globale", "value": "CONFIG_GLOBAL_MANAGE", "module": "Configuration" },
-  { "label": "Gérer les types de processus", "value": "TYPE_PROC_MANAGE", "module": "Configuration" },
-  { "label": "Gérer les niveaux de conformité", "value": "NC_LEVEL_MANAGE", "module": "Configuration" },
-  { "label": "Gérer les types d'actions", "value": "ACTION_TYPE_MANAGE", "module": "Configuration" },
-  { "label": "Gérer les origines de NC", "value": "NC_ORIGIN_MANAGE", "module": "Configuration" },
-
-  { "label": "Lire les ressources (Formation, Fournisseur...)", "value": "RESOURCES_READ", "module": "Ressources" },
-  { "label": "Gérer les formations", "value": "FORMATION_MANAGE", "module": "Ressources" },
-  { "label": "Gérer les fournisseurs", "value": "FOURNISSEUR_MANAGE", "module": "Ressources" },
-
-  { "label": "Lire les actions", "value": "ACTIONS_READ", "module": "Actions" },
-  { "label": "Consulter les réclamations", "value": "RECLAMATION_READ", "module": "Réclamations" },
-  { "label": "Soumettre une réclamation", "value": "SUBMIT_RECLAMATION", "module": "Réclamations" },
-  { "label": "Consulter les risques", "value": "RISQUE_READ", "module": "Risques" },
-  { "label": "Soumettre un risque", "value": "SUBMIT_RISQUE", "module": "Risques" },
-
-  { "label": "Consulter les audits", "value": "AUDITE_READ", "module": "Qualité" },
-  { "label": "Soumettre une non-conformité", "value": "SUBMIT_NC", "module": "Qualité" },
-  { "label": "Consulter les non-conformités", "value": "NC_READ", "module": "Qualité" },
-  { "label": "Lire la réglementation", "value": "REGLEMENTATION_READ", "module": "Qualité" },
-  { "label": "Lire les critères d'évaluation", "value": "CRITERE_EVAL_READ", "module": "Qualité" },
-
-  { "label": "Lire la gestion documentaire", "value": "DOC_READ", "module": "Documentaire" },
-  { "label": "Gérer les catégories de fichiers", "value": "DOC_CAT_MANAGE", "module": "Documentaire" },
-  { "label": "Consulter les documents QMS", "value": "document-read", "module": "Documentaire" },
-  { "label": "Gérer les documents QMS", "value": "document-write", "module": "Documentaire" },
-  { "label": "Consulter les types de documents QMS", "value": "document-type-read", "module": "Documentaire" },
-  { "label": "Gérer les types de documents QMS", "value": "document-type-write", "module": "Documentaire" },
-
-  { "label": "Consulter les circuits de validation", "value": "workflow-read", "module": "Workflow" },
-  { "label": "Gérer les circuits de validation", "value": "workflow-write", "module": "Workflow" },
-  { "label": "Valider/rejeter une étape de circuit", "value": "workflow-validate", "module": "Workflow" },
-
-  { "label": "Accéder aux traitements des demandes", "value": "TRAITEMENT_DEMANDES", "module": "Traitements" },
-  { "label": "Analyse initiale du pilote (NC)", "value": "RECEPTION_NC", "module": "Traitements" },
-  { "label": "Validation par RQ (NC)", "value": "VALIDATION_RQ", "module": "Traitements" },
-  { "label": "Affectation des responsables (NC)", "value": "IMPUTATION_NC", "module": "Traitements" },
-  { "label": "Proposition d'actions (NC)", "value": "TRAITEMENT_NC", "module": "Traitements" },
-  { "label": "Validation des actions (NC)", "value": "VALIDATION_CHEF", "module": "Traitements" },
-  { "label": "Suivi par RQ (NC)", "value": "RQ_NC", "module": "Traitements" },
-  { "label": "Consultation des NC", "value": "CONSULTATION_NC", "module": "Traitements" },
-  { "label": "Traitement des plans d'actions", "value": "TRAITEMENT_PLAN", "module": "Traitements" },
-
-  { "label": "Gérer les utilisateurs", "value": "MANAGE_USER", "module": "Administration" },
-  { "label": "Gérer les rôles", "value": "ROLE_MANAGE", "module": "Administration" },
-  { "label": "Gérer les structures/directions", "value": "STRUCT_MANAGE", "module": "Administration" }
+  {
+    "label": "Lire les configurations globales",
+    "value": "CONFIG_READ",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer les services/processus",
+    "value": "SERVICE_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer la configuration globale",
+    "value": "CONFIG_GLOBAL_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer les types de processus",
+    "value": "TYPE_PROC_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer les niveaux de conformité",
+    "value": "NC_LEVEL_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer les types d'actions",
+    "value": "ACTION_TYPE_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Gérer les origines de NC",
+    "value": "NC_ORIGIN_MANAGE",
+    "module": "Configuration"
+  },
+  {
+    "label": "Lire les ressources (Formation, Fournisseur...)",
+    "value": "RESOURCES_READ",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les formations",
+    "value": "FORMATION_MANAGE",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les fournisseurs",
+    "value": "FOURNISSEUR_MANAGE",
+    "module": "Ressources"
+  },
+  {
+    "label": "Lire les actions",
+    "value": "ACTIONS_READ",
+    "module": "Actions"
+  },
+  {
+    "label": "Consulter les réclamations",
+    "value": "RECLAMATION_READ",
+    "module": "Réclamations"
+  },
+  {
+    "label": "Soumettre une réclamation",
+    "value": "SUBMIT_RECLAMATION",
+    "module": "Réclamations"
+  },
+  {
+    "label": "Consulter les risques",
+    "value": "RISQUE_READ",
+    "module": "Risques"
+  },
+  {
+    "label": "Soumettre un risque",
+    "value": "SUBMIT_RISQUE",
+    "module": "Risques"
+  },
+  {
+    "label": "Consulter les audits",
+    "value": "AUDITE_READ",
+    "module": "Qualité"
+  },
+  {
+    "label": "Soumettre une non-conformité",
+    "value": "SUBMIT_NC",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les non-conformités",
+    "value": "NC_READ",
+    "module": "Qualité"
+  },
+  {
+    "label": "Lire la réglementation",
+    "value": "REGLEMENTATION_READ",
+    "module": "Qualité"
+  },
+  {
+    "label": "Lire les critères d'évaluation",
+    "value": "CRITERE_EVAL_READ",
+    "module": "Qualité"
+  },
+  {
+    "label": "Lire la gestion documentaire",
+    "value": "DOC_READ",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les catégories de fichiers",
+    "value": "DOC_CAT_MANAGE",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les documents QMS",
+    "value": "document-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les documents QMS",
+    "value": "document-write",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les types de documents QMS",
+    "value": "document-type-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les types de documents QMS",
+    "value": "document-type-write",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter l'historique des versions d'un document",
+    "value": "document-history",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter le journal d'audit d'un document",
+    "value": "document-audit",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Ouvrir et télécharger un document",
+    "value": "document-download",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Agir sur le circuit de validation d'un document",
+    "value": "document-validate",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Archiver ou désarchiver un document",
+    "value": "document-archive",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les circuits de validation",
+    "value": "workflow-read",
+    "module": "Workflow"
+  },
+  {
+    "label": "Gérer les circuits de validation",
+    "value": "workflow-write",
+    "module": "Workflow"
+  },
+  {
+    "label": "Valider/rejeter une étape de circuit",
+    "value": "workflow-validate",
+    "module": "Workflow"
+  },
+  {
+    "label": "Accéder aux traitements des demandes",
+    "value": "TRAITEMENT_DEMANDES",
+    "module": "Traitements"
+  },
+  {
+    "label": "Analyse initiale du pilote (NC)",
+    "value": "RECEPTION_NC",
+    "module": "Traitements"
+  },
+  {
+    "label": "Validation par RQ (NC)",
+    "value": "VALIDATION_RQ",
+    "module": "Traitements"
+  },
+  {
+    "label": "Affectation des responsables (NC)",
+    "value": "IMPUTATION_NC",
+    "module": "Traitements"
+  },
+  {
+    "label": "Proposition d'actions (NC)",
+    "value": "TRAITEMENT_NC",
+    "module": "Traitements"
+  },
+  {
+    "label": "Validation des actions (NC)",
+    "value": "VALIDATION_CHEF",
+    "module": "Traitements"
+  },
+  {
+    "label": "Suivi par RQ (NC)",
+    "value": "RQ_NC",
+    "module": "Traitements"
+  },
+  {
+    "label": "Consultation des NC",
+    "value": "CONSULTATION_NC",
+    "module": "Traitements"
+  },
+  {
+    "label": "Traitement des plans d'actions",
+    "value": "TRAITEMENT_PLAN",
+    "module": "Traitements"
+  },
+  {
+    "label": "Gérer les utilisateurs",
+    "value": "MANAGE_USER",
+    "module": "Administration"
+  },
+  {
+    "label": "Gérer les rôles",
+    "value": "ROLE_MANAGE",
+    "module": "Administration"
+  },
+  {
+    "label": "Gérer les structures/directions",
+    "value": "STRUCT_MANAGE",
+    "module": "Administration"
+  }
 ]
