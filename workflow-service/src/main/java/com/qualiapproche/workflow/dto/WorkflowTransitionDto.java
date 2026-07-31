@@ -28,4 +28,6 @@ public class WorkflowTransitionDto {
      * la destination d'une transition ne pouvait pas être restituée.
      */
     private Integer toStepOrder;
+    /** La décision clôt le circuit. À distinguer d'une transition simplement non configurée. */
+    private boolean terminal;
 }
