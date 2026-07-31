@@ -81,6 +81,16 @@ public class KcUserController {
         return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyPermissions()));
     }
 
+    /**
+     * Même précaution que {@code /me/permissions} : {@link ApiResponse} explicite pour échapper à
+     * la pagination automatique appliquée par {@code GlobalResponseHandler} à toute List nue.
+     */
+    @Operation(summary = "Rôles de l'utilisateur connecté", description = "Usage interne : permet aux services aval de contrôler une habilitation exprimée en rôle, que ni le jeton ni X-User-Permissions ne transportent.")
+    @GetMapping("/me/roles")
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, String>>>> getMyRoles() {
+        return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyRoles()));
+    }
+
     @PostMapping("/users/create")
     public ResponseEntity<KcUserDto> createUser(@RequestBody KcUserDto kcUserDto) {
         return ResponseEntity.ok(kcUserService.createUser(kcUserDto));

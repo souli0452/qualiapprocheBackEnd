@@ -448,6 +448,28 @@ public class KcUserService {
      * {@code @RequirePermissions}) pour les injecter dans l'en-tête interne
      * {@code X-User-Permissions} transmis aux services en aval.
      */
+    /**
+     * Rôles applicatifs de l'utilisateur connecté, identifiant et nom.
+     *
+     * <p>Les permissions seules ne suffisent pas à tous les appelants : le contrôle d'habilitation
+     * d'une étape de workflow porte sur le rôle responsable, désigné par son identifiant. Or ni le
+     * jeton ni {@code X-User-Permissions} ne transportent les rôles.</p>
+     */
+    public List<Map<String, String>> getMyRoles() {
+        String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new RuntimeException("Utilisateur non authentifié.");
+        }
+        return userRoleAssignmentRepository.findByUserId(userId).stream()
+                .map(assignment -> assignment.getRole())
+                .filter(java.util.Objects::nonNull)
+                .map(role -> Map.of(
+                        "id", role.getId() != null ? role.getId().toString() : "",
+                        "name", role.getName() != null ? role.getName() : ""))
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
     public List<String> getMyPermissions() {
         String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
         if (userId == null) {
