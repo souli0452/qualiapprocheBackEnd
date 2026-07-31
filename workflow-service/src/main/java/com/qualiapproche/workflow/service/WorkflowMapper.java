@@ -49,6 +49,7 @@ public class WorkflowMapper {
                 .toStepId(entity.getToStep() != null ? entity.getToStep().getId() : null)
                 .toStepName(entity.getToStep() != null ? entity.getToStep().getNomEtape() : null)
                 .toStepOrder(entity.getToStep() != null ? entity.getToStep().getStepOrder() : null)
+                .terminal(entity.isTerminal())
                 .build();
     }
 
@@ -124,6 +125,7 @@ public class WorkflowMapper {
                 .label(dto.getLabel())
                 .decision(dto.getDecision() != null ? StepDecision.valueOf(dto.getDecision()) : null)
                 .requiredRole(dto.getRequiredRole())
+                .terminal(dto.isTerminal())
                 // Note: toStep mapping needs to be resolved by ID later in the service or by a lookup
                 .build();
     }

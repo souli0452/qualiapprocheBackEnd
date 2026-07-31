@@ -127,7 +127,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         // Pas d'étape de destination : l'approbation clôt le circuit et fait entrer le document
         // en vigueur côté support-service.
         approbation.getTransitions().add(WorkflowTransition.builder()
-                .fromStep(approbation)
+                .fromStep(approbation).terminal(true)
                 .decision(StepDecision.APPROUVE).label("Approuver et mettre en vigueur").build());
         approbation.getTransitions().add(WorkflowTransition.builder()
                 .fromStep(approbation).toStep(redaction)
