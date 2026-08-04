@@ -4,10 +4,13 @@ server:
 spring:
   application:
     name: workflow-service
+  # Aucun secret ne porte de valeur par défaut : une variable d'environnement manquante fait
+  # échouer le démarrage avec un message explicite, plutôt que de laisser le service tourner
+  # avec des identifiants versionnés. Voir .env.example pour la liste à renseigner.
   datasource:
     url: ${DB_URL_WORKFLOW:jdbc:postgresql://localhost:5432/qualisira_workflowdb}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
@@ -32,7 +35,7 @@ spring:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:tachquali@gmail.com}
-    password: ${MAIL_PASSWORD:qpkcnamwhjfkundy}
+    password: ${MAIL_PASSWORD}
     protocol: smtp
     properties:
       mail:
@@ -40,6 +43,14 @@ spring:
           auth: true
           starttls:
             enable: true
+
+workflow:
+  notifications:
+    # Lien inséré dans les courriels d'étape. {resourceType} et {resourceId} y sont substitués.
+    # Laissé vide, les courriels partent sans lien plutôt qu'avec un lien mort : la route
+    # appartient au frontal, ce service ne peut pas la deviner. À renseigner après vérification
+    # de la navigation réelle.
+    motif-lien: ${WORKFLOW_LIEN_MOTIF:}
 
 eureka:
   client:

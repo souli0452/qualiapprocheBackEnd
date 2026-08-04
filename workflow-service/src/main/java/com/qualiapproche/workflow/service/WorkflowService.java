@@ -7,6 +7,7 @@ import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import com.qualiapproche.workflow.dto.WorkflowDto;
 import com.qualiapproche.workflow.dto.WorkflowStepDto;
 import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
+import com.qualiapproche.workflow.event.CatalogueWorkflowModifieEvent;
 import com.qualiapproche.workflow.model.*;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
@@ -71,9 +72,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     public WorkflowDto createWorkflow(WorkflowDto dto) {
         WorkflowMapper mapper = new WorkflowMapper();
         Workflow workflow = mapper.toEntity(dto);
+        workflow.setResourceType(TypeRessource.normaliser(dto.getResourceType()));
 
         attribuerCodesEtapes(workflow);
         resolveTransitions(workflow, dto);
+        horodaterModification(workflow);
 
         workflow = workflowRepository.save(workflow);
         reloadEngineCatalogue();
@@ -84,39 +87,104 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     public WorkflowDto updateWorkflow(UUID id, WorkflowDto dto) {
         WorkflowMapper mapper = new WorkflowMapper();
         Workflow existing = workflowRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Workflow introuvable"));
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
 
         existing.setNom(dto.getNom());
         existing.setDescription(dto.getDescription());
-        existing.setResourceType(dto.getResourceType());
+        existing.setResourceType(TypeRessource.normaliser(dto.getResourceType()));
 
         mergeSteps(existing, dto);
         resolveTransitions(existing, dto);
+        horodaterModification(existing);
 
         workflowRepository.save(existing);
         reloadEngineCatalogue();
         return mapper.toDto(existing);
     }
 
+    /**
+     * Supprime un circuit, à condition qu'aucun dossier ne soit en cours dessus.
+     *
+     * <p>La suppression était inconditionnelle, alors même que {@code mergeSteps} refuse déjà de
+     * retirer une simple étape portant des instances actives. L'incohérence était coûteuse :
+     * supprimer un circuit laissait ses instances en cours définitivement inexploitables — le
+     * moteur ne peut plus résoudre leur workflow, et toute lecture d'état comme toute décision
+     * échouait dès lors en erreur serveur, sans issue possible pour l'utilisateur.</p>
+     */
     @Transactional
     public void deleteWorkflow(UUID id) {
-        workflowRepository.deleteById(id);
+        Workflow workflow = workflowRepository.findById(id)
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
+
+        List<String> codesEtapes = workflow.getSteps().stream()
+                .map(WorkflowStep::getId)
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .toList();
+
+        if (!codesEtapes.isEmpty()
+                && validationInstanceRepository.existsByEtatCodeInAndStatus(codesEtapes, ValidationStatus.EN_COURS)) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Impossible de supprimer ce circuit : des dossiers y sont actuellement en cours. "
+                            + "Terminez-les ou migrez-les avant de le supprimer.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+
+        workflowRepository.delete(workflow);
         reloadEngineCatalogue();
     }
 
     /**
-     * Le moteur ({@link com.qualiapproche.workflow.core.engine.WorkflowEngine}) charge son
-     * catalogue une seule fois au démarrage et ne le recharge que si {@code getCatalogueVersion()}
-     * change (toujours null aujourd'hui, cf. WorkflowEngineDAOAdapter). Sans cet appel explicite,
-     * créer/modifier/supprimer un workflow via l'API n'a donc aucun effet tant que le service
-     * n'est pas redémarré.
+     * Demande le rechargement du catalogue du moteur, <b>une fois la transaction committée</b>.
+     *
+     * <p>Le moteur ({@link com.qualiapproche.workflow.core.engine.WorkflowEngine}) ne recharge
+     * de lui-même que si la signature de la source change ; sans cette demande, créer ou modifier
+     * un circuit resterait sans effet sur l'instance qui a reçu l'appel jusqu'à ce qu'elle
+     * constate le changement.</p>
+     *
+     * <p>Le rechargement avait lieu au sein même de la transaction : le moteur lisait alors des
+     * données non encore committées et mémorisait leur signature. Une transaction annulée ensuite
+     * — contrainte violée, panne — lui laissait un catalogue décrivant des circuits qui
+     * n'existaient pas, et la signature mémorisée correspondant à cet état fantôme, plus rien ne
+     * venait le corriger avant la modification suivante. Passer par un événement d'après commit
+     * garantit que le moteur ne recharge que ce qui est réellement enregistré.</p>
      */
     private void reloadEngineCatalogue() {
+        eventPublisher.publishEvent(new CatalogueWorkflowModifieEvent(this));
+    }
+
+    /**
+     * Recharge le catalogue du moteur après le commit de la modification.
+     *
+     * <p>Un échec est journalisé sans être propagé : la transaction est déjà acquise, et le
+     * moteur rattrapera de toute façon le changement au prochain contrôle de signature. Lever ici
+     * ne ferait que remonter une erreur à un appelant dont la demande a, elle, abouti.</p>
+     */
+    @org.springframework.transaction.event.TransactionalEventListener(
+            phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
+    public void rechargerCatalogueApresCommit(CatalogueWorkflowModifieEvent event) {
         try {
             this.moteur.init();
         } catch (com.qualiapproche.workflow.core.exception.WorkflowException e) {
-            throw new RuntimeException("Erreur lors du rechargement du catalogue de workflows", e);
+            log.error("Rechargement du catalogue de workflows en échec après modification. "
+                    + "Le moteur le reprendra au prochain contrôle de signature.", e);
         }
+    }
+
+    /**
+     * Horodate la modification du circuit pour que la signature du catalogue s'en trouve changée.
+     *
+     * <p>La signature repose sur {@code max(updateAt)} des circuits, et {@code @PreUpdate} ne se
+     * déclenche que si la ligne du circuit est elle-même modifiée. Or l'essentiel des changements
+     * ne portent que sur les étapes, les transitions ou les champs : la ligne parente restait
+     * intacte, la signature aussi, et les autres instances continuaient à servir un catalogue
+     * périmé. Horodater explicitement fait de {@code updateAt} le repère de la dernière mutation
+     * du circuit, quelle qu'en soit la profondeur.</p>
+     */
+    private void horodaterModification(Workflow workflow) {
+        workflow.setUpdateAt(LocalDateTime.now());
     }
 
     /**
@@ -596,24 +664,47 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         );
     }
 
+    /**
+     * État de validation d'une ressource : étape courante, actions offertes et champs à saisir.
+     *
+     * <p>Le dossier n'est plus lu qu'une fois. Il l'était deux fois — une première pour
+     * l'instance, une seconde par {@code getTransitionsPossibles(UUID)} — et chaque transition
+     * offerte donnait ensuite lieu à sa propre requête pour retrouver sa décision.</p>
+     */
     @Transactional(readOnly = true)
     public com.qualiapproche.workflow.dto.WorkflowStateDto getWorkflowStateForResource(UUID resourceId) {
-        WorkflowValidationInstance instanceInfo = findLastValidationInstanceEntity(resourceId);
-        if (instanceInfo == null) {
+        WorkflowValidationInstance instance = findLastValidationInstanceEntity(resourceId);
+        if (instance == null) {
             return null;
         }
 
-        WorkflowValidationInstance instance = fromDatabase(instanceInfo.getId());
-        java.util.Set<TransitionPersistante> transitions = getTransitionsPossibles(instance.getId());
+        rattacherEtat(instance);
+        java.util.Set<TransitionPersistante> transitions = transitionsPossiblesDe(instance);
+
+        return construireEtat(instance, transitions,
+                decisionsDesTransitions(List.of(transitions)),
+                champsDesEtapes(List.of(instance)));
+    }
+
+    /**
+     * Assemble la vue d'état à partir d'éléments déjà résolus, sans aucun accès à la base.
+     */
+    private com.qualiapproche.workflow.dto.WorkflowStateDto construireEtat(
+            WorkflowValidationInstance instance,
+            java.util.Set<TransitionPersistante> transitions,
+            Map<Long, String> decisions,
+            Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champs) {
 
         List<com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto> actions = transitions.stream()
                 .map(t -> com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto.builder()
                         .code(t.getCode())
                         .libelle(t.getLibelle())
                         .permission(t.getPermission())
-                        .decision(decisionDeTransition(t.getCode()))
+                        .decision(decisions.get(identifiantNumerique(t.getCode())))
                         .build())
                 .toList();
+
+        Long etapeCourante = identifiantNumerique(instance.getEtatCode());
 
         return com.qualiapproche.workflow.dto.WorkflowStateDto.builder()
                 .instanceId(instance.getId())
@@ -621,52 +712,155 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .currentStateCode(instance.getEtatCode())
                 .currentStateName(instance.getEtat() != null ? instance.getEtat().getLibelle() : null)
                 .allowedActions(actions)
-                .currentStepFields(champsDeLEtape(instance.getEtatCode()))
+                .currentStepFields(etapeCourante != null
+                        ? champs.getOrDefault(etapeCourante, List.of()) : List.of())
                 .build();
     }
 
-    private String decisionDeTransition(String transitionCode) {
+    /**
+     * Décision portée par chacune des transitions citées, en une seule requête.
+     *
+     * <p>Elles étaient résolues une par une : afficher une liste de dossiers offrant chacun
+     * plusieurs actions multipliait d'autant les allers-retours.</p>
+     */
+    private Map<Long, String> decisionsDesTransitions(
+            java.util.Collection<java.util.Set<TransitionPersistante>> lots) {
+        java.util.Set<Long> identifiants = lots.stream()
+                .flatMap(java.util.Set::stream)
+                .map(t -> identifiantNumerique(t.getCode()))
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        if (identifiants.isEmpty()) {
+            return Map.of();
+        }
+        return transitionRepository.findAllById(identifiants).stream()
+                .filter(t -> t.getDecision() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        WorkflowTransition::getId, t -> t.getDecision().name()));
+    }
+
+    /**
+     * Champs de saisie des étapes courantes, en une seule requête, leurs champs compris.
+     *
+     * <p>Une étape terminale ne correspond à aucune ligne : elle est simplement absente du
+     * résultat, et l'appelant obtient une liste vide.</p>
+     */
+    private Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champsDesEtapes(
+            java.util.Collection<WorkflowValidationInstance> instances) {
+        java.util.Set<Long> etapes = instances.stream()
+                .map(i -> identifiantNumerique(i.getEtatCode()))
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        if (etapes.isEmpty()) {
+            return Map.of();
+        }
+        WorkflowMapper mapper = new WorkflowMapper();
+        return stepRepository.findAvecChampsByIdIn(etapes).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        WorkflowStep::getId,
+                        step -> step.getFields().stream().map(mapper::toDto).toList()));
+    }
+
+    /**
+     * Identifiant numérique porté par un code d'état ou de transition, ou {@code null}.
+     *
+     * <p>Les états terminaux synthétiques ({@code TERMINATED_*}) n'en portent pas. Cette
+     * distinction était faite en attrapant {@link NumberFormatException} à quatre endroits :
+     * une exception servait de test, et le contrat implicite « code d'état = identifiant
+     * d'étape » n'était énoncé nulle part.</p>
+     */
+    private static Long identifiantNumerique(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
         try {
-            return transitionRepository.findById(Long.valueOf(transitionCode))
-                    .map(t -> t.getDecision() != null ? t.getDecision().name() : null)
-                    .orElse(null);
+            return Long.valueOf(code);
         } catch (NumberFormatException e) {
             return null;
         }
     }
 
-    /**
-     * Champs de saisie exigés par l'étape courante, pour que l'appelant puisse composer le
-     * formulaire de décision. Vide sur un état terminal, qui ne correspond à aucune étape.
-     */
-    private List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto> champsDeLEtape(String etatCode) {
-        WorkflowMapper mapper = new WorkflowMapper();
-        try {
-            return stepRepository.findById(Long.valueOf(etatCode))
-                    .map(step -> step.getFields().stream().map(mapper::toDto).toList())
-                    .orElseGet(List::of);
-        } catch (NumberFormatException e) {
-            return List.of();
-        }
-    }
+    /** Au-delà, la demande est refusée plutôt que servie au prix d'un balayage sans borne. */
+    static final int TAILLE_LOT_MAX = 200;
 
     /**
-     * États de plusieurs ressources en un appel : afficher une liste de N documents imposait
-     * jusqu'ici N requêtes. Les ressources sans circuit sont simplement absentes du résultat.
+     * États de plusieurs ressources en un appel, à coût constant en nombre de requêtes.
+     *
+     * <p>L'appel unique masquait jusqu'ici un coût par ressource resté intact : la méthode
+     * répétait simplement la lecture unitaire, soit six requêtes par dossier plus une par action
+     * offerte — près de quatre cents pour une page de cinquante documents, dont une centaine de
+     * contrôles de version du catalogue rigoureusement identiques. Les dossiers, les décisions et
+     * les champs de saisie sont désormais chargés en trois requêtes, quel que soit le nombre de
+     * ressources demandées.</p>
+     *
+     * <p>Un dossier dont l'étape courante a disparu du circuit est écarté du résultat plutôt que
+     * de faire échouer toute la page : c'est une consultation, et l'incohérence ne concerne qu'un
+     * dossier.</p>
      */
     @Transactional(readOnly = true)
     public Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> getWorkflowStatesForResources(List<UUID> resourceIds) {
         Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto> etats = new java.util.LinkedHashMap<>();
-        if (resourceIds == null) {
+        if (resourceIds == null || resourceIds.isEmpty()) {
             return etats;
         }
-        for (UUID resourceId : resourceIds) {
-            com.qualiapproche.workflow.dto.WorkflowStateDto etat = getWorkflowStateForResource(resourceId);
-            if (etat != null) {
-                etats.put(resourceId, etat);
+        List<UUID> demandees = resourceIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (demandees.size() > TAILLE_LOT_MAX) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Trop de ressources demandées en une fois (" + demandees.size() + "). "
+                            + "Le maximum est de " + TAILLE_LOT_MAX + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+
+        Map<UUID, WorkflowValidationInstance> instances = dernieresInstances(demandees);
+        if (instances.isEmpty()) {
+            return etats;
+        }
+
+        // Les transitions se calculent sur le catalogue en mémoire : aucune requête ici.
+        Map<UUID, java.util.Set<TransitionPersistante>> actionsParRessource = new java.util.LinkedHashMap<>();
+        for (Map.Entry<UUID, WorkflowValidationInstance> entree : instances.entrySet()) {
+            try {
+                rattacherEtat(entree.getValue());
+                actionsParRessource.put(entree.getKey(), transitionsPossiblesDe(entree.getValue()));
+            } catch (com.qualiapproche.common.exception.BusinessException e) {
+                log.warn("État de la ressource {} non exploitable, elle est écartée de la liste : {}",
+                        entree.getKey(), e.getMessage());
             }
         }
+
+        Map<Long, String> decisions = decisionsDesTransitions(actionsParRessource.values());
+        Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champs =
+                champsDesEtapes(instances.values());
+
+        for (Map.Entry<UUID, java.util.Set<TransitionPersistante>> entree : actionsParRessource.entrySet()) {
+            etats.put(entree.getKey(),
+                    construireEtat(instances.get(entree.getKey()), entree.getValue(), decisions, champs));
+        }
         return etats;
+    }
+
+    /**
+     * Dernière instance de chacune des ressources, en une seule requête.
+     *
+     * <p>Le tri décroissant est porté par la requête : la première ligne rencontrée pour une
+     * ressource est donc la plus récente, et les suivantes — l'historique de ses circuits
+     * antérieurs — sont ignorées.</p>
+     */
+    private Map<UUID, WorkflowValidationInstance> dernieresInstances(List<UUID> resourceIds) {
+        Map<String, UUID> parCle = resourceIds.stream()
+                .collect(java.util.stream.Collectors.toMap(UUID::toString, id -> id, (a, b) -> a));
+
+        Map<UUID, WorkflowValidationInstance> dernieres = new java.util.LinkedHashMap<>();
+        for (WorkflowValidationInstance instance :
+                validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(parCle.keySet())) {
+            UUID resourceId = parCle.get(instance.getResourceId());
+            if (resourceId != null) {
+                dernieres.putIfAbsent(resourceId, instance);
+            }
+        }
+        return dernieres;
     }
 
     /**
@@ -702,15 +896,49 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .decision(history.getDecision())
                 .comments(history.getComments())
                 .validatorUserId(history.getValidatorUserId())
+                .validatorFullName(history.getValidatorFullName())
                 .decisionDate(history.getDecisionDate())
                 .fieldValues(valeurs)
                 .build();
     }
 
+    /**
+     * Ouvre un circuit de validation sur une ressource.
+     *
+     * <p>Aucune vérification n'était faite : deux appels successifs créaient deux instances
+     * {@code EN_COURS} sur la même ressource, et {@code findTopBy…OrderByStartedAtDesc} en
+     * désignait ensuite une arbitrairement — les décisions prises se répartissaient entre deux
+     * circuits parallèles, dont un seul remontait au service métier. Le circuit choisi n'était pas
+     * davantage contrôlé : un circuit désactivé, dépourvu d'étapes, ou prévu pour un autre type de
+     * ressource était accepté sans broncher, la dernière erreur ne se manifestant qu'en violation
+     * de contrainte au moment de l'enregistrement.</p>
+     *
+     * <p>Un appel répété sur le <b>même</b> circuit rend l'instance déjà ouverte plutôt que
+     * d'échouer : c'est un rejeu (double clic, reprise Feign), et l'appelant attend légitimement
+     * l'état courant. Un appel désignant un <b>autre</b> circuit est en revanche refusé — basculer
+     * un dossier d'un circuit à l'autre en cours de route n'est jamais un effet voulu de cette
+     * opération.</p>
+     */
     @Transactional
     public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId) {
         Workflow workflow = workflowRepository.findById(workflowId)
-                .orElseThrow(() -> new RuntimeException("Workflow introuvable"));
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
+
+        verifierCircuitOuvrable(workflow, resourceType);
+
+        WorkflowValidationInstance enCours = validationInstanceRepository
+                .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
+                .orElse(null);
+        if (enCours != null) {
+            if (workflow.getId().toString().equals(enCours.getWorkflowCode())) {
+                return toInstanceDto(enCours);
+            }
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Un circuit de validation est déjà en cours sur cette ressource. "
+                            + "Terminez-le avant d'en ouvrir un autre.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
 
         WorkflowValidationInstance instance = WorkflowValidationInstance.builder()
                 .resourceId(resourceId.toString())
@@ -721,6 +949,29 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         WorkflowValidationInstance saved = this.initialiser(instance, workflow.getId().toString());
         return toInstanceDto(saved);
+    }
+
+    /** Refuse d'ouvrir un circuit désactivé, vide, ou prévu pour un autre type de ressource. */
+    private void verifierCircuitOuvrable(Workflow workflow, String resourceType) {
+        if (!workflow.isActif()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le circuit « " + workflow.getNom() + " » est désactivé et ne peut plus être ouvert "
+                            + "sur de nouveaux dossiers.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (workflow.getSteps() == null || workflow.getSteps().isEmpty()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le circuit « " + workflow.getNom() + " » ne comporte aucune étape : "
+                            + "il n'y a pas d'état initial où placer le dossier.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (resourceType != null && workflow.getResourceType() != null
+                && !workflow.getResourceType().equalsIgnoreCase(resourceType)) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Le circuit « " + workflow.getNom() + " » s'applique aux ressources de type "
+                            + workflow.getResourceType() + ", pas " + resourceType + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 
     @Transactional
@@ -799,10 +1050,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * était déjà jouée quand la validation échouait. Elle a donc lieu ici, avant toute exécution.</p>
      */
     private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
-        Long stepId;
-        try {
-            stepId = Long.valueOf(instance.getEtatCode());
-        } catch (NumberFormatException e) {
+        Long stepId = identifiantNumerique(instance.getEtatCode());
+        if (stepId == null) {
             return; // état terminal : aucune saisie attendue
         }
 
@@ -840,11 +1089,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * réelle, à partir de l'étape courante de l'instance.</p>
      */
     private String resoudreCodeTransition(WorkflowValidationInstance instance, StepDecision decision) {
-        Long stepId;
-        try {
-            stepId = Long.valueOf(instance.getEtatCode());
-        } catch (NumberFormatException e) {
-            // Les états terminaux synthétiques (TERMINATED_*) ne portent pas d'étape : plus rien à décider.
+        // Les états terminaux synthétiques (TERMINATED_*) ne portent pas d'étape : plus rien à décider.
+        Long stepId = identifiantNumerique(instance.getEtatCode());
+        if (stepId == null) {
             throw new com.qualiapproche.common.exception.BusinessException(
                     "Le circuit de validation de cette ressource est terminé : aucune décision n'est possible.",
                     org.springframework.http.HttpStatus.CONFLICT);
@@ -869,10 +1116,14 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             if (lastHistory != null) {
                 for (Map.Entry<Long, String> entry : request.getFields().entrySet()) {
                     WorkflowStepField field = stepFieldRepository.findById(entry.getKey())
-                            .orElseThrow(() -> new RuntimeException("Champ introuvable: " + entry.getKey()));
+                            .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                                    "Le champ de saisie " + entry.getKey() + " n'existe pas.",
+                                    org.springframework.http.HttpStatus.BAD_REQUEST));
 
                     if (field.isRequired() && (entry.getValue() == null || entry.getValue().trim().isEmpty())) {
-                        throw new RuntimeException("Le champ " + field.getFieldName() + " est requis.");
+                        throw new com.qualiapproche.common.exception.BusinessException(
+                                "Le champ « " + field.getFieldLabel() + " » est requis.",
+                                org.springframework.http.HttpStatus.BAD_REQUEST);
                     }
 
                     WorkflowFieldValue fieldValue = WorkflowFieldValue.builder()

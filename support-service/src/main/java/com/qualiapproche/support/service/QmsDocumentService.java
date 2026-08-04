@@ -63,6 +63,9 @@ public class QmsDocumentService {
     private final DocumentQmsRepository documentRepository;
     private final QmsDocumentVersionRepository versionRepository;
     private final DocumentUserAccessRepository accessRepository;
+    private final com.qualiapproche.support.repository.DocumentStructureAccessRepository structureAccessRepository;
+    private final ProfilUtilisateurService profilUtilisateurService;
+    private final NiveauxConfidentialiteService niveauxConfidentialiteService;
     private final QmsAuditLogService auditLogService;
     private final MinioService minioService;
     private final QmsDocumentTypeService typeService;
@@ -91,9 +94,20 @@ public class QmsDocumentService {
             String referenceOfficielle,
             String domaine,
             String statutLegal,
+            String prioriteId,
+            String prioriteLibelle,
+            String niveauConfidentialiteId,
+            String niveauConfidentialiteLibelle,
+            String domaineId,
             UUID workflowId
     ) {
         log.info("Creating new QMS document: type={}, serviceId={}", documentType, serviceId);
+
+        // Le booléen « confidentiel » n'est plus saisi : il se déduit du niveau de confidentialité,
+        // qui dit la même chose en plus précis — quels rôles ont le droit de voir. Le conserver
+        // permet au reste du service (protection du PDF exporté, statistiques) de continuer à
+        // fonctionner sans que deux réglages puissent se contredire.
+        confidentiel = niveauConfidentialiteId != null && !niveauConfidentialiteId.isBlank();
 
         // 1. Resolve customizable Document Type config
         QmsDocumentType docType = typeService.getTypeByCode(documentType);
@@ -103,9 +117,20 @@ public class QmsDocumentService {
         if (finalWorkflowId == null) {
             finalWorkflowId = docType.getWorkflowId();
             
-            // Fallback pour compatibilité ascendante si le champ n'est pas encore renseigné en base
-            if (finalWorkflowId == null && documentType != null) {
-                WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType(documentType);
+            // Repli si le type de document ne désigne pas encore de circuit : on demande celui qui
+            // est actif pour les documents.
+            //
+            // Le repli interrogeait le circuit actif du type de *document* ('PRO', 'ENR'…), alors
+            // que le circuit est ensuite ouvert en tant que 'DOCUMENT'. Les deux désignations ne
+            // recouvrent pas la même notion : `resourceType` est la famille de ressource, la seule
+            // que sache router la remise des notifications ({@code WorkflowNotificationService} ne
+            // connaît que DOCUMENT, NON_CONFORMITE et PLAN_ACTION). Un circuit enregistré sous un
+            // code de type documentaire n'aurait donc jamais pu notifier personne.
+            //
+            // Le circuit propre à un type de document se choisit par {@code docType.workflowId},
+            // ci-dessus : c'est le mécanisme prévu pour cela.
+            if (finalWorkflowId == null) {
+                WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType("DOCUMENT");
                 if (activeWorkflow != null && activeWorkflow.getId() != null) {
                     finalWorkflowId = activeWorkflow.getId();
                 }
@@ -174,6 +199,11 @@ public class QmsDocumentService {
                 .datePublication(documentExterne ? LocalDateTime.now() : null)
                 .domaine(domaine)
                 .statutLegal(statutLegal)
+                .prioriteId(prioriteId)
+                .prioriteLibelle(prioriteLibelle)
+                .niveauConfidentialiteId(niveauConfidentialiteId)
+                .niveauConfidentialiteLibelle(niveauConfidentialiteLibelle)
+                .domaineId(domaineId)
                 .archived(false)
                 .build();
 
@@ -212,6 +242,7 @@ public class QmsDocumentService {
     public DocumentQms assignWorkflow(UUID documentId, UUID workflowId) {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(document);
 
         if (document.getCurrentEtape() != null && !document.getCurrentEtape().isBlank()) {
             throw new IllegalStateException("Ce document est déjà soumis à un circuit de validation.");
@@ -230,8 +261,21 @@ public class QmsDocumentService {
 
     @Transactional
     public QmsDocumentVersion addVersion(UUID documentId, MultipartFile file, String comments) throws Exception {
+        return addVersion(documentId, file, comments, false);
+    }
+
+    /**
+     * @param versionMajeure vrai pour passer à la version majeure suivante (v1.3 → v2.0), comme
+     *                       l'exige le remplacement d'un document après une demande de modification
+     *                       acceptée : le changement a été instruit et décidé, ce n'est pas une
+     *                       retouche.
+     */
+    @Transactional
+    public QmsDocumentVersion addVersion(UUID documentId, MultipartFile file, String comments,
+                                         boolean versionMajeure) throws Exception {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document introuvable"));
+        exigerAccesInterne(document);
 
         // No file extension restriction enforced here to allow any file type (png, pdf, word, etc.) up to 1GB.
 
@@ -246,8 +290,12 @@ public class QmsDocumentService {
         // avant de pouvoir de nouveau être considéré comme "VALIDE" (ISO 9001 §7.5.2).
         boolean requiresRevalidation = document.isEsTraiter();
 
-        // Nouvelle version mineure par défaut
-        document.setVersionMineure(document.getVersionMineure() + 1);
+        if (versionMajeure) {
+            document.setVersionMajeure(document.getVersionMajeure() + 1);
+            document.setVersionMineure(0);
+        } else {
+            document.setVersionMineure(document.getVersionMineure() + 1);
+        }
         documentRepository.save(document);
 
         String versionLabel = document.getVersionMajeure() + "." + document.getVersionMineure();
@@ -302,6 +350,7 @@ public class QmsDocumentService {
     public DocumentQms transitionStatus(UUID id, String nextStatus, String reason) {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
+        exigerAccesInterne(doc);
 
         String oldState = getDocumentDisplayState(doc);
         log.info("Transitioning document '{}' state: {} -> {}", doc.getDocumentNumber(), oldState, nextStatus);
@@ -392,6 +441,7 @@ public class QmsDocumentService {
     public DocumentQms updateDocument(UUID documentId, DocumentUpdateDto dto) {
         DocumentQms doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(doc);
 
         if (doc.isArchived()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -466,6 +516,7 @@ public class QmsDocumentService {
     public DocumentQms archiveDocument(UUID documentId, String motif) {
         DocumentQms doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(doc);
 
         if (doc.isArchived()) {
             return doc;
@@ -485,6 +536,7 @@ public class QmsDocumentService {
     public DocumentQms unarchiveDocument(UUID documentId, String motif) {
         DocumentQms doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(doc);
 
         if (!doc.isArchived()) {
             return doc;
@@ -511,6 +563,7 @@ public class QmsDocumentService {
     public void deleteDocument(UUID documentId, String motif) {
         DocumentQms doc = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(doc);
 
         if (doc.isEsTraiter() || doc.getDateVigueur() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -522,6 +575,44 @@ public class QmsDocumentService {
         documentRepository.delete(doc);
         auditLogService.logAction("SUPPRESSION", numero,
                 motif != null ? "Suppression du brouillon. Motif : " + motif : "Suppression du brouillon.");
+    }
+
+    /**
+     * Retire un document à l'issue d'une demande de suppression acceptée.
+     *
+     * <p>Distinct de {@link #deleteDocument(UUID, String)}, qui refuse tout document entré en
+     * vigueur : ici la suppression a précisément été instruite et décidée par un circuit, et c'est
+     * cette décision qui l'autorise. Le fichier est retiré du stockage ; la demande, son circuit et
+     * la piste d'audit demeurent — ce qui a été décidé, par qui et pourquoi ne disparaît pas avec
+     * le contenu.</p>
+     *
+     * <p>Le contrôle d'accès n'est pas rejoué : l'appelant est le traitement d'aboutissement, et
+     * l'habilitation a été donnée à l'étape de décision.</p>
+     */
+    @Transactional
+    public String supprimerSurDecision(UUID documentId, String motif) {
+        DocumentQms doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+
+        String numero = doc.getDocumentNumber();
+
+        // Les fichiers d'abord : une ligne supprimée sans son contenu laisserait des objets
+        // orphelins dans le stockage, que plus rien ne désignerait.
+        doc.getVersions().forEach(version -> {
+            try {
+                if (version.getObjectName() != null) {
+                    minioService.deleteFile(version.getObjectName());
+                }
+            } catch (Exception e) {
+                log.error("Fichier {} non supprimé du stockage : {}", version.getObjectName(), e.getMessage());
+            }
+        });
+
+        documentRepository.delete(doc);
+        auditLogService.logAction("SUPPRESSION_SUR_DEMANDE", numero,
+                "Document supprimé à l'issue d'une demande instruite."
+                        + (motif != null && !motif.isBlank() ? " Motif : " + motif : ""));
+        return numero;
     }
 
     @Transactional
@@ -541,6 +632,7 @@ public class QmsDocumentService {
     public DocumentQms linkToNonConformity(UUID id, String ncRef, String actionCorrective) {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
+        exigerAccesInterne(doc);
 
         log.info("Linking document '{}' with NC '{}'. Action corrective : {}", doc.getDocumentNumber(), ncRef, actionCorrective);
 
@@ -582,6 +674,7 @@ public class QmsDocumentService {
     public ExportedDocument securedExportPdf(UUID id) throws IOException {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
+        exigerAcces(doc);
 
         log.info("Exporting secured PDF for document '{}'", doc.getDocumentNumber());
 
@@ -670,12 +763,127 @@ public class QmsDocumentService {
     }
 
     public List<QmsDocumentVersion> getVersionHistory(UUID id) {
+        exigerAccesInterne(chargerSansControle(id));
         return versionRepository.findByDocumentIdOrderByDateCreationDesc(id);
     }
 
-    public DocumentQms getDocumentById(UUID id) {
+    /** Piste d'audit, réservée à la structure du document. */
+    public List<com.qualiapproche.support.model.QmsAuditLog> getAuditLogs(UUID id) {
+        DocumentQms document = chargerSansControle(id);
+        exigerAccesInterne(document);
+        return auditLogService.getLogsForDocument(document.getDocumentNumber());
+    }
+
+    private DocumentQms chargerSansControle(UUID id) {
         return documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
+    }
+
+    public DocumentQms getDocumentById(UUID id) {
+        DocumentQms document = documentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
+        exigerAcces(document);
+        return document;
+    }
+
+    // =========================================================================
+    // Visibilité d'un document pris isolément
+    //
+    // Le filtre des recherches ne protège que les listes : sans le contrôle ci-dessous, il suffisait
+    // de connaître un identifiant pour ouvrir, télécharger ou faire avancer le document d'une autre
+    // structure.
+    // =========================================================================
+
+    /** Portée de l'accès d'un utilisateur à un document. */
+    private enum Portee {
+        /** Aucun droit : le document n'existe pas, de son point de vue. */
+        AUCUNE,
+        /** Partage : consultation et téléchargement, rien de plus. */
+        PARTAGE,
+        /** Structure émettrice, auteur, ou responsabilité qualité : le dossier lui appartient. */
+        INTERNE
+    }
+
+    /**
+     * Voit-on l'ensemble des documents, toutes structures confondues ?
+     *
+     * <p>Deux sources, parce que le rôle peut venir de deux endroits : les rôles techniques portés
+     * par le jeton Keycloak, et les rôles applicatifs que détient user-service. Un super
+     * administrateur n'a pas nécessairement de rôle technique correspondant — s'en tenir au jeton
+     * le ramenait au rang d'utilisateur ordinaire, borné à sa propre structure.</p>
+     */
+    /** Même question, posée depuis l'extérieur du service (composition du filtre de recherche). */
+    public boolean voitToutesLesStructures(ProfilUtilisateurService.Profil profil) {
+        return voitTout(profil);
+    }
+
+    private boolean voitTout(ProfilUtilisateurService.Profil profil) {
+        return SecurityUtils.hasRole("ADMIN")
+                || SecurityUtils.hasRole("MANAGE")
+                || SecurityUtils.hasRole("SUPER_ADMIN")
+                || profil.voitToutesLesStructures();
+    }
+
+    private Portee porteeSur(DocumentQms document) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            return Portee.AUCUNE;
+        }
+
+        ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
+
+        boolean voitTout = voitTout(profil);
+
+        // Le niveau de confidentialité s'applique avant tout le reste : appartenir à la structure
+        // n'ouvre pas un document classé à qui n'en a pas le rôle. Le responsable qualité, lui,
+        // accompagne l'ensemble des dossiers.
+        if (!voitTout && !niveauxConfidentialiteService.peutVoir(
+                document.getNiveauConfidentialiteId(), profil.roles())) {
+            return Portee.AUCUNE;
+        }
+
+        if (voitTout
+                || currentUserId.equals(document.getCreatedById())
+                || (profil.structureId() != null && profil.structureId().equals(document.getServiceId()))) {
+            return Portee.INTERNE;
+        }
+
+        boolean partageNominatif = accessRepository
+                .findByDocumentIdAndUserId(document.getId(), currentUserId).isPresent();
+        boolean partageStructure = profil.structureId() != null && structureAccessRepository
+                .findByDocumentIdAndStructureId(document.getId(), profil.structureId()).isPresent();
+
+        return (partageNominatif || partageStructure) ? Portee.PARTAGE : Portee.AUCUNE;
+    }
+
+    private void exigerAcces(DocumentQms document) {
+        if (porteeSur(document) == Portee.AUCUNE) {
+            // Même message que pour un document inexistant : dire « accès refusé » révélerait à qui
+            // n'y a pas droit qu'un document porte bien cet identifiant.
+            throw new IllegalArgumentException("Document introuvable avec l'ID: " + document.getId());
+        }
+    }
+
+    /**
+     * Exige mieux qu'un partage : l'historique des versions, la piste d'audit et les décisions du
+     * circuit sont les affaires internes de la structure émettrice. Le destinataire d'un partage
+     * consulte et télécharge — il n'a pas à savoir qui a rejeté quoi, ni combien de fois.
+     */
+    private void exigerAccesInterne(DocumentQms document) {
+        Portee portee = porteeSur(document);
+        if (portee == Portee.AUCUNE) {
+            throw new IllegalArgumentException("Document introuvable avec l'ID: " + document.getId());
+        }
+        if (portee == Portee.PARTAGE) {
+            throw new AccessDeniedException(
+                    "Ce document vous est partagé en lecture : sa consultation et son téléchargement "
+                            + "vous sont ouverts, mais pas son historique ni son suivi interne.");
+        }
+    }
+
+    /** L'utilisateur peut-il consulter l'historique et le suivi interne de ce document ? */
+    public boolean peutVoirLeSuiviInterne(DocumentQms document) {
+        return porteeSur(document) == Portee.INTERNE;
     }
 
     /**
@@ -754,6 +962,22 @@ public class QmsDocumentService {
 
             if (criteria.getDomaine() != null && !criteria.getDomaine().isBlank()) {
                 predicates.add(cb.equal(root.get("domaine"), criteria.getDomaine()));
+            }
+
+            if (criteria.getDomaineId() != null && !criteria.getDomaineId().isBlank()) {
+                predicates.add(cb.equal(root.get("domaineId"), criteria.getDomaineId()));
+            }
+
+            if (criteria.getPrioriteId() != null && !criteria.getPrioriteId().isBlank()) {
+                predicates.add(cb.equal(root.get("prioriteId"), criteria.getPrioriteId()));
+            }
+
+            // Le niveau demandé n'élargit rien : addVisibilityPredicates a déjà écarté les
+            // documents classés au-dessus des droits de l'appelant, et ce filtre s'y ajoute.
+            if (criteria.getNiveauConfidentialiteId() != null
+                    && !criteria.getNiveauConfidentialiteId().isBlank()) {
+                predicates.add(cb.equal(root.get("niveauConfidentialiteId"),
+                        criteria.getNiveauConfidentialiteId()));
             }
 
             if (criteria.getStatutLegal() != null && !criteria.getStatutLegal().isBlank()) {
@@ -882,19 +1106,88 @@ public class QmsDocumentService {
      * explicite lui a été accordé ({@link DocumentUserAccess}). Partagé par {@link #searchDocuments}
      * et par les méthodes de statistiques pour qu'elles restent cohérentes entre elles.
      */
+    /**
+     * Restreint toute recherche aux documents que l'appelant a le droit de voir.
+     *
+     * <p>La règle, telle qu'elle se lit du point de vue de l'utilisateur :</p>
+     * <ul>
+     *   <li><b>Ma structure</b> — je vois les documents soumis par la structure à laquelle je suis
+     *       rattaché. Ce que je peux en faire dépend ensuite de mon rôle, que le circuit arbitre
+     *       étape par étape.</li>
+     *   <li><b>Les autres structures</b> — je n'en vois rien. Un document ne franchit sa structure
+     *       d'origine que si celle-ci le partage explicitement, avec la structure destinataire
+     *       entière ({@link DocumentStructureAccess}) ou avec l'un de ses membres
+     *       ({@link DocumentUserAccess}).</li>
+     *   <li><b>Responsable qualité</b> — voit tout ce qui est soumis, toutes structures
+     *       confondues : c'est ce que sa fonction suppose.</li>
+     *   <li><b>Mes propres dépôts</b> — visibles quoi qu'il arrive, y compris si mon rattachement
+     *       a changé depuis.</li>
+     * </ul>
+     *
+     * <p>La règle précédente ne connaissait ni structure ni responsable qualité : chacun ne voyait
+     * que ce qu'il avait lui-même déposé ou ce qu'on lui avait nommément partagé. Deux collègues
+     * d'un même service s'ignoraient, et le responsable qualité ne voyait presque rien.</p>
+     *
+     * <p>Profil indisponible (user-service injoignable) : la structure est nulle, la clause s'y
+     * réduit d'elle-même, et l'utilisateur retombe sur ses propres documents et ses partages. Une
+     * panne de résolution restreint l'accès, elle ne l'élargit jamais.</p>
+     */
     private void addVisibilityPredicates(List<Predicate> predicates, Root<DocumentQms> root,
                                           CriteriaQuery<?> cq, CriteriaBuilder cb) {
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
         String currentUserId = SecurityUtils.getCurrentUserId();
-
-        if (!isAdmin && currentUserId != null) {
-            Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
-            predicates.add(cb.or(
-                    cb.equal(root.get("createdById"), currentUserId),
-                    cb.equal(accessJoin.get("userId"), currentUserId)
-            ));
-            cq.distinct(true);
+        if (currentUserId == null) {
+            return;
         }
+
+        ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
+        boolean voitTout = voitTout(profil);
+        if (voitTout) {
+            return;
+        }
+
+        ajouterRestrictionConfidentialite(predicates, root, cb, profil);
+
+        Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
+        Join<DocumentQms, com.qualiapproche.support.model.DocumentStructureAccess> structureJoin =
+                root.join("structureAccessList", JoinType.LEFT);
+
+        List<Predicate> acces = new ArrayList<>();
+        acces.add(cb.equal(root.get("createdById"), currentUserId));
+        acces.add(cb.equal(accessJoin.get("userId"), currentUserId));
+
+        if (profil.structureId() != null) {
+            acces.add(cb.equal(root.get("serviceId"), profil.structureId()));
+            acces.add(cb.equal(structureJoin.get("structureId"), profil.structureId()));
+        }
+
+        predicates.add(cb.or(acces.toArray(new Predicate[0])));
+        cq.distinct(true);
+    }
+
+    /**
+     * Écarte les documents dont le niveau de confidentialité exige un rôle que l'appelant n'a pas.
+     *
+     * <p>Cette restriction s'ajoute à celle de la structure : relever du bon service ne suffit pas
+     * si le document est classé. Un document sans niveau, ou dont le niveau n'exige aucun rôle,
+     * n'est jamais écarté ici.</p>
+     */
+    private void ajouterRestrictionConfidentialite(List<Predicate> predicates, Root<DocumentQms> root,
+                                                    CriteriaBuilder cb,
+                                                    ProfilUtilisateurService.Profil profil) {
+        if (niveauxConfidentialiteService.restrictionIndecidable()) {
+            // Référentiel injoignable : on ne peut établir le droit de personne sur un document
+            // classé. Seuls les documents sans niveau restent visibles.
+            predicates.add(cb.isNull(root.get("niveauConfidentialiteId")));
+            return;
+        }
+
+        java.util.Set<String> interdits = niveauxConfidentialiteService.niveauxInterdits(profil.roles());
+        if (interdits.isEmpty()) {
+            return;
+        }
+        predicates.add(cb.or(
+                cb.isNull(root.get("niveauConfidentialiteId")),
+                cb.not(root.get("niveauConfidentialiteId").in(interdits))));
     }
 
     /**
@@ -938,6 +1231,38 @@ public class QmsDocumentService {
      * Les admins/managers voient les stats sur tous les documents ; les autres utilisateurs
      * ne voient que les stats sur leurs propres documents (créés ou partagés avec eux).
      */
+    /**
+     * Nombre de documents déposés par mois, sur les {@code mois} derniers mois.
+     *
+     * <p>Les mois sans dépôt figurent à zéro : une courbe qui saute les mois vides déforme la
+     * pente et laisse croire à une activité continue là où il y a eu une interruption.</p>
+     *
+     * <p>Portée identique au reste des statistiques — ce que l'appelant a le droit de voir, et rien
+     * de plus : sa structure, ou l'ensemble s'il accompagne la qualité.</p>
+     *
+     * @return une carte ordonnée {@code "2026-03" → 4}, du plus ancien au plus récent
+     */
+    public Map<String, Long> getDocumentsParMois(int mois) {
+        int profondeur = Math.max(1, Math.min(mois, 36));
+        LocalDate debut = LocalDate.now().withDayOfMonth(1).minusMonths(profondeur - 1L);
+
+        Map<String, Long> serie = new LinkedHashMap<>();
+        for (int i = 0; i < profondeur; i++) {
+            serie.put(debut.plusMonths(i).format(DateTimeFormatter.ofPattern("yyyy-MM")), 0L);
+        }
+
+        LocalDateTime seuil = debut.atStartOfDay();
+        visibleDocuments(true).stream()
+                .map(DocumentQms::getCreatedAt)
+                .filter(java.util.Objects::nonNull)
+                .filter(date -> !date.isBefore(seuil))
+                .map(date -> date.format(DateTimeFormatter.ofPattern("yyyy-MM")))
+                .filter(serie::containsKey)
+                .forEach(mois2 -> serie.merge(mois2, 1L, Long::sum));
+
+        return serie;
+    }
+
     public DocumentStatsDto getDocumentStats() {
         List<DocumentQms> documents = visibleDocuments(false);
 
@@ -966,12 +1291,13 @@ public class QmsDocumentService {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
+        // Partager relève de la structure émettrice, non du seul déposant : un collègue du même
+        // service traite les mêmes dossiers, et le responsable qualité les accompagne tous.
+        exigerAccesInterne(document);
 
-        if (!isAdmin && !document.getCreatedById().equals(currentUserId)) {
-            throw new AccessDeniedException("Vous n'êtes pas autorisé à gérer les accès de ce document.");
-        }
+        // Le destinataire n'est plus contraint par une structure désignée à la soumission : il se
+        // choisit à l'étape où l'on décide de partager, et c'est le geste lui-même — réservé à la
+        // structure émettrice — qui fait l'habilitation.
 
         // Update if entry already exists, otherwise create
         DocumentUserAccess access = accessRepository.findByDocumentIdAndUserId(documentId, userId)
@@ -1014,6 +1340,75 @@ public class QmsDocumentService {
     }
 
     /**
+     * Partage un document avec une structure, désignée au moment du geste.
+     *
+     * <p>Le destinataire ne se décide pas à la soumission mais à l'étape où l'on choisit de
+     * partager : c'est là qu'on sait à qui le document doit être montré. L'étape en cours est
+     * consignée avec le partage — savoir <i>quand</i> un document a franchi sa structure vaut
+     * autant que savoir avec qui.</p>
+     *
+     * <p>Partager relève de la structure émettrice, et du responsable qualité qui accompagne tous
+     * les dossiers. L'accès obtenu reste en lecture et téléchargement : ni historique, ni piste
+     * d'audit, ni décisions de circuit.</p>
+     */
+    @Transactional
+    public com.qualiapproche.support.model.DocumentStructureAccess partagerAvecStructure(
+            UUID documentId, String structureId, String structureLibelle) {
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(document);
+
+        if (structureId == null || structureId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Aucune structure destinataire n'a été désignée pour ce partage.");
+        }
+        if (structureId.equals(document.getServiceId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cette structure est celle qui a émis le document : ses membres le voient déjà.");
+        }
+
+        return structureAccessRepository.findByDocumentIdAndStructureId(documentId, structureId)
+                .orElseGet(() -> {
+                    var partage = structureAccessRepository.save(
+                            com.qualiapproche.support.model.DocumentStructureAccess.builder()
+                                    .document(document)
+                                    .structureId(structureId)
+                                    .structureLibelle(structureLibelle)
+                                    .etapeCode(document.getCurrentEtape())
+                                    .sharedByUserId(SecurityUtils.getCurrentUserId())
+                                    .sharedByFullName(getCurrentUser())
+                                    .build());
+
+                    auditLogService.logAction("PARTAGE_STRUCTURE", document.getDocumentNumber(),
+                            "Document partagé avec la structure "
+                                    + (structureLibelle != null ? structureLibelle : structureId)
+                                    + (document.getCurrentEtape() != null
+                                            ? " à l'étape « " + document.getCurrentEtape() + " »" : ""));
+                    return partage;
+                });
+    }
+
+    /** Retire le partage consenti à une structure. */
+    @Transactional
+    public void retirerPartageStructure(UUID documentId, String structureId) {
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(document);
+
+        structureAccessRepository.deleteByDocumentIdAndStructureId(documentId, structureId);
+        auditLogService.logAction("PARTAGE_STRUCTURE_RETIRE", document.getDocumentNumber(),
+                "Partage retiré pour la structure " + structureId);
+    }
+
+    /** Structures avec lesquelles le document est partagé. */
+    public List<com.qualiapproche.support.model.DocumentStructureAccess> getPartagesStructure(UUID documentId) {
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
+        exigerAccesInterne(document);
+        return structureAccessRepository.findByDocumentId(documentId);
+    }
+
+    /**
      * Revokes access for a specific user from a document.
      */
     @Transactional
@@ -1021,12 +1416,8 @@ public class QmsDocumentService {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
-
-        if (!isAdmin && !document.getCreatedById().equals(currentUserId)) {
-            throw new AccessDeniedException("Vous n'êtes pas autorisé à révoquer les accès de ce document.");
-        }
+        // Même règle que pour l'octroi : accorder sans pouvoir révoquer n'aurait pas de sens.
+        exigerAccesInterne(document);
 
         accessRepository.deleteByDocumentIdAndUserId(documentId, userId);
 
@@ -1041,13 +1432,8 @@ public class QmsDocumentService {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
-
-        // Only creator or admin can see the full ACL
-        if (!isAdmin && !document.getCreatedById().equals(currentUserId)) {
-            throw new AccessDeniedException("Vous n'êtes pas autorisé à consulter les accès de ce document.");
-        }
+        // La liste des accès est une affaire interne à la structure émettrice.
+        exigerAccesInterne(document);
 
         return accessRepository.findByDocumentId(documentId);
     }
@@ -1070,31 +1456,65 @@ public class QmsDocumentService {
                     "Vous n'êtes pas autorisé à consulter les documents partagés d'un autre utilisateur.");
         }
 
-        return accessRepository.findByUserId(userId).stream()
-                .map(access -> {
-                    DocumentQms doc = access.getDocument();
-                    String versionLabel = doc.getVersionMajeure() + "." + doc.getVersionMineure();
-                    return SharedDocumentDto.builder()
-                            .documentId(doc.getId())
-                            .documentNumber(doc.getDocumentNumber())
-                            .titre(doc.getTitre())
-                            .documentType(doc.getDocumentType())
-                            .status(getDocumentDisplayState(doc).toLowerCase())
-                            .serviceLibelle(doc.getServiceLibelle())
-                            .serviceSigle(doc.getServiceSigle())
-                            .redacteur(doc.getRedacteur())
-                            .domaine(doc.getDomaine())
-                            .versionLabel(versionLabel)
-                            .dateVigueur(doc.getDateVigueur())
-                            .dateProchRevision(doc.getDateProchRevision())
-                            .confidentiel(doc.isConfidentiel())
-                            .userId(access.getUserId())
-                            .userFullName(access.getUserFullName())
-                            .userEmail(access.getUserEmail())
-                            .accessRole(access.getRole())
-                            .build();
-                })
-                .collect(Collectors.toList());
+        // Partages nominatifs.
+        Map<UUID, SharedDocumentDto> parDocument = new LinkedHashMap<>();
+        accessRepository.findByUserId(userId).forEach(access -> {
+            DocumentQms doc = access.getDocument();
+            parDocument.put(doc.getId(), versSharedDto(doc)
+                    .userId(access.getUserId())
+                    .userFullName(access.getUserFullName())
+                    .userEmail(access.getUserEmail())
+                    .accessRole(access.getRole())
+                    .partageStructure(false)
+                    .build());
+        });
+
+        // Partages consentis à la structure entière : ils valent pour chacun de ses membres, sans
+        // qu'aucun n'ait été nommé. Sans eux, l'onglet « Partagés avec moi » resterait vide pour
+        // qui n'a reçu qu'un partage collectif.
+        String structureId = utilisateurCible(userId).structureId();
+        if (structureId != null) {
+            structureAccessRepository.findByStructureId(structureId).forEach(partage -> {
+                DocumentQms doc = partage.getDocument();
+                // Un partage nominatif l'emporte : il porte un rôle, que le partage collectif n'a pas.
+                parDocument.computeIfAbsent(doc.getId(), id -> versSharedDto(doc)
+                        .userId(userId)
+                        .accessRole("READ_ONLY")
+                        .partageStructure(true)
+                        .partagePar(partage.getSharedByFullName())
+                        .build());
+            });
+        }
+
+        return new ArrayList<>(parDocument.values());
+    }
+
+    /**
+     * Structure de l'utilisateur visé. Pour l'appelant lui-même — le cas courant — c'est son profil
+     * en cache ; pour un tiers (consultation par un administrateur), il est demandé à user-service.
+     */
+    private ProfilUtilisateurService.Profil utilisateurCible(String userId) {
+        if (userId.equals(SecurityUtils.getCurrentUserId())) {
+            return profilUtilisateurService.profilCourant();
+        }
+        return profilUtilisateurService.profilDe(userId);
+    }
+
+    private SharedDocumentDto.SharedDocumentDtoBuilder versSharedDto(DocumentQms doc) {
+        return SharedDocumentDto.builder()
+                .documentId(doc.getId())
+                .documentNumber(doc.getDocumentNumber())
+                .titre(doc.getTitre())
+                .documentType(doc.getDocumentType())
+                .status(getDocumentDisplayState(doc).toLowerCase())
+                .serviceLibelle(doc.getServiceLibelle())
+                .serviceSigle(doc.getServiceSigle())
+                .redacteur(doc.getRedacteur())
+                .domaine(doc.getDomaine())
+                .versionLabel(doc.getVersionMajeure() + "." + doc.getVersionMineure())
+                .dateVigueur(doc.getDateVigueur())
+                .dateProchRevision(doc.getDateProchRevision())
+                .confidentiel(doc.isConfidentiel());
     }
 
     /**

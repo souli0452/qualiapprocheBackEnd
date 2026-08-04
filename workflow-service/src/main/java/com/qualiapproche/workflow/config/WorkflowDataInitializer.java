@@ -32,7 +32,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         
         if (existingWorkflows.isEmpty()) {
             log.info("No default NON_CONFORMITE workflow found. Creating one...");
-            createDefaultNonConformiteWorkflow();
+            workflowRepository.save(circuitNonConformiteParDefaut());
             log.info("Default NON_CONFORMITE workflow created successfully.");
         } else {
             log.info("Default NON_CONFORMITE workflow already exists.");
@@ -43,10 +43,19 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         if (existingPlanActionWorkflows.isEmpty()) {
             log.info("No default PLAN_ACTION workflow found. Creating one...");
-            createDefaultPlanActionWorkflow();
+            workflowRepository.save(circuitPlanActionParDefaut());
             log.info("Default PLAN_ACTION workflow created successfully.");
         } else {
             log.info("Default PLAN_ACTION workflow already exists.");
+        }
+
+        log.info("Checking for default DEMANDE_DOCUMENT workflow...");
+        if (workflowRepository.findByResourceType("DEMANDE_DOCUMENT").isEmpty()) {
+            log.info("No default DEMANDE_DOCUMENT workflow found. Creating one...");
+            workflowRepository.save(circuitDemandeDocumentParDefaut());
+            log.info("Default DEMANDE_DOCUMENT workflow created successfully.");
+        } else {
+            log.info("Default DEMANDE_DOCUMENT workflow already exists.");
         }
 
         log.info("Checking for default DOCUMENT workflow...");
@@ -54,7 +63,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
         if (existingDocumentWorkflows.isEmpty()) {
             log.info("No default DOCUMENT workflow found. Creating one...");
-            createDefaultDocumentWorkflow();
+            workflowRepository.save(circuitDocumentParDefaut());
             log.info("Default DOCUMENT workflow created successfully.");
         } else {
             log.info("Default DOCUMENT workflow already exists.");
@@ -72,8 +81,12 @@ public class WorkflowDataInitializer implements CommandLineRunner {
      * c'est ce qui fait remonter un statut {@code APPROVED} à support-service, qui fait alors
      * entrer le document en vigueur. Un rejet renvoie en rédaction plutôt que de clore le
      * circuit, le document restant en cours de traitement.</p>
+     *
+     * <p>Ces trois fabriques rendent le circuit sans l'enregistrer, et ne dépendent d'aucun état :
+     * un test peut ainsi les inspecter sans base, et vérifier que les étapes livrées ici figurent
+     * bien au catalogue partagé ({@code CatalogueEtapesStandard}), que sème support-service.</p>
      */
-    private void createDefaultDocumentWorkflow() {
+    static Workflow circuitDocumentParDefaut() {
         Workflow workflow = Workflow.builder()
                 .nom("Workflow Défaut Document")
                 .description("Circuit de validation par défaut des documents qualité")
@@ -86,7 +99,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(1)
                 .etatTraitement("REDACTION")
                 .description("Rédaction et dépôt du document")
-                .responsableRole("ROLE_AGENT")
+                .responsableRole("AGENT")
                 .emailTemplateCode("emailTemplate")
                 .build();
 
@@ -96,7 +109,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(2)
                 .etatTraitement("VERIFICATION")
                 .description("Vérification de la forme et du fond")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("structureToStructure")
                 .build();
         verification.getFields().add(WorkflowStepField.builder().step(verification)
@@ -109,7 +122,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(3)
                 .etatTraitement("APPROBATION")
                 .description("Approbation et mise en vigueur")
-                .responsableRole("ROLE_RESPONSABLE_QUALITE")
+                .responsableRole("RESPONSABLE_QUALITE")
                 .emailTemplateCode("validationRq")
                 .build();
 
@@ -137,10 +150,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         workflow.addStep(verification);
         workflow.addStep(approbation);
 
-        workflowRepository.save(workflow);
+        return workflow;
     }
 
-    private void createDefaultNonConformiteWorkflow() {
+    static Workflow circuitNonConformiteParDefaut() {
         Workflow workflow = Workflow.builder()
                 .nom("Workflow Défaut Non-Conformité")
                 .description("Workflow par défaut pour le traitement des non-conformités")
@@ -154,7 +167,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(1)
                 .etatTraitement("SOUMISSION")
                 .description("Création et soumission de la NC")
-                .responsableRole("ROLE_AGENT") // or any
+                .responsableRole("AGENT") // or any
                 .emailTemplateCode("emailTemplate")
                 .build();
 
@@ -165,7 +178,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(2)
                 .etatTraitement("RECEPTION")
                 .description("Réception et prise en charge")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("structureToStructure")
                 .build();
 
@@ -176,7 +189,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(3)
                 .etatTraitement("IMPUTATION")
                 .description("Imputation à un agent traitant")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("emailTemplate")
                 .build();
         step3.getFields().add(WorkflowStepField.builder().step(step3).fieldName("userImputId").fieldLabel("Agent responsable du traitement").type(FieldType.TEXT).isRequired(true).build());
@@ -188,7 +201,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(4)
                 .etatTraitement("TRAITEMENT")
                 .description("Analyse et mise en œuvre du plan d'action")
-                .responsableRole("ROLE_AGENT_IMPUTE")
+                .responsableRole("AGENT_IMPUTE")
                 .emailTemplateCode("emailPlanAction")
                 .build();
         step4.getFields().add(WorkflowStepField.builder().step(step4).fieldName("actionPreventive").fieldLabel("Action préventive proposée").type(FieldType.TEXT).isRequired(true).build());
@@ -202,7 +215,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(5)
                 .etatTraitement("VALIDATION")
                 .description("Validation de la pertinence des actions")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("validationNonConformite")
                 .build();
         step5.getFields().add(WorkflowStepField.builder().step(step5).fieldName("pertinancePilote").fieldLabel("Pertinence de l'action").type(FieldType.TEXT).isRequired(true).build());
@@ -215,7 +228,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(6)
                 .etatTraitement("VALIDATION_RS")
                 .description("Validation RQ des actions")
-                .responsableRole("ROLE_RESPONSABLE_QUALITE")
+                .responsableRole("RESPONSABLE_QUALITE")
                 .emailTemplateCode("validationRq")
                 .build();
         step6.getFields().add(WorkflowStepField.builder().step(step6).fieldName("pertinanceRs").fieldLabel("Pertinence de l'action (RS)").type(FieldType.TEXT).isRequired(true).build());
@@ -228,7 +241,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(7)
                 .etatTraitement("SUIVI_RQ")
                 .description("Suivi de l'efficacité et clôture")
-                .responsableRole("ROLE_RESPONSABLE_QUALITE")
+                .responsableRole("RESPONSABLE_QUALITE")
                 .emailTemplateCode("validationAfterPlan")
                 .build();
         step7.getFields().add(WorkflowStepField.builder().step(step7).fieldName("efficaciteId").fieldLabel("Efficacité (ID)").type(FieldType.TEXT).isRequired(true).build());
@@ -241,7 +254,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(8)
                 .etatTraitement("CLOTURE")
                 .description("Clôture finale de la NC")
-                .responsableRole("ROLE_RESPONSABLE_QUALITE")
+                .responsableRole("RESPONSABLE_QUALITE")
                 .emailTemplateCode("traitementReussi")
                 .build();
 
@@ -282,10 +295,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         workflow.addStep(step7);
         workflow.addStep(step8);
 
-        workflowRepository.save(workflow);
+        return workflow;
     }
 
-    private void createDefaultPlanActionWorkflow() {
+    static Workflow circuitPlanActionParDefaut() {
         Workflow workflow = Workflow.builder()
                 .nom("Workflow Défaut Plan d'Action")
                 .description("Workflow par défaut pour le suivi d'un plan d'action")
@@ -299,7 +312,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(1)
                 .etatTraitement("NON_TRAITER")
                 .description("Plan d'action en attente de traitement par l'agent")
-                .responsableRole("ROLE_AGENT_IMPUTE")
+                .responsableRole("AGENT_IMPUTE")
                 .emailTemplateCode("emailPlanAction")
                 .build();
 
@@ -310,7 +323,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(2)
                 .etatTraitement("TRAITER")
                 .description("Le plan d'action a été exécuté")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("emailRqPlan")
                 .build();
 
@@ -321,7 +334,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(3)
                 .etatTraitement("REJECTED")
                 .description("Le plan d'action a été rejeté")
-                .responsableRole("ROLE_PILOTE")
+                .responsableRole("PILOTE")
                 .emailTemplateCode("rejectPlanAction")
                 .build();
 
@@ -340,8 +353,85 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         workflow.addStep(step2);
         workflow.addStep(step3);
 
-        workflowRepository.save(workflow);
+        return workflow;
     }
 
 
+    /**
+     * Circuit par défaut d'une demande de modification ou de suppression de document.
+     *
+     * <p>Trois étapes, volontairement courtes : le demandeur soumet, le responsable qualité
+     * instruit, et la décision clôt le circuit. C'est cette clôture qui déclenche l'aboutissement
+     * côté support-service — dépôt du fichier remplaçant pour une modification, retrait du document
+     * pour une suppression — d'où une étape terminale explicite plutôt qu'une fin déduite.</p>
+     *
+     * <p>Le rejet renvoie au demandeur : une demande refusée doit pouvoir être reprise et
+     * réargumentée, non disparaître.</p>
+     */
+    static Workflow circuitDemandeDocumentParDefaut() {
+        Workflow workflow = Workflow.builder()
+                .nom("Workflow Défaut Demande Document")
+                .description("Circuit de validation des demandes de modification et de suppression de document")
+                .resourceType("DEMANDE_DOCUMENT")
+                .build();
+
+        WorkflowStep soumission = WorkflowStep.builder()
+                .code("DEMANDE_SOUMISSION")
+                .nomEtape("Soumission de la demande")
+                .stepOrder(1)
+                .etatTraitement("SOUMISSION")
+                .description("Rédaction et dépôt de la demande")
+                .responsableRole("AGENT")
+                .emailTemplateCode("emailTemplate")
+                .build();
+
+        WorkflowStep instruction = WorkflowStep.builder()
+                .code("DEMANDE_INSTRUCTION")
+                .nomEtape("Instruction de la demande")
+                .stepOrder(2)
+                .etatTraitement("INSTRUCTION")
+                .description("Examen de la demande au titre de la qualité")
+                .responsableRole("RESPONSABLE_QUALITE")
+                .emailTemplateCode("validationRq")
+                .build();
+        instruction.getFields().add(WorkflowStepField.builder().step(instruction)
+                .fieldName("avisQualite").fieldLabel("Avis du responsable qualité")
+                .type(FieldType.TEXT).isRequired(true).build());
+
+        WorkflowStep decision = WorkflowStep.builder()
+                .code("DEMANDE_DECISION")
+                .nomEtape("Décision")
+                .stepOrder(3)
+                .etatTraitement("DECISION")
+                .description("Suite donnée à la demande")
+                .responsableRole("RESPONSABLE_QUALITE")
+                .emailTemplateCode("traitementReussi")
+                .build();
+
+        soumission.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(soumission).toStep(instruction)
+                .decision(StepDecision.APPROUVE).label("Soumettre la demande").build());
+
+        instruction.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(instruction).toStep(decision)
+                .decision(StepDecision.APPROUVE).label("Retenir la demande").build());
+        instruction.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(instruction).toStep(soumission)
+                .decision(StepDecision.REJETE).label("Renvoyer au demandeur").build());
+
+        // Terminale et déclarée comme telle : sans ce marqueur, le moteur ignore la transition et
+        // l'aboutissement — remplacement du fichier ou retrait du document — n'aurait pas lieu.
+        decision.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(decision).terminal(true)
+                .decision(StepDecision.APPROUVE).label("Accepter et exécuter").build());
+        decision.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(decision).terminal(true)
+                .decision(StepDecision.REJETE).label("Refuser la demande").build());
+
+        workflow.addStep(soumission);
+        workflow.addStep(instruction);
+        workflow.addStep(decision);
+
+        return workflow;
+    }
 }

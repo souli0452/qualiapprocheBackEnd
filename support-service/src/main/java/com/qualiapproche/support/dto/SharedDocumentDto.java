@@ -69,4 +69,14 @@ public class SharedDocumentDto {
 
     /** Rôle sur ce document : READ_ONLY ou WRITE */
     private String accessRole;
+
+    /**
+     * Vrai lorsque l'accès vient d'un partage consenti à la structure entière, et non d'une
+     * désignation nominative. L'écran s'en sert pour dire d'où vient le droit, et pour ne pas
+     * proposer un suivi interne que le serveur refuserait.
+     */
+    private boolean partageStructure;
+
+    /** Qui a partagé, lorsque le partage vise la structure. */
+    private String partagePar;
 }

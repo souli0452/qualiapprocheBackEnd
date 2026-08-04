@@ -1,5 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +31,12 @@ import static com.qualiapproche.common.utils.ApiUrls.UPDATE_RISQUE;
 @RestController
 @RequestMapping(RISQUE_ROOT_URL)
 @Tag(name = "Risques", description = "Identification et évaluation des risques")
+@RequirePermissions(
+        create = {"risque-write", "SUBMIT_RISQUE"},
+        update = {"risque-write", "SUBMIT_RISQUE"},
+        read = {"risque-read", "risque-write", "RISQUE_READ", "SUBMIT_RISQUE"},
+        delete = {"risque-write", "SUBMIT_RISQUE"}
+)
 public class RisqueController {
 
     @Autowired
@@ -38,6 +46,7 @@ public class RisqueController {
     /                     Méthode de création d'un RISQUE                    /
     /-----------------------------------------------------------------------*/
     @Operation(summary = "Créer un risque", description = "Identifie un nouveau risque dans le système")
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_RISQUE)
     public ResponseEntity<RisqueDto> create(@RequestBody RisqueDto risqueDto) {
         RisqueDto risque = risqueService.create(risqueDto);
@@ -47,6 +56,7 @@ public class RisqueController {
     /*-----------------------------------------------------------------------/
     /                     Méthode de mise à jour d'un RISQUE                 /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_RISQUE)
     public ResponseEntity<RisqueDto> update(@RequestBody RisqueDto risqueDto) {
         RisqueDto risque = risqueService.update(risqueDto);
@@ -56,6 +66,7 @@ public class RisqueController {
     /*-----------------------------------------------------------------------/
     /               Méthode de récupération de tous les RISQUES              /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_RISQUE)
     public ResponseEntity<List<RisqueDto>> allRisques() {
         List<RisqueDto> risque = risqueService.allRisques();
@@ -65,6 +76,7 @@ public class RisqueController {
     /*-----------------------------------------------------------------------/
     /           Méthode de récupération d'un RISQUE par son ID               /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_RISQUE_BY_ID)
     public ResponseEntity<RisqueDto> getRisqueById(@PathVariable UUID risqueId) {
         RisqueDto risque = risqueService.getRisqueById(risqueId);
@@ -74,6 +86,7 @@ public class RisqueController {
     /*-----------------------------------------------------------------------/
     /                  Méthode de suppression d'un RISQUE                    /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_RISQUE)
     public void deleteById(@PathVariable UUID risqueId) {
         risqueService.delete(risqueId);

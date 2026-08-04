@@ -17,6 +17,7 @@ import java.util.UUID;
 public class SupportInternalCallbackController {
 
     private final QmsDocumentService documentService;
+    private final com.qualiapproche.support.service.DemandeDocumentService demandeService;
 
     @PostMapping("/documents/{documentId}/status")
     public ResponseEntity<Void> updateDocumentStatus(
@@ -37,6 +38,23 @@ public class SupportInternalCallbackController {
 
         documentService.updateWorkflowStatus(documentId, status, statusName, comments);
 
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Avancement d'une demande de modification ou de suppression.
+     *
+     * <p>Point de remise distinct de celui des documents : la décision finale sur une demande
+     * n'est pas qu'un état à consigner — une suppression acceptée retire le document, une
+     * modification acceptée ouvre le dépôt du fichier remplaçant.</p>
+     */
+    @PostMapping("/demandes/{demandeId}/status")
+    public ResponseEntity<Void> updateDemandeStatus(
+            @PathVariable("demandeId") UUID demandeId,
+            @RequestBody Map<String, Object> payload) {
+
+        log.info("Received workflow callback for demande {}: {}", demandeId, payload);
+        demandeService.traiterAvancement(demandeId, payload);
         return ResponseEntity.ok().build();
     }
 

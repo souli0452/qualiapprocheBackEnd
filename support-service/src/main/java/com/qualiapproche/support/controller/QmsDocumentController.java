@@ -49,6 +49,24 @@ public class QmsDocumentController {
     private final QmsAuditLogService auditLogService;
     private final DocumentMapper documentMapper;
     private final com.qualiapproche.support.client.WorkflowClient workflowClient;
+    private final com.qualiapproche.support.service.NiveauxConfidentialiteService niveauxConfidentialiteService;
+    private final com.qualiapproche.support.service.ProfilUtilisateurService profilUtilisateurService;
+
+    /**
+     * Niveaux de confidentialité proposables à l'appelant comme critère de recherche.
+     *
+     * <p>La liste est celle qu'il a le droit de voir, pas le référentiel entier : un niveau
+     * inaccessible ne rendrait aucun document, et sa seule présence dans le filtre trahirait un
+     * classement qui ne le regarde pas. La restriction elle-même reste appliquée côté recherche —
+     * cet écran ne fait que ne pas proposer l'inutile.</p>
+     */
+    @GetMapping("/filtres/niveaux-confidentialite")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<List<com.qualiapproche.common.dto.NiveauConfidentialiteDto>> niveauxFiltrables() {
+        var profil = profilUtilisateurService.profilCourant();
+        return ResponseEntity.ok(niveauxConfidentialiteService.visiblesPour(
+                profil.roles(), documentService.voitToutesLesStructures(profil)));
+    }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.canCreate(this)")
@@ -70,11 +88,21 @@ public class QmsDocumentController {
             @RequestParam(value = "referenceOfficielle", required = false) String referenceOfficielle,
             @RequestParam(value = "domaine", required = false) String domaine,
             @RequestParam(value = "statutLegal", required = false) String statutLegal,
+            // Priorité et niveau de confidentialité : facultatifs, choisis dans les référentiels
+            // paramétrables. Le libellé accompagne l'identifiant pour que la liste s'affiche sans
+            // interroger le référentiel à chaque ligne.
+            @RequestParam(value = "prioriteId", required = false) String prioriteId,
+            @RequestParam(value = "prioriteLibelle", required = false) String prioriteLibelle,
+            @RequestParam(value = "niveauConfidentialiteId", required = false) String niveauConfidentialiteId,
+            @RequestParam(value = "niveauConfidentialiteLibelle", required = false) String niveauConfidentialiteLibelle,
+            @RequestParam(value = "domaineId", required = false) String domaineId,
             @RequestParam(value = "workflowId", required = false) UUID workflowId
     ) {
         DocumentQms doc = documentService.createDocument(
                 file, titre, documentType, reference, description, serviceId, serviceLibelle, serviceSigle, redacteur, periodiciteMois,
-                confidentiel, documentExterne, processusDestId, processusDestLibelle, referenceOfficielle, domaine, statutLegal, workflowId
+                confidentiel, documentExterne, processusDestId, processusDestLibelle, referenceOfficielle, domaine, statutLegal,
+                prioriteId, prioriteLibelle, niveauConfidentialiteId, niveauConfidentialiteLibelle,
+                domaineId, workflowId
         );
         return ResponseEntity.ok(documentMapper.toDto(doc));
     }
@@ -139,11 +167,14 @@ public class QmsDocumentController {
         return ResponseEntity.ok(documentService.getVersionHistory(id));
     }
 
+    /**
+     * Piste d'audit du document. Réservée à sa structure — le destinataire d'un partage consulte
+     * et télécharge, il n'a pas à connaître le détail des opérations internes.
+     */
     @GetMapping("/{id}/audit-logs")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<List<QmsAuditLog>> getAuditLogs(@PathVariable("id") UUID id) {
-        DocumentQms doc = documentService.getDocumentById(id);
-        return ResponseEntity.ok(auditLogService.getLogsForDocument(doc.getDocumentNumber()));
+        return ResponseEntity.ok(documentService.getAuditLogs(id));
     }
 
     @GetMapping("/search")
@@ -158,6 +189,9 @@ public class QmsDocumentController {
             @RequestParam(value = "processusDestId",      required = false) String processusDestId,
             @RequestParam(value = "processusDestLibelle", required = false) String processusDestLibelle,
             @RequestParam(value = "domaine",             required = false) String domaine,
+            @RequestParam(value = "domaineId",           required = false) String domaineId,
+            @RequestParam(value = "prioriteId",          required = false) String prioriteId,
+            @RequestParam(value = "niveauConfidentialiteId", required = false) String niveauConfidentialiteId,
             @RequestParam(value = "statutLegal",         required = false) String statutLegal,
             @RequestParam(value = "reference",           required = false) String reference,
             @RequestParam(value = "ncReference",         required = false) String ncReference,
@@ -188,6 +222,9 @@ public class QmsDocumentController {
                 .processusDestId(processusDestId)
                 .processusDestLibelle(processusDestLibelle)
                 .domaine(domaine)
+                .domaineId(domaineId)
+                .prioriteId(prioriteId)
+                .niveauConfidentialiteId(niveauConfidentialiteId)
                 .statutLegal(statutLegal)
                 .reference(reference)
                 .ncReference(ncReference)
@@ -211,9 +248,19 @@ public class QmsDocumentController {
 
         List<DocumentQms> docs = documentService.searchDocuments(criteria);
         List<DocumentQmsDto> dtos = docs.stream()
-                .map(documentMapper::toDto)
+                .map(this::versDtoSitue)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
+    }
+
+    /**
+     * Traduit le document en DTO en y ajoutant ce que l'écran ne peut pas deviner : l'appelant
+     * relève-t-il de la structure du document, ou n'y accède-t-il que par un partage ?
+     */
+    private DocumentQmsDto versDtoSitue(DocumentQms doc) {
+        DocumentQmsDto dto = documentMapper.toDto(doc);
+        dto.setSuiviInterneAutorise(documentService.peutVoirLeSuiviInterne(doc));
+        return dto;
     }
 
     /**
@@ -240,6 +287,17 @@ public class QmsDocumentController {
     @Operation(summary = "Statistique générique par dimension",
             description = "Regroupe et compte les documents visibles par l'utilisateur connecté " +
                     "(tous si administrateur/manager) selon la dimension demandée.")
+    /**
+     * Dépôts par mois, pour la courbe de la vue d'ensemble. Mois vides compris, à zéro.
+     */
+    @GetMapping("/stats/mensuel")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<Map<String, Long>>> getStatsMensuelles(
+            @RequestParam(value = "mois", required = false, defaultValue = "12") int mois) {
+        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(
+                documentService.getDocumentsParMois(mois)));
+    }
+
     @GetMapping("/stats/by/{dimension}")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<Map<String, Long>> getStatsByDimension(
@@ -294,7 +352,7 @@ public class QmsDocumentController {
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentQmsDto> getDocument(@PathVariable("id") UUID id) {
         DocumentQms doc = documentService.getDocumentById(id);
-        DocumentQmsDto dto = documentMapper.toDto(doc);
+        DocumentQmsDto dto = versDtoSitue(doc);
         try {
             com.qualiapproche.common.dto.WorkflowStateDto state = workflowClient.getWorkflowState(id);
             dto.setWorkflowState(state);
@@ -329,6 +387,40 @@ public class QmsDocumentController {
     ) {
         DocumentUserAccess access = documentService.grantAccess(id, userId, userFullName, userEmail, role);
         return ResponseEntity.ok(access);
+    }
+
+    /**
+     * Partage le document avec une structure choisie au moment du geste : tous ses membres y
+     * accèdent alors en lecture et en téléchargement.
+     *
+     * <p>C'est le seul geste par lequel un document sort de sa structure d'origine autrement que
+     * nommément. Il appartient à la structure émettrice — le service le vérifie.</p>
+     */
+    @PostMapping("/{id}/share/structure")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<com.qualiapproche.support.model.DocumentStructureAccess> partagerAvecStructure(
+            @PathVariable("id") UUID id,
+            @RequestParam("structureId") String structureId,
+            @RequestParam(value = "structureLibelle", required = false) String structureLibelle) {
+        return ResponseEntity.ok(documentService.partagerAvecStructure(id, structureId, structureLibelle));
+    }
+
+    /** Retire le partage consenti à une structure. */
+    @DeleteMapping("/{id}/share/structure/{structureId}")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<Void> retirerPartageStructure(
+            @PathVariable("id") UUID id,
+            @PathVariable("structureId") String structureId) {
+        documentService.retirerPartageStructure(id, structureId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Structures avec lesquelles ce document est partagé. */
+    @GetMapping("/{id}/share/structure")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<List<com.qualiapproche.support.model.DocumentStructureAccess>> getPartagesStructure(
+            @PathVariable("id") UUID id) {
+        return ResponseEntity.ok(documentService.getPartagesStructure(id));
     }
 
     /**

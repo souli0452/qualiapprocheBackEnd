@@ -4,6 +4,7 @@ import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.model.ValidationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
@@ -13,4 +14,13 @@ public interface WorkflowValidationInstanceRepository extends JpaRepository<Work
     Optional<WorkflowValidationInstance> findTopByResourceIdAndStatusOrderByStartedAtDesc(String resourceId, ValidationStatus status);
     Optional<WorkflowValidationInstance> findTopByResourceIdOrderByStartedAtDesc(String resourceId);
     boolean existsByEtatCodeInAndStatus(List<String> etatCodes, ValidationStatus status);
+
+    /**
+     * Instances de plusieurs ressources, la plus récente de chacune en tête.
+     *
+     * <p>Sert la consultation par lot : l'appelant retient la première ligne rencontrée pour
+     * chaque ressource. Une requête unique remplace les N que provoquait
+     * {@code findTopByResourceIdOrderByStartedAtDesc} appelée en boucle.</p>
+     */
+    List<WorkflowValidationInstance> findByResourceIdInOrderByStartedAtDesc(Collection<String> resourceIds);
 }

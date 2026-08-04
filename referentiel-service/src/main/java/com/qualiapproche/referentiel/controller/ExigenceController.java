@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +23,12 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(EXIGENCE_ROOT_URL)
+@RequirePermissions(
+        create = {"exigence-write"},
+        update = {"exigence-write"},
+        read = {"exigence-read", "exigence-write", "CRITERE_EVAL_READ"},
+        delete = {"exigence-write"}
+)
 public class ExigenceController {
 
     private final ExigenceService exigenceService;
@@ -29,6 +37,7 @@ public class ExigenceController {
   /                     Méthode de création d'une exigence                 /
 /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_EXIGENCE)
     public ResponseEntity<ExigenceDto> create(@RequestBody ExigenceDto exigenceDto) {
         ExigenceDto exigence = exigenceService.create(exigenceDto);
@@ -39,6 +48,7 @@ public class ExigenceController {
        /                     Méthode de consultation d'une exigences par ID      /
       /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_EXIGENCE_BY_ID)
     public ResponseEntity<ExigenceDto> getExigenceById(@PathVariable UUID id) {
         ExigenceDto exigenceDto = exigenceService.getExigenceById(id);
@@ -50,6 +60,7 @@ public class ExigenceController {
     /                 Méthode de consultation de  toutes les exigences           /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_EXIGENCE)
     public ResponseEntity<List<ExigenceDto>> allExigence() {
         List<ExigenceDto> exigences = exigenceService.allExigences();
@@ -60,6 +71,7 @@ public class ExigenceController {
     /           Méthode de modification d'une exigences                         /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_EXIGENCE)
     public ResponseEntity<ExigenceDto> update(@RequestBody ExigenceDto exigenceDto) {
         ExigenceDto exigence = exigenceService.update(exigenceDto);
@@ -70,6 +82,7 @@ public class ExigenceController {
      /           Méthode de suppression d'une exigence             /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_EXIGENCE)
     public void deleteyId(@PathVariable UUID id) {
         exigenceService.delete(id);

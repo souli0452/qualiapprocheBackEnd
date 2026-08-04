@@ -6,6 +6,7 @@ import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.entities.UserRoleAssignment;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
 import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
+import com.qualiapproche.userservice.service.AppRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ public class AppRoleController {
 
     private final AppRoleRepository appRoleRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final AppRoleService appRoleService;
     private final ObjectMapper objectMapper;
 
     // Lire le dictionnaire des permissions depuis le JSON
@@ -42,9 +44,15 @@ public class AppRoleController {
         return appRoleRepository.findAll();
     }
 
+    /**
+     * Création et modification partagent ce point d'entrée (le front y poste le rôle entier, avec
+     * son identifiant lorsqu'il en a un). Le {@code save()} direct qui s'y trouvait acceptait
+     * n'importe quelle réécriture, renommage compris ; les règles sont désormais portées par
+     * {@link AppRoleService#enregistrer(AppRole)}.
+     */
     @PostMapping
     public AppRole createRole(@RequestBody AppRole role) {
-        return appRoleRepository.save(role);
+        return appRoleService.enregistrer(role);
     }
 
     @PostMapping("/assign")

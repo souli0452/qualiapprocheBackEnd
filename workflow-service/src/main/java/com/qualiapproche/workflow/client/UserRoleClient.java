@@ -21,4 +21,13 @@ public interface UserRoleClient {
 
     @GetMapping("/api/v1/me/roles")
     Map<String, Object> getMyRoles();
+
+    /**
+     * Utilisateurs joignables portant un rôle, désigné par identifiant ou par nom.
+     *
+     * <p>Seule source des adresses des responsables d'étape : ce service ne connaît que le rôle
+     * inscrit sur l'étape, pas les personnes qui l'occupent.</p>
+     */
+    @GetMapping("/api/v1/roles/{role}/users")
+    Map<String, Object> getUsersByRole(@org.springframework.web.bind.annotation.PathVariable("role") String role);
 }

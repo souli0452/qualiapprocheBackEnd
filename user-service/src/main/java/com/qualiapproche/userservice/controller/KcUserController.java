@@ -91,6 +91,25 @@ public class KcUserController {
         return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyRoles()));
     }
 
+    /**
+     * Résolution inverse de {@code /me/roles} : qui porte ce rôle ?
+     *
+     * <p>Usage interne. Sans elle, un service qui doit prévenir les responsables d'une étape n'a
+     * aucun moyen de connaître leurs adresses — workflow-service en fabriquait une à partir du
+     * nom du rôle, qui ne correspondait à aucune boîte réelle.</p>
+     *
+     * <p>Enveloppé dans {@code ApiResponse} comme {@code /me/roles}, pour échapper à la
+     * pagination automatique appliquée par {@code GlobalResponseHandler} à toute List nue.</p>
+     */
+    @Operation(summary = "Utilisateurs portant un rôle",
+            description = "Usage interne : permet aux services aval de notifier les porteurs d'un rôle. "
+                    + "Le rôle est accepté par identifiant ou par nom.")
+    @GetMapping("/roles/{role}/users")
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.common.dto.DestinataireDto>>> getUsersByRole(
+            @PathVariable("role") String role) {
+        return ResponseEntity.ok(ApiResponse.success(kcUserService.getUsersByRole(role)));
+    }
+
     @PostMapping("/users/create")
     public ResponseEntity<KcUserDto> createUser(@RequestBody KcUserDto kcUserDto) {
         return ResponseEntity.ok(kcUserService.createUser(kcUserDto));

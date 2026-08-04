@@ -1,13 +1,10 @@
 package com.qualiapproche.workflow.event;
 
-import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
-import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.SmtpEmailService;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,20 +47,16 @@ public class WorkflowEventListener {
     private static final String PREFIXE_ETAT_TERMINAL = "TERMINATED_";
 
     private final WorkflowStepRepository stepRepository;
-    private final EmailTemplateRepository emailTemplateRepository;
-    private final SmtpEmailService emailService;
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
     private final WorkflowNotificationService notificationService;
-
-    /**
-     * Passe l'identifiant de la notification enregistrée avant commit à la phase de remise, qui
-     * s'exécute sur le même fil.
-     */
-    private final ThreadLocal<UUID> notificationsAremettre = new ThreadLocal<>();
+    private final NotificateurEtapeParEmail notificateurParEmail;
 
     /**
      * Enregistre la notification à remettre, dans la transaction de la transition : les deux sont
      * ainsi committées ensemble, ou pas du tout. Aucun appel réseau ici — seulement une écriture.
+     *
+     * <p>L'identifiant obtenu est déposé sur l'événement lui-même, que la phase suivante recevra
+     * à l'identique.</p>
      */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void enregistrerNotification(TransitionFranchieEvent event) {
@@ -75,7 +68,10 @@ public class WorkflowEventListener {
         Map<String, Object> payload = construireCharge(event, etapeAtteinte(event.getEtatApres()));
         WorkflowNotification notification =
                 notificationService.enregistrer(instance.getResourceId(), instance.getResourceType(), payload);
-        notificationsAremettre.set(notification.getId());
+        event.setNotificationId(notification.getId());
+        // La phase suivante compose le courriel : elle a besoin de la ressource, pas de l'instance.
+        event.setResourceId(instance.getResourceId());
+        event.setResourceType(instance.getResourceType());
     }
 
     /**
@@ -85,14 +81,12 @@ public class WorkflowEventListener {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void remettreNotification(TransitionFranchieEvent event) {
-        UUID notificationId = notificationsAremettre.get();
-        notificationsAremettre.remove();
-
+        UUID notificationId = event.getNotificationId();
         if (notificationId != null) {
             notificationService.remettre(notificationId);
         }
 
-        etapeAtteinte(event.getEtatApres()).ifPresent(step -> notifierParEmail(step, event));
+        etapeAtteinte(event.getEtatApres()).ifPresent(step -> notificateurParEmail.notifier(step, event));
     }
 
     private WorkflowValidationInstance instanceConcernee(TransitionFranchieEvent event) {
@@ -116,7 +110,9 @@ public class WorkflowEventListener {
      * ({@code TERMINATED_*}), qui ne correspond à aucune étape configurée.
      */
     private Optional<WorkflowStep> etapeAtteinte(String etatApres) {
-        if (etatApres.startsWith(PREFIXE_ETAT_TERMINAL)) {
+        // Le contrôle de nullité couvre la phase d'après commit, qui n'est pas précédée du
+        // filtrage opéré par instanceConcernee().
+        if (etatApres == null || estTerminal(etatApres)) {
             return Optional.empty();
         }
         try {
@@ -127,19 +123,39 @@ public class WorkflowEventListener {
         }
     }
 
+    /**
+     * Compose la charge utile à partir de l'état atteint.
+     *
+     * <p>Le caractère terminal se lit sur le <b>code de l'état</b>, et non sur l'absence d'étape.
+     * Les deux étaient confondus : {@link #etapeAtteinte} rend également un résultat vide quand
+     * l'étape est simplement introuvable — supprimée du circuit, ou code non numérique. La charge
+     * était alors construite comme celle d'une fin de circuit, et le retrait du préfixe
+     * {@code TERMINATED_} s'appliquait à un code qui ne le portait pas : l'exception qui en
+     * résultait remontait depuis un écouteur d'avant commit et <b>annulait la transition</b>,
+     * transformant une étape mal configurée en échec de la décision de l'utilisateur.</p>
+     */
     private Map<String, Object> construireCharge(TransitionFranchieEvent event, Optional<WorkflowStep> etapeAtteinte) {
         Map<String, Object> payload = new HashMap<>();
+        String etatApres = event.getEtatApres();
 
-        if (etapeAtteinte.isPresent()) {
+        if (estTerminal(etatApres)) {
+            // Etat terminal : le suffixe porte la décision finale (APPROUVE / REJETE).
+            String decision = etatApres.substring(PREFIXE_ETAT_TERMINAL.length());
+            payload.put("status", "APPROUVE".equalsIgnoreCase(decision) ? "APPROVED" : "REJECTED");
+            payload.put("statusName", decision);
+            payload.put("etatCode", null);
+        } else if (etapeAtteinte.isPresent()) {
             WorkflowStep step = etapeAtteinte.get();
             payload.put("status", "EN_COURS");
             payload.put("statusName", step.getNomEtape());
             payload.put("etatCode", step.getEtatTraitement());
         } else {
-            // Etat terminal : le suffixe porte la décision finale (APPROUVE / REJETE).
-            String decision = event.getEtatApres().substring(PREFIXE_ETAT_TERMINAL.length());
-            payload.put("status", "APPROUVE".equalsIgnoreCase(decision) ? "APPROVED" : "REJECTED");
-            payload.put("statusName", decision);
+            // Étape introuvable sur un état non terminal : le circuit reste en cours. Le service
+            // métier est informé avec ce dont on dispose, plutôt que de le laisser sans nouvelle.
+            log.warn("L'étape « {} » atteinte par la ressource est introuvable : la notification "
+                    + "est émise sans libellé d'étape.", etatApres);
+            payload.put("status", "EN_COURS");
+            payload.put("statusName", etatApres);
             payload.put("etatCode", null);
         }
 
@@ -149,37 +165,8 @@ public class WorkflowEventListener {
         return payload;
     }
 
-    private void notifierParEmail(WorkflowStep step, TransitionFranchieEvent event) {
-        String templateCode = step.getEmailTemplateCode();
-        if (templateCode == null || templateCode.isBlank()) {
-            return;
-        }
-
-        EmailTemplate template = emailTemplateRepository.findByCode(templateCode).orElse(null);
-        if (template == null) {
-            log.warn("Modèle d'e-mail introuvable pour le code '{}'.", templateCode);
-            return;
-        }
-
-        Map<String, String> variables = new HashMap<>();
-        variables.put("subject", template.getSubject());
-        variables.put("user", "Responsable " + step.getResponsableRole());
-        variables.put("entityId", event.getEntityId());
-        variables.put("etatAvant", event.getEtatAvant());
-        variables.put("etatApres", step.getNomEtape());
-        variables.put("auteurId", event.getAuteurId());
-        variables.put("commentaire", event.getCommentaire());
-
-        // TODO destinataires réels : résoudre via user-service les utilisateurs portant
-        // step.responsableRole. L'adresse ci-dessous reste un substitut — aucun destinataire
-        // réel n'est notifié tant que cette résolution n'est pas faite.
-        String destinataire = "role_" + step.getResponsableRole() + "@qualiapproche.com";
-
-        try {
-            emailService.sendEmail(destinataire, template.getSubject(), template.getBody(), variables);
-        } catch (Exception e) {
-            log.error("Échec de l'envoi de l'e-mail '{}' pour l'étape '{}' : {}",
-                    templateCode, step.getNomEtape(), e.getMessage());
-        }
+    private boolean estTerminal(String etatApres) {
+        return etatApres != null && etatApres.startsWith(PREFIXE_ETAT_TERMINAL);
     }
+
 }

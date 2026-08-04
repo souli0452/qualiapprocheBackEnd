@@ -73,6 +73,36 @@ public class DocumentQms extends AuditEntity {
     private String domaine;
     private String statutLegal;
 
+    /**
+     * Code du document saisi par son auteur, distinct du numéro attribué par le système.
+     *
+     * <p>Le champ {@code reference} existait déjà en base mais n'était offert par aucun écran : les
+     * organisations qui numérotent leurs documents selon leur propre convention n'avaient nulle
+     * part où l'inscrire.</p>
+     */
+    // (le champ `reference` ci-dessus tient ce rôle ; aucune colonne nouvelle n'est nécessaire)
+
+    /** Priorité, choisie dans le référentiel paramétrable servi par referentiel-service. */
+    private String prioriteId;
+    private String prioriteLibelle;
+
+    /**
+     * Niveau de confidentialité, choisi dans le référentiel paramétrable. Il porte la liste des
+     * rôles admis à consulter le document ; la restriction s'ajoute à celle de la structure, elle
+     * ne s'y substitue pas.
+     */
+    private String niveauConfidentialiteId;
+    private String niveauConfidentialiteLibelle;
+
+    /**
+     * Domaine d'application, choisi dans le référentiel paramétrable.
+     *
+     * <p>Le champ {@code domaine} ci-dessus reste la valeur affichée — il porte désormais le
+     * libellé du domaine choisi. Il était en saisie libre : « RH », « Ressources Humaines » et
+     * « ressources humaines » comptaient pour trois domaines distincts dans les statistiques.</p>
+     */
+    private String domaineId;
+
     private String ncReference;
 
     private String lastModifiedBy;
@@ -92,6 +122,15 @@ public class DocumentQms extends AuditEntity {
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<DocumentUserAccess> userAccessList = new ArrayList<>();
+
+    /**
+     * Structures avec lesquelles le document a été partagé — geste explicite de la structure
+     * émettrice, sans lequel aucune autre structure ne le voit.
+     */
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @JsonIgnore
+    private List<DocumentStructureAccess> structureAccessList = new ArrayList<>();
 
     @JsonProperty("currentObjectName")
     public String getCurrentObjectName() {

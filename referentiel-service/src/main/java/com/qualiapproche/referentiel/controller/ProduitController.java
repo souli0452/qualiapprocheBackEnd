@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +28,12 @@ import static com.qualiapproche.common.utils.ApiUrls.UPDATE_PRODUIT;
 
 @RequestMapping(PRODUIT_ROOT_URL)
 @RestController
+@RequirePermissions(
+        create = {"produit-write"},
+        update = {"produit-write"},
+        read = {"produit-read", "produit-write", "RESOURCES_READ"},
+        delete = {"produit-write"}
+)
 public class ProduitController {
 
     @Autowired
@@ -34,6 +42,7 @@ public class ProduitController {
     /*-----------------------------------------------------------------------/
     /               Méthode de création d'un produit                     /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_PRODUIT)
     public ResponseEntity<ProduitDto> create(@RequestBody ProduitDto produitDto) {
         ProduitDto produit = produitService.create(produitDto);
@@ -43,6 +52,7 @@ public class ProduitController {
     /*-----------------------------------------------------------------------/
     /              Méthode de mise à jour d'un produit                   /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_PRODUIT)
     public ResponseEntity<ProduitDto> update(@RequestBody ProduitDto produitDto) {
         ProduitDto produit = produitService.update(produitDto);
@@ -52,6 +62,7 @@ public class ProduitController {
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de tous les produits                  /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_PRODUIT)
     public ResponseEntity<List<ProduitDto>> allProduits() {
         List<ProduitDto> produit = produitService.allProduits();
@@ -61,6 +72,7 @@ public class ProduitController {
     /*-----------------------------------------------------------------------/
     /       Méthode de récupération d'un produit par son ID              /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_PRODUIT_BY_ID)
     public ResponseEntity<ProduitDto> getProduitById(@PathVariable UUID id) {
         ProduitDto produit = produitService.getProduitById(id);
@@ -70,6 +82,7 @@ public class ProduitController {
     /*-----------------------------------------------------------------------/
     /                Méthode de suppression d'un produit                 /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_PRODUIT)
     public void deleteById(@PathVariable UUID id) {
         produitService.delete(id);

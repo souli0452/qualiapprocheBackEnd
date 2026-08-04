@@ -70,6 +70,13 @@ public class ApiUrls {
     public static final String DOCUMENT_URL =QUALI_APPROCHE_ROOT_URL+ "/qms/documents";
     /* Type processus urls */
 
+    // Référentiels propres au module documentaire : priorité et niveau de confidentialité d'un
+    // document. Paramétrables comme les autres, ils sont servis ici pour que support-service les
+    // résolve et que l'écran de configuration les administre.
+    public static final String DOMAINE_APPLICATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/domaines-application";
+    public static final String PRIORITE_DOCUMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/priorites-document";
+    public static final String NIVEAU_CONFIDENTIALITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-confidentialite";
+
     public static final String TYPE_PROCESSUS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-processus";
     public static final String CREATE_TYPE_PROCESSUS = "/create";
     public static final String GET_ALL_TYPE_PROCESSUS = "/all";
