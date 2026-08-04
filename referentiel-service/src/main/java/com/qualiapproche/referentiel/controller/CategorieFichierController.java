@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.CategorieFichierDto;
 import com.qualiapproche.referentiel.service.CategorieFichierService;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequestMapping(CATEGORIE_FICHIER_ROOT_URL)
 @RequiredArgsConstructor
+@RequirePermissions(
+        create = {"categorie-fichier-write", "DOC_CAT_MANAGE"},
+        update = {"categorie-fichier-write", "DOC_CAT_MANAGE"},
+        read = {"categorie-fichier-read", "categorie-fichier-write", "DOC_READ", "DOC_CAT_MANAGE"},
+        delete = {"categorie-fichier-write", "DOC_CAT_MANAGE"}
+)
 public class CategorieFichierController {
 
     private final CategorieFichierService categorieFichierService;
@@ -23,6 +31,7 @@ public class CategorieFichierController {
     /                   Méthode de création d'une catégorie                       /
     /----------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_CATEGORIE_FICHIER)
     public ResponseEntity<CategorieFichierDto> create(@RequestBody CategorieFichierDto categorieFichierDto) {
         CategorieFichierDto categorieFichier = categorieFichierService.create(categorieFichierDto);
@@ -33,6 +42,7 @@ public class CategorieFichierController {
     /*----------------------------------------------------------------------------/
     /               Méthode de modification d'une catégorie                       /
     /----------------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_CATEGORIE_FICHIER)
     public ResponseEntity<CategorieFichierDto> update(@RequestBody CategorieFichierDto categorieFichierDto) {
         CategorieFichierDto fournisseurDto = categorieFichierService.update(categorieFichierDto);
@@ -44,6 +54,7 @@ public class CategorieFichierController {
     /           Méthode de consultation de  toutes les catégories                /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_CATEGORIE_FICHIER)
     public ResponseEntity<List<CategorieFichierDto>> allCategorieFichier() {
         List<CategorieFichierDto> categorieFichiers = categorieFichierService.allCategorieFichier();
@@ -55,6 +66,7 @@ public class CategorieFichierController {
     /           Méthode de récupperation d'une catégorie par son ID               /
     /----------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping()
     public ResponseEntity<CategorieFichierDto> getCategorieFichierById(@RequestParam UUID categorieId) {
         CategorieFichierDto categorieFichier = categorieFichierService.getCategorieFichierById(categorieId);

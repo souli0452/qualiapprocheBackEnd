@@ -2,6 +2,7 @@ package com.qualiapproche.workflow.config;
 
 import com.qualiapproche.common.config.GlobalExceptionHandler;
 import com.qualiapproche.common.config.KeycloakRoleConverter;
+import com.qualiapproche.common.config.PermissionConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -22,16 +23,22 @@ import org.springframework.security.web.SecurityFilterChain;
  * était refusée. {@link KeycloakRoleConverter} rétablit la conversion des rôles Keycloak,
  * à l'identique des autres services métier.</p>
  *
- * <p>Volontairement, seuls {@link KeycloakRoleConverter} et {@link GlobalExceptionHandler}
- * sont importés depuis {@code common.config} plutôt que d'en scanner tout le paquet : celui-ci
- * contient aussi {@code GlobalResponseHandler}, qui encapsulerait les réponses dans
- * {@code ApiResponse} et changerait le format de sortie déjà consommé par les clients Feign
- * et par le front.</p>
+ * <p>{@link PermissionConfig} fournit le bean {@code perm} sur lequel s'appuient les
+ * {@code @PreAuthorize} protégeant l'administration des circuits. Sans cet import, l'expression
+ * {@code @perm.canCreate(this)} ne se résoudrait pas et toute création de circuit échouerait —
+ * les autres services obtiennent ce bean par le scan de {@code common.config}, que cette
+ * configuration évite volontairement (voir ci-dessous).</p>
+ *
+ * <p>Volontairement, seuls {@link KeycloakRoleConverter}, {@link GlobalExceptionHandler} et
+ * {@link PermissionConfig} sont importés depuis {@code common.config} plutôt que d'en scanner
+ * tout le paquet : celui-ci contient aussi {@code GlobalResponseHandler}, qui encapsulerait les
+ * réponses dans {@code ApiResponse} et changerait le format de sortie déjà consommé par les
+ * clients Feign et par le front.</p>
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class})
+@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class, PermissionConfig.class})
 public class WorkflowSecurityConfig {
 
     private final KeycloakRoleConverter keycloakRoleConverter;

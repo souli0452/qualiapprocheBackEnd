@@ -470,6 +470,92 @@ public class KcUserService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Utilisateurs joignables portant un rôle applicatif donné.
+     *
+     * <p>Résolution inverse de {@link #getMyRoles()}, dont dépendent les services qui notifient
+     * les responsables d'une étape : jusqu'ici, aucun point d'entrée ne permettait de savoir
+     * <b>qui</b> porte un rôle, et workflow-service se rabattait sur une adresse fabriquée à
+     * partir du nom du rôle, qui ne correspondait à aucune boîte réelle.</p>
+     *
+     * <p>Le rôle est accepté indifféremment par identifiant ou par nom : les circuits de
+     * validation le désignent tantôt de l'une, tantôt de l'autre façon.</p>
+     *
+     * <p>Sont écartés les utilisateurs désactivés et ceux sans adresse — les notifier est
+     * impossible, et les compter comme destinataires masquerait le fait que personne n'est
+     * prévenu.</p>
+     *
+     * @param role identifiant ou nom du rôle
+     * @return les destinataires, sans doublon ; liste vide si le rôle n'est porté par personne
+     */
+    public List<com.qualiapproche.common.dto.DestinataireDto> getUsersByRole(String role) {
+        if (role == null || role.isBlank()) {
+            return List.of();
+        }
+
+        List<com.qualiapproche.userservice.entities.UserRoleAssignment> affectations =
+                affectationsDuRole(role.trim());
+
+        return affectations.stream()
+                .map(com.qualiapproche.userservice.entities.UserRoleAssignment::getUserId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .map(this::destinataire)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    /** Affectations du rôle, cherché par identifiant puis, à défaut, par nom. */
+    private List<com.qualiapproche.userservice.entities.UserRoleAssignment> affectationsDuRole(String role) {
+        try {
+            List<com.qualiapproche.userservice.entities.UserRoleAssignment> parId =
+                    userRoleAssignmentRepository.findByRole_Id(java.util.UUID.fromString(role));
+            if (!parId.isEmpty()) {
+                return parId;
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Le rôle n'est pas désigné par un identifiant : c'est un nom.
+        }
+        return userRoleAssignmentRepository.findByRole_NameIgnoreCase(role);
+    }
+
+    /**
+     * Profil de contact d'un utilisateur, ou {@code null} s'il n'est pas joignable.
+     *
+     * <p>Un compte peut avoir disparu de Keycloak sans que son affectation ait été retirée :
+     * l'échec est alors propre à cet utilisateur et ne doit pas priver les autres de leur
+     * notification.</p>
+     */
+    private com.qualiapproche.common.dto.DestinataireDto destinataire(String userId) {
+        try {
+            UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
+                    .users().get(userId).toRepresentation();
+
+            if (user == null || Boolean.FALSE.equals(user.isEnabled())) {
+                return null;
+            }
+            String email = user.getEmail();
+            if (email == null || email.isBlank()) {
+                log.warn("L'utilisateur {} porte le rôle demandé mais n'a pas d'adresse : "
+                        + "il ne peut pas être notifié.", userId);
+                return null;
+            }
+
+            String nomComplet = ((user.getFirstName() != null ? user.getFirstName() : "") + " "
+                    + (user.getLastName() != null ? user.getLastName() : "")).trim();
+
+            return com.qualiapproche.common.dto.DestinataireDto.builder()
+                    .userId(userId)
+                    .email(email)
+                    .nomComplet(nomComplet.isBlank() ? email : nomComplet)
+                    .build();
+        } catch (Exception e) {
+            log.warn("Profil de l'utilisateur {} illisible, il est écarté des destinataires : {}",
+                    userId, e.getMessage());
+            return null;
+        }
+    }
+
     public List<String> getMyPermissions() {
         String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
         if (userId == null) {

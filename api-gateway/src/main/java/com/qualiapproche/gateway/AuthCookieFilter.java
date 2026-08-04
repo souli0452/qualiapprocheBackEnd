@@ -21,13 +21,21 @@ import java.util.Optional;
  * Filtre global de la Gateway qui lit le cookie {@code access_token} et l'injecte automatiquement
  * dans l'header {@code Authorization: Bearer <token>} pour tous les microservices en aval.
  *
- * <p>Pour les routes vers support-service (seul consommateur actuel de {@code @RequirePermissions}),
- * il interroge en plus {@code user-service} pour résoudre les permissions applicatives
+ * <p>Il interroge en plus {@code user-service} pour résoudre les permissions applicatives
  * (AppRole, stockées uniquement dans la base de user-service) de l'utilisateur connecté, et les
  * transmet via l'en-tête interne {@code X-User-Permissions}. Toute valeur de cet en-tête envoyée
  * par le client d'origine est systématiquement écrasée : elle ne doit jamais venir d'ailleurs que
  * de la gateway elle-même. Le résultat est mis en cache quelques dizaines de secondes
  * ({@link UserPermissionsCache}) pour ne pas appeler user-service à chaque requête.
+ *
+ * <p>Cette résolution vaut pour <b>toutes</b> les routes, et non plus pour le seul support-service.
+ * La restriction datait du temps où il était l'unique porteur de {@code @RequirePermissions} ;
+ * depuis, workflow-service, referentiel-service, amelioration-service et user-service en portent
+ * aussi. Sans en-tête, {@code PermissionChecker} ne voit que les rôles techniques du JWT et refuse
+ * l'accès à tout le monde — y compris au SUPER_ADMIN, qui détient pourtant la permission en base :
+ * l'administration des circuits de validation était ainsi devenue impossible à qui que ce soit.
+ * Un préfixe à déclarer ici à chaque nouveau service protégé serait le même piège, silencieux et
+ * indiscernable d'une permission manquante.
  *
  * <p>Ordre -1 garantit que ce filtre s'exécute avant tous les filtres Gateway.
  */
@@ -38,7 +46,6 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
     private static final String ACCESS_TOKEN_COOKIE = "access_token";
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String PERMISSIONS_HEADER = "X-User-Permissions";
-    private static final String SUPPORT_SERVICE_PREFIX = "/support-service/";
 
     private final WebClient webClient;
     private final UserPermissionsCache permissionsCache;
@@ -64,11 +71,6 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
 
         String token = accessTokenCookie.getValue();
         requestBuilder.header(AUTHORIZATION_HEADER, "Bearer " + token);
-
-        boolean needsPermissions = exchange.getRequest().getURI().getPath().startsWith(SUPPORT_SERVICE_PREFIX);
-        if (!needsPermissions) {
-            return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
-        }
 
         Optional<String[]> cached = permissionsCache.get(token);
         if (cached.isPresent()) {

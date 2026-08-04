@@ -10,6 +10,7 @@ import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
+import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
@@ -26,13 +27,30 @@ import java.util.Map;
 public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, TransitionPersistante, WorkflowPersistant> {
 
     private final WorkflowRepository workflowRepository;
+    private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowConditionAdapter conditionAdapter;
     private final BeanFactory beanFactory;
 
+    /**
+     * Construit le catalogue complet en deux requêtes.
+     *
+     * <p>Les circuits et leurs étapes arrivent ensemble, puis toutes les transitions en une fois.
+     * Le parcours s'appuyait auparavant sur les collections différées de chaque entité : une
+     * lecture par circuit pour ses étapes, puis une par étape pour ses transitions. Sur un
+     * catalogue de quelques circuits, ce chargement — rejoué à chaque modification et au
+     * démarrage de chaque instance — représentait déjà plusieurs dizaines d'allers-retours.</p>
+     */
     @Override
     @Transactional(readOnly = true)
     public List<WorkflowPersistant> getAllWorkflow() throws WorkflowException {
-        List<com.qualiapproche.workflow.model.Workflow> dbWorkflows = workflowRepository.findAll();
+        List<com.qualiapproche.workflow.model.Workflow> dbWorkflows = workflowRepository.findAllAvecEtapes();
+
+        // Transitions groupées par étape d'origine : le regroupement en mémoire remplace une
+        // lecture différée par étape.
+        Map<Long, List<WorkflowTransition>> transitionsParEtape = transitionRepository.findAll().stream()
+                .filter(t -> t.getFromStep() != null)
+                .collect(java.util.stream.Collectors.groupingBy(t -> t.getFromStep().getId()));
+
         List<WorkflowPersistant> coreWorkflows = new ArrayList<>();
 
         for (com.qualiapproche.workflow.model.Workflow dbWf : dbWorkflows) {
@@ -55,7 +73,8 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
 
             // Load Transitions
             for (WorkflowStep dbStep : dbWf.getSteps()) {
-                for (WorkflowTransition dbTrans : dbStep.getTransitions()) {
+                for (WorkflowTransition dbTrans :
+                        transitionsParEtape.getOrDefault(dbStep.getId(), List.of())) {
                     Etat origine = coreWf.getEtat(dbTrans.getFromStep().getId().toString());
                     Etat destination = null;
 

@@ -12,10 +12,21 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class WorkflowAppConfig {
 
+    /**
+     * Intervalle minimal entre deux contrôles de la signature du catalogue.
+     *
+     * <p>Borne le coût de détection d'une modification faite par une autre instance : sans lui,
+     * chaque consultation du catalogue interrogeait la base. Il ne retarde pas les modifications
+     * faites par cette instance, qui recharge explicitement après commit.</p>
+     */
+    @org.springframework.beans.factory.annotation.Value("${workflow.catalogue.intervalle-controle-ms:5000}")
+    private long intervalleControleMs;
+
     @Bean
     public IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> workflowEnginePort(
             IWorkflowEngine<IWorkflowData, TransitionPersistante, WorkflowPersistant> daoPort) {
-        WorkflowEngine<IWorkflowData, TransitionPersistante, WorkflowPersistant> engine = new WorkflowEngine<>(daoPort);
+        WorkflowEngine<IWorkflowData, TransitionPersistante, WorkflowPersistant> engine =
+                new WorkflowEngine<>(daoPort, java.time.Duration.ofMillis(intervalleControleMs));
         try {
             engine.init();
         } catch (com.qualiapproche.workflow.core.exception.WorkflowException e) {

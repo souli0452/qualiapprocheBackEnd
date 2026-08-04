@@ -36,6 +36,16 @@ public class RolesUtilisateurService {
     @Value("${workflow.roles.cache-seconds:60}")
     private long retentionSecondes;
 
+    /**
+     * Nombre d'utilisateurs retenus simultanément.
+     *
+     * <p>Le cache n'était jamais purgé : une entrée par utilisateur vu depuis le démarrage y
+     * restait indéfiniment, y compris pour ceux qui ne reviendraient jamais. Sur un service de
+     * longue durée, la table ne pouvait que croître.</p>
+     */
+    @Value("${workflow.roles.cache-taille-max:5000}")
+    private int tailleMax;
+
     private final Map<String, Entree> cache = new ConcurrentHashMap<>();
 
     private record Entree(Set<String> roles, Instant expiration) {
@@ -62,6 +72,7 @@ public class RolesUtilisateurService {
 
         Set<String> roles = interroger(userId);
         if (roles != null) {
+            purgerSiNecessaire();
             cache.put(userId, new Entree(roles, Instant.now().plus(Duration.ofSeconds(retentionSecondes))));
             return roles;
         }
@@ -73,6 +84,25 @@ public class RolesUtilisateurService {
             return entree.roles();
         }
         return Set.of();
+    }
+
+    /**
+     * Évacue les entrées périmées lorsque le cache atteint sa borne, et le vide entièrement si
+     * cela ne suffit pas.
+     *
+     * <p>Une purge complète n'a d'autre effet qu'un surcroît d'appels à user-service le temps que
+     * le cache se reconstitue : aucune décision ne s'appuie sur son contenu au-delà de la
+     * fraîcheur déjà garantie par l'expiration.</p>
+     */
+    private void purgerSiNecessaire() {
+        if (cache.size() < tailleMax) {
+            return;
+        }
+        cache.values().removeIf(Entree::estPerimee);
+        if (cache.size() >= tailleMax) {
+            log.info("Cache des rôles saturé ({} entrées, toutes valides) : il est vidé.", cache.size());
+            cache.clear();
+        }
     }
 
     /** @return les rôles, ou {@code null} si l'interrogation a échoué. */

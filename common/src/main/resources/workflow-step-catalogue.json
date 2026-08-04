@@ -1,0 +1,104 @@
+[
+  {
+    "code": "REDACTION",
+    "nomEtape": "Rédaction",
+    "responsableRole": "AGENT",
+    "description": "Rédaction et dépôt du document"
+  },
+  {
+    "code": "VERIFICATION",
+    "nomEtape": "Vérification",
+    "responsableRole": "PILOTE",
+    "description": "Vérification de la forme et du fond"
+  },
+  {
+    "code": "APPROBATION",
+    "nomEtape": "Approbation",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Approbation et mise en vigueur"
+  },
+  {
+    "code": "SOUMISSION",
+    "nomEtape": "Soumission",
+    "responsableRole": "AGENT",
+    "description": "Création et soumission de la NC"
+  },
+  {
+    "code": "RECEPTION",
+    "nomEtape": "Réception",
+    "responsableRole": "PILOTE",
+    "description": "Réception et prise en charge"
+  },
+  {
+    "code": "IMPUTATION",
+    "nomEtape": "Imputation",
+    "responsableRole": "PILOTE",
+    "description": "Imputation à un agent traitant"
+  },
+  {
+    "code": "TRAITEMENT",
+    "nomEtape": "Traitement",
+    "responsableRole": "AGENT_IMPUTE",
+    "description": "Analyse et mise en œuvre du plan d'action"
+  },
+  {
+    "code": "VALIDATION",
+    "nomEtape": "Validation",
+    "responsableRole": "PILOTE",
+    "description": "Validation de la pertinence des actions"
+  },
+  {
+    "code": "VALIDATION_RS",
+    "nomEtape": "Validation RS",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Validation RQ des actions"
+  },
+  {
+    "code": "SUIVI_RQ",
+    "nomEtape": "Suivi RQ",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Suivi de l'efficacité et clôture"
+  },
+  {
+    "code": "CLOTURE",
+    "nomEtape": "Clôture",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Clôture finale de la NC"
+  },
+  {
+    "code": "NON_TRAITER",
+    "nomEtape": "À Traiter",
+    "responsableRole": "AGENT_IMPUTE",
+    "description": "Plan d'action en attente de traitement par l'agent"
+  },
+  {
+    "code": "TRAITER",
+    "nomEtape": "Traité",
+    "responsableRole": "PILOTE",
+    "description": "Le plan d'action a été exécuté"
+  },
+  {
+    "code": "REJECTED",
+    "nomEtape": "Rejeté",
+    "responsableRole": "PILOTE",
+    "description": "Le plan d'action a été rejeté"
+  },
+  {
+    "code": "DEMANDE_SOUMISSION",
+    "nomEtape": "Soumission de la demande",
+    "responsableRole": "AGENT",
+    "description": "Rédaction et dépôt de la demande"
+  },
+  {
+    "code": "DEMANDE_INSTRUCTION",
+    "nomEtape": "Instruction de la demande",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Examen de la demande au titre de la qualité"
+  },
+  {
+    "code": "DEMANDE_DECISION",
+    "nomEtape": "Décision",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Suite donnée à la demande"
+  }
+]

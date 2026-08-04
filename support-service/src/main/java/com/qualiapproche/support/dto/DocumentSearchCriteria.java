@@ -46,6 +46,22 @@ public class DocumentSearchCriteria {
     /** Domaine fonctionnel du document (ex: "Qualité", "RH", ...) */
     private String domaine;
 
+    /** Domaine d'application, par son identifiant au référentiel. */
+    private String domaineId;
+
+    /** Priorité, par son identifiant au référentiel. */
+    private String prioriteId;
+
+    /**
+     * Niveau de confidentialité, par son identifiant au référentiel.
+     *
+     * <p>Filtrer sur un niveau que l'appelant n'a pas le droit de voir ne le lui ouvre pas : la
+     * clause de visibilité écarte ces documents en amont, et le filtre ne fait alors que réduire
+     * un ensemble déjà vide. Le front ne propose de son côté que les niveaux permis, pour ne pas
+     * offrir un critère qui ne rendrait jamais rien.</p>
+     */
+    private String niveauConfidentialiteId;
+
     /** Statut légal du document externe */
     private String statutLegal;
 

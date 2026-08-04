@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.CrictereEvaluationDto;
 import com.qualiapproche.common.dto.DepartementDto;
 import com.qualiapproche.referentiel.service.DepartementService;
@@ -15,6 +17,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(DEPARTEMENT_ROOT_URL)
+@RequirePermissions(
+        create = {"departement-write", "STRUCT_MANAGE"},
+        update = {"departement-write", "STRUCT_MANAGE"},
+        read = {"departement-read", "departement-write", "CONFIG_READ", "STRUCT_MANAGE"},
+        delete = {"departement-write", "STRUCT_MANAGE"}
+)
 public class DepartementController {
 
     private final DepartementService departementService;
@@ -23,6 +31,7 @@ public class DepartementController {
   /                     Méthode de création d'un département                 /
 /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_DEPARTEMENT)
     public ResponseEntity<DepartementDto> create(@RequestBody DepartementDto departementDto) {
         DepartementDto departement = departementService.create(departementDto);
@@ -33,6 +42,7 @@ public class DepartementController {
        /                     Méthode de consultation d'un département par ID      /
       /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_DEPARTEMENT_BY_ID)
     public ResponseEntity<DepartementDto> getDepartementById(@RequestParam UUID id) {
         DepartementDto departementDto = departementService.getDepartementById(id);
@@ -44,6 +54,7 @@ public class DepartementController {
     /                 Méthode de consultation de  tout les département           /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_DEPARTEMENT)
     public ResponseEntity<List<DepartementDto>> allDepartement() {
         List<DepartementDto> departements = departementService.getallDepartement();
@@ -54,6 +65,7 @@ public class DepartementController {
     /           Méthode de modification d'un département                         /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_DEPARTEMENT)
     public ResponseEntity<DepartementDto> update(@RequestBody DepartementDto departementDto) {
         DepartementDto departement = departementService.update(departementDto);
@@ -64,6 +76,7 @@ public class DepartementController {
      /           Méthode de suppression d'un crictère d'évaluation               /
     /--------------------------------------------------------------------------*/
 
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_DEPARTEMENT)
     public void deleteyId(@PathVariable UUID id) {
         departementService.delete(id);

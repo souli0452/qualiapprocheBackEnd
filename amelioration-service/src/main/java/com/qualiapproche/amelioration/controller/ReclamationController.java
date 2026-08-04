@@ -1,5 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.ReclamationDto;
 import com.qualiapproche.amelioration.service.ReclamationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,12 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RequestMapping(RECLAMATION_ROOT_URL)
 @RestController
 @Tag(name = "Réclamations", description = "Gestion des réclamations clients et internes")
+@RequirePermissions(
+        create = {"reclamation-write", "SUBMIT_RECLAMATION"},
+        update = {"reclamation-write", "SUBMIT_RECLAMATION"},
+        read = {"reclamation-read", "reclamation-write", "RECLAMATION_READ", "SUBMIT_RECLAMATION"},
+        delete = {"reclamation-write", "SUBMIT_RECLAMATION"}
+)
 public class ReclamationController {
 
     @Autowired
@@ -26,6 +34,7 @@ public class ReclamationController {
     /               Méthode de création d'une Reclamation               /
     /-----------------------------------------------------------------------*/
     @Operation(summary = "Créer une réclamation", description = "Enregistre une nouvelle réclamation dans le système")
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_RECLAMATION)
     public ResponseEntity<ReclamationDto> create(@RequestBody ReclamationDto reclamationDto) {
         ReclamationDto reclamation = reclamationService.create(reclamationDto);
@@ -35,6 +44,7 @@ public class ReclamationController {
     /*-----------------------------------------------------------------------/
     /              Méthode de mise à jour d'une Reclamation               /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_RECLAMATION)
     public ResponseEntity<ReclamationDto> update(@RequestBody ReclamationDto reclamationDto) {
         ReclamationDto reclamation = reclamationService.update(reclamationDto);
@@ -44,6 +54,7 @@ public class ReclamationController {
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de toutes les Reclamations                /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_RECLAMATION)
     public ResponseEntity<List<ReclamationDto>> allReclamations() {
         List<ReclamationDto> reclamation = reclamationService.allReclamations();
@@ -53,6 +64,7 @@ public class ReclamationController {
     /*-----------------------------------------------------------------------/
     /       Méthode de récupération d'une Reclamation par son ID             /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_RECLAMATION_BY_ID)
     public ResponseEntity<ReclamationDto> getReclamationById(@PathVariable UUID id) {
         ReclamationDto reclamation = reclamationService.getReclamationById(id);
@@ -62,6 +74,7 @@ public class ReclamationController {
     /*-----------------------------------------------------------------------/
     /                Méthode de suppression d'une Reclamation                /
     /-----------------------------------------------------------------------*/
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_RECLAMATION)
     public void deleteById(@PathVariable UUID id) {
         reclamationService.delete(id);

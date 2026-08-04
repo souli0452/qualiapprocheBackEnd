@@ -28,6 +28,8 @@ public class ValidationHistoryDto {
     private String decision;
     private String comments;
     private String validatorUserId;
+    /** Nom de l'auteur au moment de la décision ; nul sur les décisions antérieures à ce champ. */
+    private String validatorFullName;
     private LocalDateTime decisionDate;
     @Builder.Default
     private List<FieldValueDto> fieldValues = new ArrayList<>();

@@ -50,6 +50,17 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
 
     protected abstract String getCurrentUserId();
 
+    /**
+     * Nom de l'auteur de la décision, consigné avec elle.
+     *
+     * <p>Lu dans le jeton — que l'appel vienne du front ou d'un service métier, qui le propage.
+     * À défaut de jeton, {@code SecurityUtils} rend « Système », ce qui vaut mieux qu'un vide :
+     * une décision prise par un traitement automatique se lit alors comme telle.</p>
+     */
+    protected String getCurrentUserFullName() {
+        return com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
+    }
+
     @Transactional
     public D initialiser(D pData, String pWorkflowCode) {
         if (pData == null) {
@@ -59,7 +70,11 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         try {
             this.moteur.initEtatData(pData);
         } catch (WorkflowException e) {
-            throw new RuntimeException("Erreur lors de l'initialisation du workflow", e);
+            // Configuration de circuit inexploitable : c'est le circuit choisi qui est en cause,
+            // pas le service. Signalé comme tel plutôt qu'en erreur serveur indifférenciée.
+            throw new BusinessException(
+                    "Ce circuit de validation n'est pas exploitable : " + e.getMessage(),
+                    HttpStatus.CONFLICT);
         }
         this.synchroniserEtat(pData);
         return this.getRepository().save(pData);
@@ -72,8 +87,18 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
 
     @Transactional(readOnly = true)
     public Set<TransitionPersistante> getTransitionsPossibles(UUID dossierId) {
-        D aData = this.fromDatabase(dossierId);
-        return this.transitionsAutorisees(this.construireContexte(aData));
+        return this.transitionsPossiblesDe(this.fromDatabase(dossierId));
+    }
+
+    /**
+     * Transitions franchissables pour un dossier <b>déjà chargé et dont l'état est rattaché</b>.
+     *
+     * <p>Existe pour le traitement par lot : passer par {@link #getTransitionsPossibles(UUID)}
+     * relisait le dossier alors que l'appelant venait de le charger, doublant les allers-retours
+     * pour chaque ressource d'une liste.</p>
+     */
+    protected Set<TransitionPersistante> transitionsPossiblesDe(D pData) {
+        return this.transitionsAutorisees(this.construireContexte(pData));
     }
 
     @Transactional
@@ -91,31 +116,58 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         return this.updateHistorique(pData, aTransition, aContexte);
     }
 
+    /**
+     * Charge le dossier et lui rattache son état tel que le déclare son circuit.
+     *
+     * <p>Les trois refus possibles portent une intention métier et sont donc signalés comme tels.
+     * Levés en {@code RuntimeException} nue, ils remontaient en erreur serveur : l'appelant ne
+     * pouvait distinguer un dossier inexistant — cas courant, sur un identifiant erroné — d'une
+     * panne du service, et une configuration de circuit incohérente passait pour un incident
+     * technique.</p>
+     */
     protected D fromDatabase(UUID dossierId) {
         if (dossierId == null) {
             throw new IllegalArgumentException("L'identifiant de la donnee est indefini.");
         }
         D aData = this.getRepository().findById(dossierId)
-                .orElseThrow(() -> new RuntimeException("Dossier introuvable: " + dossierId));
-
-        WorkflowPersistant aWorkflow = this.workflowDe(aData, dossierId);
-        Etat aEtat = aWorkflow.getEtat(aData.getEtatCode());
-        if (aEtat == null) {
-            throw new RuntimeException("L'etat " + aData.getEtatCode() + " n'est pas declare par le workflow.");
-        }
-        aData.setEtat(aEtat);
-        return aData;
+                .orElseThrow(() -> new BusinessException(
+                        "Dossier de validation introuvable.", HttpStatus.NOT_FOUND));
+        return this.rattacherEtat(aData);
     }
 
-    private WorkflowPersistant workflowDe(D pData, UUID pId) {
+    /**
+     * Rattache à un dossier déjà chargé l'état que déclare son circuit.
+     *
+     * <p>Séparé de {@link #fromDatabase(UUID)} pour que le traitement par lot, qui charge les
+     * dossiers en une seule requête, n'ait pas à les relire un par un.</p>
+     */
+    protected D rattacherEtat(D pData) {
+        WorkflowPersistant aWorkflow = this.workflowDe(pData);
+        Etat aEtat = aWorkflow.getEtat(pData.getEtatCode());
+        if (aEtat == null) {
+            throw new BusinessException(
+                    "L'étape courante de ce dossier (" + pData.getEtatCode() + ") n'existe plus dans son "
+                            + "circuit de validation. Le circuit a été modifié : ce dossier doit être migré.",
+                    HttpStatus.CONFLICT);
+        }
+        pData.setEtat(aEtat);
+        return pData;
+    }
+
+    private WorkflowPersistant workflowDe(D pData) {
         WorkflowPersistant aWorkflow;
         try {
             aWorkflow = this.moteur.getWorkflowByCode(pData.getWorkflowCode());
         } catch (WorkflowException e) {
-            throw new RuntimeException("Erreur lors de la recupération du workflow", e);
+            throw new BusinessException(
+                    "Le circuit de validation de ce dossier n'a pas pu être chargé.",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
         if (aWorkflow == null) {
-            throw new RuntimeException("Le workflow " + pData.getWorkflowCode() + " est inconnu.");
+            throw new BusinessException(
+                    "Le circuit de validation de ce dossier n'existe plus. Il a été supprimé : "
+                            + "ce dossier doit être migré vers un autre circuit.",
+                    HttpStatus.CONFLICT);
         }
         return aWorkflow;
     }
@@ -146,7 +198,9 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
             // Because IWorkflowEngine returns SequencedSet/Set we cast properly
             return new LinkedHashSet<>(this.moteur.getTransitionsPossibles(pContexte));
         } catch (WorkflowException e) {
-            throw new RuntimeException(e);
+            throw new BusinessException(
+                    "Les actions possibles sur ce dossier n'ont pas pu être déterminées : " + e.getMessage(),
+                    HttpStatus.CONFLICT);
         }
     }
 
@@ -155,7 +209,9 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         try {
             aTransition = this.moteur.getTransitionByCode(pData, pCodeTransition);
         } catch (WorkflowException e) {
-            throw new RuntimeException("Erreur de resolution de transition", e);
+            throw new BusinessException(
+                    "L'action demandée n'a pas pu être résolue dans ce circuit : " + e.getMessage(),
+                    HttpStatus.CONFLICT);
         }
         if (aTransition == null) {
             throw new BusinessException(
@@ -193,7 +249,9 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         try {
             this.moteur.executerTransition(pContexte, pTransition);
         } catch (WorkflowException e) {
-            throw new RuntimeException("Erreur d'execution de la transition", e);
+            throw new BusinessException(
+                    "Cette action n'a pas pu être menée à son terme : " + e.getMessage(),
+                    HttpStatus.CONFLICT);
         }
         
         this.synchroniserEtat(pData);
@@ -211,6 +269,7 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
                 .decision(pTransition.getLibelle() != null ? pTransition.getLibelle() : "Action exécutée")
                 .comments(pData.getObservation())
                 .validatorUserId(this.getCurrentUserId())
+                .validatorFullName(this.getCurrentUserFullName())
                 .decisionDate(LocalDateTime.now())
                 .build();
                 

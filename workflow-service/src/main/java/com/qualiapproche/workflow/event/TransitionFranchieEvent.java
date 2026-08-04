@@ -1,7 +1,10 @@
 package com.qualiapproche.workflow.event;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.context.ApplicationEvent;
+
+import java.util.UUID;
 
 /**
  * Événement publié à chaque franchissement de transition.
@@ -34,6 +37,33 @@ public class TransitionFranchieEvent extends ApplicationEvent {
     private final String auteurId;
     private final String commentaire;
     private final String lotId;
+
+    /**
+     * Notification enregistrée avant le commit, à remettre une fois celui-ci acquis.
+     *
+     * <p>Les deux phases d'écoute reçoivent la <b>même</b> instance d'événement : celle-ci est
+     * donc le support naturel pour passer l'identifiant de l'une à l'autre. Il transitait
+     * jusqu'ici par un {@code ThreadLocal}, avec deux défauts — un commit en échec n'atteignant
+     * jamais la phase suivante, la valeur restait accrochée à un fil de pool et polluait la
+     * requête d'après ; et deux transitions dans une même transaction se seraient écrasées
+     * mutuellement, seule la dernière étant remise sans attendre l'ordonnanceur.</p>
+     */
+    @Setter
+    private UUID notificationId;
+
+    /**
+     * Ressource métier pilotée par l'instance, renseignée en même temps que la notification.
+     *
+     * <p>{@code entityId} désigne l'instance de validation, pas le document ou la non-conformité
+     * dont il est question : un courriel qui la citerait renverrait le lecteur vers un
+     * identifiant qui ne lui parle pas. L'écouteur charge déjà l'instance avant le commit ; il
+     * dépose ici ce qu'il en sait, plutôt que de la relire ensuite.</p>
+     */
+    @Setter
+    private String resourceId;
+
+    @Setter
+    private String resourceType;
 
     public TransitionFranchieEvent(String entityClass, String entityId, String workflowCode, String transitionCode,
                                    String etatAvant, String etatApres, String auteurId, String commentaire, String lotId) {

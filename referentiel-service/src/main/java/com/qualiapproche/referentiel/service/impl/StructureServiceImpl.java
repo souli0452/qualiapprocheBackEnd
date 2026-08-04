@@ -212,9 +212,13 @@ public class StructureServiceImpl implements StructureService {
                 }
             }
         } else {
-            dto.setModulesSubscribed(java.util.Arrays.asList(
-                "NON_CONFORMITE", "QMS", "DOCUMENT", "AUDIT", "ACTION", "FORMATION", "FOURNISSEUR", "RISQUE"
-            ));
+            // Abonnement sans licence : tous les modules sont ouverts. La liste était écrite à la
+            // main et nommait « QMS », « DOCUMENT », « ACTION », « FOURNISSEUR » — quatre noms
+            // absents de ModuleAbonnement, donc reconnus par aucun garde côté front. Elle est
+            // désormais dérivée de l'énumération, seule référence des noms de module.
+            dto.setModulesSubscribed(java.util.Arrays.stream(
+                    com.qualiapproche.common.enumeration.ModuleAbonnement.values())
+                    .map(Enum::name).toList());
         }
         return dto;
     }

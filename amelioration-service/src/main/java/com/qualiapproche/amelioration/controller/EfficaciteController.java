@@ -1,5 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.EfficaciteDto;
 import com.qualiapproche.amelioration.service.EfficaciteService;
 import lombok.RequiredArgsConstructor;
@@ -15,31 +17,42 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(EFFICACITE_ROOT_URL)
+@RequirePermissions(
+        create = {"efficacite-write"},
+        update = {"efficacite-write"},
+        read = {"efficacite-read", "efficacite-write", "ACTIONS_READ"},
+        delete = {"efficacite-write"}
+)
 public class EfficaciteController {
 
     private final EfficaciteService efficaciteService;
 
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_EFFICACITE)
     public ResponseEntity<EfficaciteDto> create(@RequestBody EfficaciteDto efficaciteDto) {
         EfficaciteDto efficaciteDto1 = efficaciteService.create(efficaciteDto);
         return new ResponseEntity<>(efficaciteDto1, HttpStatus.OK);
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_EFFICACITE)
     public ResponseEntity<EfficaciteDto> update(@RequestBody EfficaciteDto EfficaciteDto) {
         EfficaciteDto EfficaciteDto1 = efficaciteService.update(EfficaciteDto);
         return new ResponseEntity<>(EfficaciteDto1, HttpStatus.OK);
     }
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_EFFICACITE)
     public ResponseEntity<List<EfficaciteDto>> allEfficacites() {
         List<EfficaciteDto> efficaciteDtos  = efficaciteService.getAll();
         return new ResponseEntity<>(efficaciteDtos, HttpStatus.OK);
     }
+    @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_EFFICACITE_BY_ID)
     public ResponseEntity<EfficaciteDto> getEfficaciteById(@PathVariable UUID id) {
         EfficaciteDto efficaciteDto  = efficaciteService.getById(id);
         return new ResponseEntity<>(efficaciteDto, HttpStatus.OK);
     }
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_EFFICACITE)
     public void deleteyId(@PathVariable UUID id) {
         efficaciteService.delete(id);

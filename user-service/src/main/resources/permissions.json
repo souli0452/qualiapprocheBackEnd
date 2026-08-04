@@ -50,8 +50,93 @@
     "module": "Ressources"
   },
   {
+    "label": "Consulter les formations",
+    "value": "formation-read",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les formations",
+    "value": "formation-write",
+    "module": "Ressources"
+  },
+  {
+    "label": "Consulter les fournisseurs",
+    "value": "fournisseur-read",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les fournisseurs",
+    "value": "fournisseur-write",
+    "module": "Ressources"
+  },
+  {
+    "label": "Consulter les prestataires",
+    "value": "prestataire-read",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les prestataires",
+    "value": "prestataire-write",
+    "module": "Ressources"
+  },
+  {
+    "label": "Consulter les produits",
+    "value": "produit-read",
+    "module": "Ressources"
+  },
+  {
+    "label": "Gérer les produits",
+    "value": "produit-write",
+    "module": "Ressources"
+  },
+  {
     "label": "Lire les actions",
     "value": "ACTIONS_READ",
+    "module": "Actions"
+  },
+  {
+    "label": "Consulter les actions",
+    "value": "action-read",
+    "module": "Actions"
+  },
+  {
+    "label": "Gérer les actions",
+    "value": "action-write",
+    "module": "Actions"
+  },
+  {
+    "label": "Consulter les actions correctives et préventives",
+    "value": "action-corrective-read",
+    "module": "Actions"
+  },
+  {
+    "label": "Gérer les actions correctives et préventives",
+    "value": "action-corrective-write",
+    "module": "Actions"
+  },
+  {
+    "label": "Consulter les mesures d'efficacité",
+    "value": "efficacite-read",
+    "module": "Actions"
+  },
+  {
+    "label": "Gérer les mesures d'efficacité",
+    "value": "efficacite-write",
+    "module": "Actions"
+  },
+  {
+    "label": "Consulter les plans d'action",
+    "value": "plan-action-read",
+    "module": "Actions"
+  },
+  {
+    "label": "Gérer les plans d'action",
+    "value": "plan-action-write",
+    "module": "Actions"
+  },
+  {
+    "label": "Valider un plan d'action",
+    "value": "plan-action-validate",
     "module": "Actions"
   },
   {
@@ -65,6 +150,16 @@
     "module": "Réclamations"
   },
   {
+    "label": "Consulter les réclamations",
+    "value": "reclamation-read",
+    "module": "Réclamations"
+  },
+  {
+    "label": "Déclarer et gérer une réclamation",
+    "value": "reclamation-write",
+    "module": "Réclamations"
+  },
+  {
     "label": "Consulter les risques",
     "value": "RISQUE_READ",
     "module": "Risques"
@@ -72,6 +167,16 @@
   {
     "label": "Soumettre un risque",
     "value": "SUBMIT_RISQUE",
+    "module": "Risques"
+  },
+  {
+    "label": "Consulter les risques",
+    "value": "risque-read",
+    "module": "Risques"
+  },
+  {
+    "label": "Déclarer et gérer un risque",
+    "value": "risque-write",
     "module": "Risques"
   },
   {
@@ -97,6 +202,76 @@
   {
     "label": "Lire les critères d'évaluation",
     "value": "CRITERE_EVAL_READ",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les non-conformités",
+    "value": "nc-read",
+    "module": "Qualité"
+  },
+  {
+    "label": "Déclarer et modifier une non-conformité",
+    "value": "nc-write",
+    "module": "Qualité"
+  },
+  {
+    "label": "Valider une non-conformité",
+    "value": "nc-validate",
+    "module": "Qualité"
+  },
+  {
+    "label": "Réceptionner une non-conformité",
+    "value": "nc-receive",
+    "module": "Qualité"
+  },
+  {
+    "label": "Imputer une non-conformité",
+    "value": "nc-impute",
+    "module": "Qualité"
+  },
+  {
+    "label": "Clôturer une non-conformité",
+    "value": "nc-close",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les types de non-conformité",
+    "value": "type-nc-read",
+    "module": "Qualité"
+  },
+  {
+    "label": "Paramétrer les types de non-conformité",
+    "value": "type-nc-write",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les niveaux de non-conformité",
+    "value": "niveau-nc-read",
+    "module": "Qualité"
+  },
+  {
+    "label": "Paramétrer les niveaux de non-conformité",
+    "value": "niveau-nc-write",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les exigences",
+    "value": "exigence-read",
+    "module": "Qualité"
+  },
+  {
+    "label": "Gérer les exigences",
+    "value": "exigence-write",
+    "module": "Qualité"
+  },
+  {
+    "label": "Consulter les réglementations",
+    "value": "reglementation-read",
+    "module": "Qualité"
+  },
+  {
+    "label": "Gérer les réglementations",
+    "value": "reglementation-write",
     "module": "Qualité"
   },
   {
@@ -152,6 +327,51 @@
   {
     "label": "Archiver ou désarchiver un document",
     "value": "document-archive",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les priorités de document",
+    "value": "priorite-document-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les priorités de document",
+    "value": "priorite-document-write",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les niveaux de confidentialité",
+    "value": "niveau-confidentialite-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les niveaux de confidentialité",
+    "value": "niveau-confidentialite-write",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les demandes sur les documents",
+    "value": "demande-document-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Déposer une demande sur un document",
+    "value": "demande-document-write",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Instruire et décider des demandes sur les documents",
+    "value": "demande-document-validate",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Consulter les domaines d'application",
+    "value": "domaine-application-read",
+    "module": "Documentaire"
+  },
+  {
+    "label": "Gérer les domaines d'application",
+    "value": "domaine-application-write",
     "module": "Documentaire"
   },
   {
@@ -228,5 +448,90 @@
     "label": "Gérer les structures/directions",
     "value": "STRUCT_MANAGE",
     "module": "Administration"
+  },
+  {
+    "label": "Consulter les structures",
+    "value": "structure-read",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Gérer les structures",
+    "value": "structure-write",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Consulter les départements",
+    "value": "departement-read",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Gérer les départements",
+    "value": "departement-write",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Consulter les types de processus",
+    "value": "type-processus-read",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Gérer les types de processus",
+    "value": "type-processus-write",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Consulter la configuration globale",
+    "value": "config-global-read",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Modifier la configuration globale",
+    "value": "config-global-write",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Consulter les catégories de fichier",
+    "value": "categorie-fichier-read",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Gérer les catégories de fichier",
+    "value": "categorie-fichier-write",
+    "module": "Référentiel"
+  },
+  {
+    "label": "Voir la rubrique Accueil",
+    "value": "menu-accueil",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Gestion documentaire",
+    "value": "menu-gestion-documentaire",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Qualité & Conformité",
+    "value": "menu-qualite",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Gestion des ressources",
+    "value": "menu-ressources",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Gestion des actions",
+    "value": "menu-actions",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Traitement des demandes",
+    "value": "menu-traitements",
+    "module": "Menus"
+  },
+  {
+    "label": "Voir la rubrique Configurations",
+    "value": "menu-configuration",
+    "module": "Menus"
   }
 ]
