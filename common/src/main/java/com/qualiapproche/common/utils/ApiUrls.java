@@ -2,9 +2,9 @@ package com.qualiapproche.common.utils;
 public class ApiUrls {
 
     /* Base urls */
-    public static final String QUALI_APPROCHE_ROOT_URL="/api/v1";
+    public static final String QUALI_APPROCHE_ROOT_URL = "/api/v1";
 
-    public static final String URL_ROLES =QUALI_APPROCHE_ROOT_URL+"/roles";
+    public static final String URL_ROLES = QUALI_APPROCHE_ROOT_URL + "/roles";
 
 
     /* Fournnisseur urls */
@@ -30,7 +30,7 @@ public class ApiUrls {
 
     /* Action corrective et preventive urls */
 
-    public static final String ACTION_ROOT_URL =QUALI_APPROCHE_ROOT_URL + "/action-corrective";
+    public static final String ACTION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/action-corrective";
     public static final String CREATE_ACTION = "/create";
     public static final String GET_ALL_ACTION = "/all";
     public static final String GET_ACTION_BY_ID = "/get/{id}";
@@ -39,7 +39,7 @@ public class ApiUrls {
 
     /* Formation urls */
 
-    public static final String FORMATION_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/formation";
+    public static final String FORMATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/formation";
     public static final String CREATE_FORMATION = "/create";
     public static final String GET_ALL_FORMATION = "/all";
     public static final String GET_FORMATION_BY_ID = "/get/{id}";
@@ -49,7 +49,7 @@ public class ApiUrls {
 
     /* Efficacite urls */
 
-    public static final String EFFICACITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/efficacite";
+    public static final String EFFICACITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/efficacite";
     public static final String CREATE_EFFICACITE = "/create";
     public static final String GET_ALL_EFFICACITE = "/all";
     public static final String GET_EFFICACITE_BY_ID = "/get/{id}";
@@ -58,16 +58,16 @@ public class ApiUrls {
 
     /* Type non conformités urls */
 
-    public static final String TYPE_NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-non-conformite";
+    public static final String TYPE_NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/type-non-conformite";
     public static final String CREATE_TYPE_NON_CONFORMITE = "/create";
     public static final String GET_ALL_TYPE_NON_CONFORMITE = "/all";
     public static final String GET_TYPE_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String UPDATE_TYPE_NON_CONFORMITE = "/update";
     public static final String DELETE_TYPE_NON_CONFORMITE = "/delete/{id}";
     /* Type document urls */
-    public static final String DOCUMENT_TYPE =QUALI_APPROCHE_ROOT_URL+ "/qms/document-types";
+    public static final String DOCUMENT_TYPE = QUALI_APPROCHE_ROOT_URL + "/qms/document-types";
     /* documennts  urls */
-    public static final String DOCUMENT_URL =QUALI_APPROCHE_ROOT_URL+ "/qms/documents";
+    public static final String DOCUMENT_URL = QUALI_APPROCHE_ROOT_URL + "/qms/documents";
     /* Type processus urls */
 
     // Référentiels propres au module documentaire : priorité et niveau de confidentialité d'un
@@ -77,7 +77,7 @@ public class ApiUrls {
     public static final String PRIORITE_DOCUMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/priorites-document";
     public static final String NIVEAU_CONFIDENTIALITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-confidentialite";
 
-    public static final String TYPE_PROCESSUS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/type-processus";
+    public static final String TYPE_PROCESSUS_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/type-processus";
     public static final String CREATE_TYPE_PROCESSUS = "/create";
     public static final String GET_ALL_TYPE_PROCESSUS = "/all";
     public static final String GET_TYPE_PROCESSUS_BY_ID = "/get/{id}";
@@ -85,7 +85,7 @@ public class ApiUrls {
     public static final String DELETE_TYPE_PROCESSUS = "/delete/{id}";
     /* Actions urls */
 
-    public static final String ACTIONS_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/actions";
+    public static final String ACTIONS_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/actions";
     public static final String CREATE_ACTIONS = "/create";
     public static final String GET_ALL_ACTIONS = "/all";
     public static final String GET_ACTIONS_BY_ID = "/get/{id}";
@@ -94,13 +94,13 @@ public class ApiUrls {
     /* Niveau Non Conformités urls */
 
 
-    public static final String CG_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/config-global";
+    public static final String CG_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/config-global";
     public static final String CREATE_CG = "/create";
-    public static final String GET_ALL_CG= "/all";
+    public static final String GET_ALL_CG = "/all";
     public static final String GET_CG_BY_ID = "/get/{id}";
     public static final String UPDATE_CG = "/update/{id}";
 
-    public static final String NIVEAU_NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL+ "/niveau/non-conformite";
+    public static final String NIVEAU_NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveau/non-conformite";
     public static final String CREATE_NIVEAU_NON_CONFORMITE = "/create";
     public static final String GET_ALL_NIVEAU_NON_CONFORMITE = "/all";
     public static final String GET_NIVEAU_NON_CONFORMITE_BY_ID = "/get/{id}";
@@ -135,7 +135,7 @@ public class ApiUrls {
 
     /* Non conformité urls */
 
-    public static final String NON_CONFORMITE_ROOT_URL =QUALI_APPROCHE_ROOT_URL + "/non-conformite";
+    public static final String NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/non-conformite";
     //public static final String CREATE_NON_CONFORMITE = "/create";
     public static final String CREATE_NON_CONFORMITE_PROCESSUS = "/create";
     public static final String UPDATE_NON_CONFORMITE_PROCESSUS = "/update/{id}";
@@ -143,7 +143,6 @@ public class ApiUrls {
     public static final String GET_NON_CONFORMITE_BY_ID = "/get/{id}";
     public static final String GET_ALL_NON_CONFORMITE = "/all";
     public static final String UPDATE_NON_CONFORMITE = "/update";
-    public static final String REJECT_NON_CONFORMITE = "/reject";
     public static final String DELETE_NON_CONFORMITE = "/delete/{id}";
     public static final String GET_ETAT_BAY_NON_CONFORMITE = "/{etapeTraitement}";
     public static final String GET_ALL_CONFORMITE_IMPUTED = "/imputed/{userId}/{etapeTraitement}";
@@ -211,15 +210,14 @@ public class ApiUrls {
     public static final String PLAN_ACTION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/plan-action";
     public static final String CREATE_PLAN_ACTION = "/create";
     public static final String UPDATE_PLAN_ACTION = "/update";
-    public static final String REJET_PLAN_ACTION = "/rejet";
     public static final String GET_PLAN_ACTION_BY_ID = "/get" + "/{id}";
     public static final String GET_ALL_PLAN_ACTION = "/all";
-    public static final String GET_ALL_PLAN_ACTION_RESPONSABLE= "/all/by-email/{email}/{status}";
-    public static final String GET_ALL_PLAN_ACTION_ALL= "/all/{email}";
+    public static final String GET_ALL_PLAN_ACTION_RESPONSABLE = "/all/by-email/{email}/{status}";
+    public static final String GET_ALL_PLAN_ACTION_ALL = "/all/{email}";
     public static final String DELETE_PLAN_ACTION = "/delete" + "/{id}";
 
 
-    public static final String ROOT_STRUCTURE_API = QUALI_APPROCHE_ROOT_URL+"/structures";
+    public static final String ROOT_STRUCTURE_API = QUALI_APPROCHE_ROOT_URL + "/structures";
     public static final String CREATE_STRUCTURE = "/create";
     public static final String GET_ALL_STRUCTURE = "/all";
     public static final String UPDATE_STRUCTURE = "/update";

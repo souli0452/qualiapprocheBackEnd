@@ -48,12 +48,17 @@ public class NiveauxConfidentialiteService {
      * reviendrait à offrir un critère qui ne rendrait jamais rien, et à révéler au passage
      * l'existence d'un classement qui ne nous regarde pas.</p>
      *
-     * @param voitTout vrai pour qui échappe à la restriction (responsable qualité, administration) :
-     *                 la liste lui est alors rendue entière
+     * <p>Le responsable qualité n'y échappe pas : voir toutes les structures dispense de la
+     * barrière de structure, non du classement. Lui proposer un niveau dont il n'a pas le rôle
+     * lui rendrait une liste vide, sans qu'il comprenne pourquoi.</p>
+     *
+     * @param estAdministrateur vrai pour l'administration générale, seule dispensée du classement :
+     *                          le référentiel lui est alors rendu entier
      */
-    public List<NiveauConfidentialiteDto> visiblesPour(Set<String> rolesUtilisateur, boolean voitTout) {
+    public List<NiveauConfidentialiteDto> visiblesPour(Set<String> rolesUtilisateur,
+                                                       boolean estAdministrateur) {
         niveaux();
-        if (voitTout) {
+        if (estAdministrateur) {
             return catalogue;
         }
         if (!referentielLu) {
@@ -102,6 +107,19 @@ public class NiveauxConfidentialiteService {
         }
         Set<String> exiges = niveaux().getOrDefault(niveauId, Set.of());
         return exiges.isEmpty() || exiges.stream().anyMatch(rolesUtilisateur::contains);
+    }
+
+    /**
+     * Rôles qu'admet ce niveau, vides s'il ne restreint rien ou s'il est inconnu.
+     *
+     * <p>Sert à confronter le classement d'un document au circuit qui doit le traiter : un
+     * niveau qui n'admet aucun des rôles décidant des étapes immobilise le document.</p>
+     */
+    public Set<String> rolesAdmis(String niveauId) {
+        if (niveauId == null || niveauId.isBlank()) {
+            return Set.of();
+        }
+        return niveaux().getOrDefault(niveauId, Set.of());
     }
 
     private Map<String, Set<String>> niveaux() {

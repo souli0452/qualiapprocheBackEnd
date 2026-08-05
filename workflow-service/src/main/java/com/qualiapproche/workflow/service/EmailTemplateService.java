@@ -43,7 +43,7 @@ public class EmailTemplateService {
     public EmailTemplateDto updateTemplate(UUID id, EmailTemplateDto dto) {
         EmailTemplate existing = emailTemplateRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Email template not found for ID: " + id));
-        
+
         // check code uniqueness
         if (!existing.getCode().equals(dto.getCode()) && emailTemplateRepository.findByCode(dto.getCode()).isPresent()) {
             throw new IllegalArgumentException("Email template with code '" + dto.getCode() + "' already exists.");
@@ -53,7 +53,7 @@ public class EmailTemplateService {
         existing.setSubject(dto.getSubject());
         existing.setBody(dto.getBody());
         existing.setDescription(dto.getDescription());
-        
+
         existing = emailTemplateRepository.save(existing);
         return emailTemplateMapper.toDto(existing);
     }

@@ -1,8 +1,11 @@
 package com.qualiapproche.workflow.event;
 
+import com.qualiapproche.workflow.model.WorkflowFieldValue;
 import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
+import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
+import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
@@ -17,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Point unique de propagation d'une transition franchie vers les services métier.
@@ -35,8 +39,13 @@ import java.util.UUID;
  *   <li>{@code etatCode} — état de traitement métier de l'étape ({@code VALIDATION_RS}, {@code CLOTURE}…) ;</li>
  *   <li>{@code comments} — commentaire saisi lors de la décision ;</li>
  *   <li>{@code decision} — code de la transition franchie ;</li>
+ *   <li>{@code fields} — valeurs saisies lors de la décision, indexées par nom de champ ;</li>
  *   <li>{@code timestamp} — horodatage de la transition.</li>
  * </ul>
+ *
+ * <p>{@code fields} est ce qui permet à un module métier de recopier une saisie d'étape dans sa
+ * propre donnée — un document justificatif de rejet, par exemple. Sans lui, la saisie restait
+ * enfermée dans l'historique du moteur et le module devait la redemander à l'utilisateur.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -48,6 +57,8 @@ public class WorkflowEventListener {
 
     private final WorkflowStepRepository stepRepository;
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
+    private final ValidationHistoryRepository historyRepository;
+    private final WorkflowFieldValueRepository fieldValueRepository;
     private final WorkflowNotificationService notificationService;
     private final NotificateurEtapeParEmail notificateurParEmail;
 
@@ -65,7 +76,7 @@ public class WorkflowEventListener {
             return;
         }
 
-        Map<String, Object> payload = construireCharge(event, etapeAtteinte(event.getEtatApres()));
+        Map<String, Object> payload = construireCharge(event, etapeAtteinte(event.getEtatApres()), instance);
         WorkflowNotification notification =
                 notificationService.enregistrer(instance.getResourceId(), instance.getResourceType(), payload);
         event.setNotificationId(notification.getId());
@@ -134,7 +145,8 @@ public class WorkflowEventListener {
      * résultait remontait depuis un écouteur d'avant commit et <b>annulait la transition</b>,
      * transformant une étape mal configurée en échec de la décision de l'utilisateur.</p>
      */
-    private Map<String, Object> construireCharge(TransitionFranchieEvent event, Optional<WorkflowStep> etapeAtteinte) {
+    private Map<String, Object> construireCharge(TransitionFranchieEvent event, Optional<WorkflowStep> etapeAtteinte,
+                                                 WorkflowValidationInstance instance) {
         Map<String, Object> payload = new HashMap<>();
         String etatApres = event.getEtatApres();
 
@@ -161,8 +173,30 @@ public class WorkflowEventListener {
 
         payload.put("comments", event.getCommentaire());
         payload.put("decision", event.getTransitionCode());
+        payload.put("fields", champsSaisis(instance));
         payload.put("timestamp", LocalDateTime.now().toString());
         return payload;
+    }
+
+    /**
+     * Valeurs saisies lors de la décision qui vient d'être prise, indexées par nom de champ.
+     *
+     * <p>Elles sont relues depuis l'historique plutôt que portées par l'événement : celui-ci est
+     * publié au franchissement, alors que les valeurs sont rattachées juste après. Cette phase
+     * d'avant commit voit donc l'ensemble, là où l'événement ne verrait rien.</p>
+     *
+     * <p>Le nom du champ sert de clé — c'est le seul repère stable pour le module métier, les
+     * identifiants d'étapes changeant d'une installation à l'autre.</p>
+     */
+    private Map<String, String> champsSaisis(WorkflowValidationInstance instance) {
+        return historyRepository.findTopByValidationInstanceOrderByDecisionDateDesc(instance)
+                .map(history -> fieldValueRepository.findByHistory_Id(history.getId()).stream()
+                        .filter(valeur -> valeur.getFieldName() != null && valeur.getValue() != null)
+                        .collect(Collectors.toMap(
+                                WorkflowFieldValue::getFieldName,
+                                WorkflowFieldValue::getValue,
+                                (premiere, seconde) -> seconde)))
+                .orElseGet(Map::of);
     }
 
     private boolean estTerminal(String etatApres) {

@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 public class KcRoleMapper {
 
     public KcRoleDto toDto(RoleRepresentation role) {
-        if (role == null) return null;
+        if (role == null) {
+            return null;
+        }
         KcRoleDto dto = new KcRoleDto();
         dto.setId(role.getId());
         dto.setName(role.getName());
@@ -17,7 +19,9 @@ public class KcRoleMapper {
     }
 
     public RoleRepresentation toEntity(KcRoleDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         RoleRepresentation role = new RoleRepresentation();
         role.setId(dto.getId());
         role.setName(dto.getName());

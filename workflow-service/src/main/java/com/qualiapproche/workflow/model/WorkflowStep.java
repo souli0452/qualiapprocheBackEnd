@@ -1,7 +1,22 @@
 package com.qualiapproche.workflow.model;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +73,16 @@ public class WorkflowStep {
 
     @Column(name = "email_template_code")
     private String emailTemplateCode;
+
+    /**
+     * Champ de cette étape dont la valeur désigne la personne à qui le dossier est confié.
+     *
+     * <p>L'imputation d'une non-conformité y inscrit {@code userImputId} : la décision prise à
+     * cette étape ne fait pas qu'avancer le dossier, elle en nomme le titulaire. Les étapes
+     * suivantes peuvent alors se réserver à cette personne plutôt qu'à un rôle.</p>
+     */
+    @Column(name = "champ_titulaire")
+    private String champTitulaire;
 
     /**
      * Modèle d'étape du catalogue ayant servi à pré-remplir cette étape.

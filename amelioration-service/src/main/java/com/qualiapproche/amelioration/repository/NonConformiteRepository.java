@@ -37,7 +37,8 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId, Etat etatTraitement, Pageable pageable);
 
-        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_soumission_id = :structureId GROUP BY a.status", nativeQuery = true)
+        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_soumission_id = :structureId GROUP BY a.status",
+                nativeQuery = true)
         List<NcStats> countByStatusForStructure(@Param("structureId") String structureId);
 
         Page<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId, Pageable pageable);
@@ -134,6 +135,29 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findAllByStructureSoumissionIdOrOrigineId(String structureSoumissionId, String originId, Pageable pageable);
 
+        /**
+         * Non-conformités désignées une à une.
+         *
+         * <p>Sert la liste « à traiter » : les dossiers sont d'abord choisis par le moteur — lui
+         * seul sait sur lesquels l'appelant peut décider — puis relus ici pour être présentés et
+         * paginés.</p>
+         */
+        Page<NonConformite> findByIdIn(java.util.Collection<UUID> ids, Pageable pageable);
+
+        /**
+         * Non-conformités qu'un utilisateur a le droit de voir.
+         *
+         * <p>Celles de sa structure — émises par elle ou qui lui sont adressées — et les siennes :
+         * celles qu'il a déclarées, celles qui lui sont imputées. Un dossier déclaré depuis une
+         * structure qu'il a quittée reste ainsi visible à son auteur, et un dossier imputé
+         * nominativement l'est à son traitant même si l'affectation a changé de structure.</p>
+         */
+        @Query("SELECT n FROM NonConformite n WHERE n.structureSoumissionId = :structureId "
+                        + "OR n.origineId = :structureId "
+                        + "OR n.createdById = :userId OR n.userImputId = :userId")
+        Page<NonConformite> findVisiblesPar(@Param("structureId") String structureId,
+                        @Param("userId") String userId, Pageable pageable);
+
         Page<NonConformite> findAllByCurrentUserStructure(String structureId, Pageable pageable);
 
         long countByCreatedByIdAndStatus(String userId, Status status);
@@ -157,7 +181,8 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "FROM quali_nc " +
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)", nativeQuery = true)
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
+                                nativeQuery = true)
         long countTotalByYear(
                         @Param("annee") int annee,
                         @Param("structureId") String structureId);
@@ -179,7 +204,8 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND EXTRACT(MONTH FROM created_at) = :mois " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)", nativeQuery = true)
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
+                                nativeQuery = true)
         long countTotalByMonth(
                         @Param("annee") int annee,
                         @Param("mois") int mois,
@@ -188,19 +214,18 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
         Page<NonConformite> findAllByNiveauNonConformiteId(java.util.UUID niveauNonConformiteId, Pageable pageable);
 }
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
-        
+
+
+
+
+
+
+
+

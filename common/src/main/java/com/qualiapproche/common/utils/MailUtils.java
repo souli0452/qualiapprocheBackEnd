@@ -3,7 +3,13 @@ package com.qualiapproche.common.utils;
 
 import com.qualiapproche.common.config.ThymeleafConfig;
 import com.qualiapproche.common.config.MailConfig;
-import jakarta.mail.*;
+import jakarta.mail.Authenticator;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
+import jakarta.mail.Multipart;
+import jakarta.mail.PasswordAuthentication;
+import jakarta.mail.Session;
+import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
@@ -40,15 +46,16 @@ public final class MailUtils {
         context.setVariables(variables);
         String htmlBody = ThymeleafConfig.getTemplateEngine().process(templateName, context);
 
-        if (emailMessage == null || emailMessage.getTo_address() == null || emailMessage.getTo_address().trim().isEmpty()) {
-            System.err.println("Warning: Attempted to send email but to_address is null or empty. Subject: " + (emailMessage != null ? emailMessage.getSubject() : "N/A"));
+        if (emailMessage == null || emailMessage.getToAddress() == null || emailMessage.getToAddress().trim().isEmpty()) {
+            System.err.println("Warning: Attempted to send email but toAddress is null or empty. Subject: "
+                    + (emailMessage != null ? emailMessage.getSubject() : "N/A"));
             return;
         }
 
         Message msg = new MimeMessage(session);
         msg.setFrom(new InternetAddress(mailConfig.getUsername(), false));
 
-        msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailMessage.getTo_address()));
+        msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailMessage.getToAddress()));
         msg.setSubject(emailMessage.getSubject());
         msg.setSentDate(new Date());
 

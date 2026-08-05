@@ -52,12 +52,18 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.qualiapproche.common.utils.StatutEnum;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Lob;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
@@ -102,6 +108,8 @@ public class PlanAction extends AuditEntity {
   @Lob
   @Column(columnDefinition = "TEXT")
   private String observationRejet;
+  @Lob
+  @Column(columnDefinition = "TEXT")
   private String actionCorrective;
   /*
    * @ManyToOne
@@ -111,6 +119,10 @@ public class PlanAction extends AuditEntity {
   private LocalDate dateRejet;
   @Column(columnDefinition = "TEXT")
   private String critereEfficacite;
+  /** Ce que le responsable qualité a observé, confronté au critère ci-dessus. */
+  @Lob
+  @Column(columnDefinition = "TEXT")
+  private String constatEfficacite;
   private UUID workflowId;
   private String workflowStatus;
 }

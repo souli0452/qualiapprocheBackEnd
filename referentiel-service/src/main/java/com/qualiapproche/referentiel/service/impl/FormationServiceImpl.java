@@ -1,9 +1,7 @@
 package com.qualiapproche.referentiel.service.impl;
 
 import com.qualiapproche.common.dto.FormationDto;
-import com.qualiapproche.common.dto.FournisseurDto;
 import com.qualiapproche.referentiel.entities.Formation;
-import com.qualiapproche.referentiel.entities.Fournisseur;
 import com.qualiapproche.referentiel.entities.mappers.FormationMapper;
 import com.qualiapproche.referentiel.repository.FormationRepository;
 import com.qualiapproche.referentiel.service.FormationService;
@@ -23,7 +21,7 @@ public class FormationServiceImpl implements FormationService {
     private final FormationMapper formationMapper;
     @Override
     public FormationDto create(FormationDto formationDto) {
-        Formation formation=formationMapper.toEntity(formationDto);
+        Formation formation = formationMapper.toEntity(formationDto);
         formation.setStatut(StatutEnum.ACTIF);
         return formationMapper.toDto(formationRepository.save(formation));
     }
@@ -48,8 +46,8 @@ public class FormationServiceImpl implements FormationService {
 
     @Override
     public FormationDto delete(UUID id) {
-        Formation formation=formationRepository.getReferenceById(id);
+        Formation formation = formationRepository.getReferenceById(id);
         formation.setStatut(StatutEnum.INACTIF);
-        return formationMapper.toDto(   formationRepository.save(formation));
+        return formationMapper.toDto(formationRepository.save(formation));
     }
 }

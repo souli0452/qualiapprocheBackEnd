@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.common.utils.SecurityUtils;
@@ -48,7 +49,7 @@ public class DemandeDocumentService {
     private final DocumentQmsRepository documentRepository;
     private final QmsDocumentService documentService;
     private final ProfilUtilisateurService profilUtilisateurService;
-    private final MinioService minioService;
+    private final StorageService storageService;
     private final QmsAuditLogService auditLogService;
     private final WorkflowClient workflowClient;
 
@@ -95,7 +96,7 @@ public class DemandeDocumentService {
         if (pieceJointe != null && !pieceJointe.isEmpty()) {
             try {
                 demande.setPieceJointeObjectName(
-                        minioService.uploadFile(pieceJointe, "demandes", type.name().toLowerCase()));
+                        storageService.uploadFile(pieceJointe, "demandes", type.name().toLowerCase()));
                 demande.setPieceJointeNom(pieceJointe.getOriginalFilename());
             } catch (Exception e) {
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,

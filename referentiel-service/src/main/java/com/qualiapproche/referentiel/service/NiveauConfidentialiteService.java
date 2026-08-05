@@ -11,7 +11,12 @@ public interface NiveauConfidentialiteService {
     NiveauConfidentialiteDto create(NiveauConfidentialiteDto dto);
     NiveauConfidentialiteDto update(NiveauConfidentialiteDto dto);
     NiveauConfidentialiteDto getById(UUID id);
-    Page<NiveauConfidentialiteDto> getAll(Pageable pageable);
+    /**
+     * Page du référentiel, restreinte au terme cherché s'il y en a un.
+     *
+     * @param recherche terme libre, facultatif ; vide, la page porte tout le référentiel
+     */
+    Page<NiveauConfidentialiteDto> getAll(String recherche, Pageable pageable);
     List<NiveauConfidentialiteDto> getAll();
     void delete(UUID id);
 }

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+        "-//Puppy Crawl//DTD Suppressions 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<!--
+  Exceptions ciblées à la configuration de checkstyle.xml.
+
+  Les règles globalement inadaptées au projet sont retirées de checkstyle.xml
+  plutôt que neutralisées ici : ce fichier ne doit contenir que des exceptions
+  localisées, chacune justifiée par un commentaire.
+-->
+<suppressions>
+
+    <!-- Sources générées par les annotation processors (MapStruct, Lombok). -->
+    <suppress checks=".*" files="[\\/](target|generated-sources)[\\/]"/>
+
+    <!--
+      Les classes de configuration Spring déclarent des chaînes de filtres et
+      des beans qui dépassent naturellement la longueur de méthode retenue.
+    -->
+    <suppress checks="MethodLength" files="[\\/]config[\\/].*Config(uration)?\.java$"/>
+
+</suppressions>

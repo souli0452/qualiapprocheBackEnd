@@ -30,7 +30,8 @@ public class SendMailServiceImpl implements SendMailService {
     }
 
     @Override
-    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName, String numeroNc, String observation) {
+    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName,
+            String numeroNc, String observation) {
         // Not used in referentiel
     }
 

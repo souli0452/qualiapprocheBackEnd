@@ -1,21 +1,15 @@
 package com.qualiapproche.common.dto;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-
-
- 
-import com.fasterxml.jackson.annotation.JsonBackReference;
 
 
 
 
-import java.util.List;
+
+
+
 import java.util.UUID;
 
 
@@ -26,7 +20,7 @@ import java.util.UUID;
 
 
 @SuperBuilder
-public class CrictereEvaluationDto extends AuditEntityDto{
+public class CrictereEvaluationDto extends AuditEntityDto {
 
     private String libelleCrictereEvaluation;
     private String descriptionCrictereEvaluation;
@@ -35,7 +29,7 @@ public class CrictereEvaluationDto extends AuditEntityDto{
     private String serviceClient;
     private String commentaireEvaluation;
 
-    
+
    // @JsonBackReference
     private UUID fournisseurId;
 

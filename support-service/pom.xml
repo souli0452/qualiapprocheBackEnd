@@ -63,11 +63,11 @@
             <artifactId>pdfbox</artifactId>
             <version>2.0.28</version>
         </dependency>
-        <!-- Minio SDK -->
+        <!-- Dépôt de fichiers : le client MinIO et la convention de rangement viennent de lib-storage -->
         <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-            <version>8.5.7</version>
+            <groupId>com.qualiapproche</groupId>
+            <artifactId>lib-storage</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Email -->

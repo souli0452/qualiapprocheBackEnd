@@ -16,4 +16,11 @@ public class WorkflowStepFieldDto {
     private String type; // string, numeric, select, file, date
     private boolean required;
     private String options;
+
+    /**
+     * Décision à laquelle le champ se rapporte ({@code APPROUVE}, {@code REJETE}), ou {@code null}
+     * s'il vaut quelle que soit la décision. L'écran n'a ainsi à présenter que ce que la décision
+     * choisie réclame.
+     */
+    private String decision;
 }

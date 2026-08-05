@@ -7,7 +7,14 @@ import com.qualiapproche.amelioration.service.NiveauNonConformiteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -45,13 +52,13 @@ public class NiveauNonConformiteController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_NIVEAU_NON_CONFORMITE)
     public ResponseEntity<Page<NiveauNonConformiteDto>> allNiveauNonConformite(@ParameterObject Pageable pageable) {
-        Page<NiveauNonConformiteDto> niveauNonConformiteDtos  = niveauNonConformiteService.getAll(pageable);
+        Page<NiveauNonConformiteDto> niveauNonConformiteDtos = niveauNonConformiteService.getAll(pageable);
         return new ResponseEntity<>(niveauNonConformiteDtos, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_NIVEAU_NON_CONFORMITE_BY_ID)
     public ResponseEntity<NiveauNonConformiteDto> getEfficaciteById(@PathVariable UUID id) {
-        NiveauNonConformiteDto niveauNonConformiteDto  = niveauNonConformiteService.getById(id);
+        NiveauNonConformiteDto niveauNonConformiteDto = niveauNonConformiteService.getById(id);
         return new ResponseEntity<>(niveauNonConformiteDto, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canDelete(this)")

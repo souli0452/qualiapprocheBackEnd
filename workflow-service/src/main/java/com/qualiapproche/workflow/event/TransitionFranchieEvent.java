@@ -78,7 +78,7 @@ public class TransitionFranchieEvent extends ApplicationEvent {
         this.commentaire = commentaire;
         this.lotId = lotId;
     }
-    
+
     public TransitionFranchieEvent(String entityClass, String entityId, String workflowCode, String transitionCode,
                                    String etatAvant, String etatApres, String auteurId, String commentaire) {
         this(entityClass, entityId, workflowCode, transitionCode, etatAvant, etatApres, auteurId, commentaire, null);

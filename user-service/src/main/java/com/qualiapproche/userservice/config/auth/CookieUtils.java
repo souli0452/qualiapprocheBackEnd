@@ -19,12 +19,12 @@ public final class CookieUtils {
     public static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
     /** Durée de vie du cookie access_token  (1 heure en secondes). */
-    private static final int ACCESS_TOKEN_MAX_AGE  = 3600;
+    private static final int ACCESS_TOKEN_MAX_AGE = 3600;
 
     /** Durée de vie du cookie refresh_token (30 jours en secondes). */
     private static final int REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
 
-    private CookieUtils() {}
+    private CookieUtils() { }
 
     // -------------------------------------------------------------------------
     // Création des cookies
@@ -113,7 +113,9 @@ public final class CookieUtils {
     // -------------------------------------------------------------------------
 
     private static Optional<String> getCookieValue(HttpServletRequest request, String name) {
-        if (request.getCookies() == null) return Optional.empty();
+        if (request.getCookies() == null) {
+            return Optional.empty();
+        }
         return Arrays.stream(request.getCookies())
                 .filter(c -> name.equals(c.getName()))
                 .map(Cookie::getValue)

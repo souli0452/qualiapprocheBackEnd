@@ -82,6 +82,18 @@ public class ProfilUtilisateurService {
                     || roles.stream().anyMatch(ROLES_ADMINISTRATION::contains);
         }
 
+        /**
+         * Relève-t-il de l'administration générale ?
+         *
+         * <p>Seul ce rôle échappe au classement des documents. Le responsable qualité, lui, y est
+         * soumis : il voit toutes les structures, pas tous les classements. Cette dispense-ci
+         * existe pour qu'un document mal classé — sur un rôle que plus personne ne détient —
+         * reste réparable ; sans elle, plus personne ne pourrait ni le voir ni le reclasser.</p>
+         */
+        public boolean estAdministrateur() {
+            return roles.stream().anyMatch(ROLES_ADMINISTRATION::contains);
+        }
+
         static Profil vide() {
             return new Profil(null, Set.of());
         }

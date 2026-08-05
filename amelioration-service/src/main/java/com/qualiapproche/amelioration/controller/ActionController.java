@@ -4,13 +4,19 @@ import com.qualiapproche.common.annotation.RequirePermissions;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.ActionDto;
 import com.qualiapproche.amelioration.service.ActionService;
-import com.qualiapproche.amelioration.service.EfficaciteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -42,20 +48,20 @@ public class ActionController {
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_ACTIONS)
     public ResponseEntity<ActionDto> update(@RequestBody ActionDto actionDto) {
-        ActionDto ActionDto1 = actionService.update(actionDto);
-        return new ResponseEntity<>(ActionDto1, HttpStatus.OK);
+        ActionDto actionDto1 = actionService.update(actionDto);
+        return new ResponseEntity<>(actionDto1, HttpStatus.OK);
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_ACTIONS)
     public ResponseEntity<List<ActionDto>> allActions() {
-        List<ActionDto> actionDtos  = actionService.getAll();
+        List<ActionDto> actionDtos = actionService.getAll();
         return new ResponseEntity<>(actionDtos, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ACTIONS_BY_ID)
     public ResponseEntity<ActionDto> getById(@PathVariable UUID id) {
-        ActionDto actionDto  = actionService.getById(id);
+        ActionDto actionDto = actionService.getById(id);
         return new ResponseEntity<>(actionDto, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canDelete(this)")

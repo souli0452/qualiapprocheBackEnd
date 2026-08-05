@@ -37,40 +37,57 @@ public class NonConformiteSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (numeroReference != null && !numeroReference.isBlank())
+            if (numeroReference != null && !numeroReference.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("numeroReference")), "%" + numeroReference.toLowerCase() + "%"));
-            if (nomProcessus != null && !nomProcessus.isBlank())
+            }
+            if (nomProcessus != null && !nomProcessus.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("nomProcessus")), "%" + nomProcessus.toLowerCase() + "%"));
-            if (origineId != null && !origineId.isBlank())
+            }
+            if (origineId != null && !origineId.isBlank()) {
                 predicates.add(cb.equal(root.get("origineId"), origineId));
-            if (origineService != null && !origineService.isBlank())
+            }
+            if (origineService != null && !origineService.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("origineService")), "%" + origineService.toLowerCase() + "%"));
-            if (structureSoumissionId != null && !structureSoumissionId.isBlank())
+            }
+            if (structureSoumissionId != null && !structureSoumissionId.isBlank()) {
                 predicates.add(cb.equal(root.get("structureSoumissionId"), structureSoumissionId));
-            if (structureResponsableId != null && !structureResponsableId.isBlank())
+            }
+            if (structureResponsableId != null && !structureResponsableId.isBlank()) {
                 predicates.add(cb.equal(root.get("structureResponsableId"), structureResponsableId));
-            if (etatTraitement != null)
+            }
+            if (etatTraitement != null) {
                 predicates.add(cb.equal(root.get("etatTraitement"), etatTraitement));
-            if (status != null)
+            }
+            if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
-            if (typeDemande != null)
+            }
+            if (typeDemande != null) {
                 predicates.add(cb.equal(root.get("typeDemande"), typeDemande));
-            if (circuit != null)
+            }
+            if (circuit != null) {
                 predicates.add(cb.equal(root.get("circuit"), circuit));
-            if (userImputeEmail != null && !userImputeEmail.isBlank())
+            }
+            if (userImputeEmail != null && !userImputeEmail.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("userImputeEmail")), "%" + userImputeEmail.toLowerCase() + "%"));
-            if (typeNonConformiteLibelle != null && !typeNonConformiteLibelle.isBlank())
+            }
+            if (typeNonConformiteLibelle != null && !typeNonConformiteLibelle.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("typeNonConformiteLibelle")), "%" + typeNonConformiteLibelle.toLowerCase() + "%"));
-            if (niveauNonConformiteLibelle != null && !niveauNonConformiteLibelle.isBlank())
+            }
+            if (niveauNonConformiteLibelle != null && !niveauNonConformiteLibelle.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("niveauNonConformiteLibelle")), "%" + niveauNonConformiteLibelle.toLowerCase() + "%"));
-            if (typeNonConformiteId != null)
+            }
+            if (typeNonConformiteId != null) {
                 predicates.add(cb.equal(root.get("typeNonConformiteId"), typeNonConformiteId));
-            if (niveauNonConformiteId != null)
+            }
+            if (niveauNonConformiteId != null) {
                 predicates.add(cb.equal(root.get("niveauNonConformiteId"), niveauNonConformiteId));
-            if (publicationDateFrom != null)
+            }
+            if (publicationDateFrom != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("publicationDate"), publicationDateFrom));
-            if (publicationDateTo != null)
+            }
+            if (publicationDateTo != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("publicationDate"), publicationDateTo));
+            }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };

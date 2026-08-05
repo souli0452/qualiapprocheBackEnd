@@ -75,7 +75,9 @@ class WorkflowServiceGardeFousTest {
     void setUp() {
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
-                transitionRepository, stepRepository);
+                transitionRepository, stepRepository,
+                // Pas de proxy hors contexte Spring : voir WorkflowService#self().
+                null);
     }
 
     private Workflow circuit(boolean actif, String resourceType, int nbEtapes) {
@@ -312,5 +314,79 @@ class WorkflowServiceGardeFousTest {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
         verify(workflowRepository, never()).save(any());
+    }
+
+    // ------------------------------------------------------- apparence des actions
+
+    /** Circuit d'une étape portant une transition dont on fixe l'apparence. */
+    private WorkflowDto dtoAvecApparence(String icone, String severite) {
+        return WorkflowDto.builder()
+                .nom("wok")
+                .resourceType("DOCUMENT")
+                .steps(new ArrayList<>(List.of(
+                        WorkflowStepDto.builder().nomEtape("Rédaction").stepOrder(1)
+                                .transitions(new ArrayList<>(List.of(
+                                        com.qualiapproche.workflow.dto.WorkflowTransitionDto.builder()
+                                                .decision("APPROUVE")
+                                                .label("Soumettre")
+                                                .icon(icone)
+                                                .severity(severite)
+                                                .terminal(true)
+                                                .build())))
+                                .build())))
+                .build();
+    }
+
+    @Test
+    @DisplayName("Libellé, icône et couleur du bouton sont enregistrés sur la transition")
+    void configuration_apparenceEnregistree() {
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowDto aCree = service.createWorkflow(dtoAvecApparence("pi pi-send", "info"));
+
+        assertThat(aCree.getSteps().get(0).getTransitions()).singleElement().satisfies(t -> {
+            assertThat(t.getLabel()).isEqualTo("Soumettre");
+            assertThat(t.getIcon()).isEqualTo("pi pi-send");
+            assertThat(t.getSeverity()).isEqualTo("info");
+        });
+    }
+
+    @Test
+    @DisplayName("La couleur est lue quelle qu'en soit la casse, et « warning » vaut « warn »")
+    void configuration_couleurNormalisee() {
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        // PrimeNG a renommé cette sévérité entre ses versions 17 et 18 : accepter les deux
+        // graphies évite que l'écran de configuration ait à suivre la version du thème.
+        assertThat(service.createWorkflow(dtoAvecApparence(null, "WARNING"))
+                .getSteps().get(0).getTransitions().get(0).getSeverity()).isEqualTo("warn");
+        assertThat(service.createWorkflow(dtoAvecApparence(null, " Danger "))
+                .getSteps().get(0).getTransitions().get(0).getSeverity()).isEqualTo("danger");
+    }
+
+    @Test
+    @DisplayName("Une couleur inconnue est refusée en 400, la liste des jetons admis à l'appui")
+    void configuration_couleurInconnue_refusee() {
+        assertThatThrownBy(() -> service.createWorkflow(dtoAvecApparence(null, "sucess")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("sucess")
+                .hasMessageContaining("success")
+                .extracting(e -> ((BusinessException) e).getStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        verify(workflowRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Une couleur absente reste vide en configuration : le défaut se lit à l'exécution")
+    void configuration_couleurAbsente_nonInventee() {
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowDto aCree = service.createWorkflow(dtoAvecApparence(null, null));
+
+        assertThat(aCree.getSteps().get(0).getTransitions()).singleElement().satisfies(t -> {
+            assertThat(t.getIcon()).isNull();
+            assertThat(t.getSeverity()).isNull();
+        });
     }
 }

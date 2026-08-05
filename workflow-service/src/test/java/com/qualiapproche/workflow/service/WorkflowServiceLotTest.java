@@ -77,7 +77,9 @@ class WorkflowServiceLotTest {
     void setUp() throws Exception {
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
-                transitionRepository, stepRepository);
+                transitionRepository, stepRepository,
+                // Pas de proxy hors contexte Spring : voir WorkflowService#self().
+                null);
 
         // Catalogue en mémoire : une étape « 10 » offrant une transition « 100 ».
         WorkflowPersistant aCircuit = new WorkflowPersistant(circuitCode);
@@ -88,6 +90,8 @@ class WorkflowServiceLotTest {
 
         TransitionPersistante aTransition = new TransitionPersistante("100", aEtape, aEtape);
         aTransition.setLibelle("Valider");
+        aTransition.setIcon("pi pi-verified");
+        aTransition.setSeverite(com.qualiapproche.workflow.model.SeveriteAction.WARN);
         aTransition.setPermission("RESPONSABLE");
         when(moteur.getTransitionsPossibles(any()))
                 .thenReturn(java.util.Collections.unmodifiableSequencedSet(
@@ -201,6 +205,25 @@ class WorkflowServiceLotTest {
                 });
         assertThat(aEtat.getCurrentStepFields()).singleElement()
                 .satisfies(champ -> assertThat(champ.getFieldName()).isEqualTo("avis"));
+    }
+
+    @Test
+    @DisplayName("L'apparence du bouton accompagne l'action, prête à l'emploi côté écran")
+    void lot_apparenceDuBoutonRestituee() {
+        UUID aRessource = UUID.randomUUID();
+        when(validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(anyCollection()))
+                .thenReturn(List.of(instance(aRessource)));
+
+        WorkflowStateDto aEtat = service.getWorkflowStatesForResources(List.of(aRessource)).get(aRessource);
+
+        // Le jeton de couleur est celui qu'attend <p-button [severity]> : aucune conversion
+        // n'est laissée à l'appelant.
+        assertThat(aEtat.getAllowedActions()).singleElement()
+                .satisfies(action -> {
+                    assertThat(action.getLibelle()).isEqualTo("Valider");
+                    assertThat(action.getIcon()).isEqualTo("pi pi-verified");
+                    assertThat(action.getSeverity()).isEqualTo("warn");
+                });
     }
 
     @Test

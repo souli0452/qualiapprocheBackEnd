@@ -12,7 +12,9 @@ import java.util.Map;
 public class KcUserMapper {
 
     public KcUserDto toDto(UserRepresentation user) {
-        if (user == null) return null;
+        if (user == null) {
+            return null;
+        }
         KcUserDto dto = new KcUserDto();
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
@@ -26,7 +28,9 @@ public class KcUserMapper {
     }
 
     public UserRepresentation toEntity(KcUserDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         UserRepresentation user = new UserRepresentation();
         user.setId(dto.getId());
         user.setUsername(dto.getUsername());
@@ -35,7 +39,7 @@ public class KcUserMapper {
         user.setLastName(dto.getLastName());
         user.setEnabled(dto.isEnabled());
         user.setEmailVerified(dto.isEmailVerified());
-        
+
         Map<String, java.util.List<String>> attributes = new HashMap<>();
         if (dto.getPhoneNumber() != null) {
             attributes.put("phoneNumber", Collections.singletonList(dto.getPhoneNumber()));
@@ -47,7 +51,7 @@ public class KcUserMapper {
             attributes.put("fonction", Collections.singletonList(dto.getFonction()));
         }
         user.setAttributes(attributes);
-        
+
         return user;
     }
 }

@@ -42,7 +42,7 @@ public class ActionServiceImpl implements ActionService {
 
     @Override
     public List<ActionDto> getAll() {
-        return  actionMapper.toDtos(actionRepository.findAll()) ;
+        return actionMapper.toDtos(actionRepository.findAll());
     }
 
     @Override
@@ -57,7 +57,7 @@ public class ActionServiceImpl implements ActionService {
 
     @Override
     public void delete(UUID id) {
-        Action action=actionRepository.getReferenceById(id);
+        Action action = actionRepository.getReferenceById(id);
         actionRepository.delete(action);
     }
 }

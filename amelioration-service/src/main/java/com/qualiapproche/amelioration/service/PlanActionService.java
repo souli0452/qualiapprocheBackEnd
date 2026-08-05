@@ -1,7 +1,6 @@
 package com.qualiapproche.amelioration.service;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -29,5 +28,34 @@ public interface PlanActionService {
             java.time.LocalDate dateTraitementFrom, java.time.LocalDate dateTraitementTo,
             Pageable pageable);
 
-    void updateWorkflowState(UUID planActionId, String newStateName, String newEtatTraitement);
+    /**
+     * Corrige la description d'un plan d'action, sans toucher à son avancement.
+     *
+     * <p>L'agent imputé rédige ses plans avant de soumettre son traitement, et doit pouvoir les
+     * reprendre : une cause mal formulée, une échéance à ajuster, un responsable à changer. Le
+     * point d'entrée que le front appelait pour cela — {@code PUT /plan-action/update} — n'existait
+     * pas : la correction partait en 404 et l'écran annonçait pourtant un succès.</p>
+     *
+     * <p>Le statut, le circuit et le rattachement à la non-conformité ne sont pas modifiables ici :
+     * ils relèvent du moteur et de la décision, non de la saisie. Une correction ne doit ni engager
+     * un plan, ni le solder.</p>
+     */
+    PlanActionDto corriger(PlanActionDto dto);
+
+    /**
+     * Actions correctives sur lesquelles l'appelant a une décision à prendre.
+     *
+     * <p>C'est le circuit qui sait qui peut agir : une action revenue chez le pilote pour être
+     * vérifiée, ou déclinée et à ré-attribuer, n'apparaissait dans aucune de ses listes — il fallait
+     * qu'il ouvre la non-conformité et en parcoure les actions pour la retrouver.</p>
+     */
+    org.springframework.data.domain.Page<PlanActionDto> aTraiterParLAppelant(
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Répercute sur le plan l'étape que le circuit vient d'atteindre, et les valeurs qui y ont été
+     * saisies — dont le responsable, qu'une ré-attribution peut changer.
+     */
+    void updateWorkflowState(UUID planActionId, String newStateName, String newEtatTraitement,
+            java.util.Map<String, String> champs);
 }

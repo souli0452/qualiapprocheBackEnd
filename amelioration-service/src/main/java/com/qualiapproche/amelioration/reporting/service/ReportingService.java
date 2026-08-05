@@ -3,7 +3,6 @@ package com.qualiapproche.amelioration.reporting.service;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.common.enumeration.TypeDemande;
 import com.qualiapproche.amelioration.reporting.config.ReportConfigService;
-import com.qualiapproche.amelioration.reporting.config.ReportConstant;
 import com.qualiapproche.amelioration.reporting.dto.PlanActionDto;
 import com.qualiapproche.amelioration.reporting.dto.ReportingInputDto;
 import com.qualiapproche.amelioration.reporting.dto.ReportingResponseDto;
@@ -21,11 +20,12 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.text.SimpleDateFormat;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 
 @Slf4j
@@ -77,7 +77,7 @@ public class ReportingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "demande introuvable."));
         List<PlanActionDto> planActionList = nonConformite.getPlanActions().stream().map(plan -> new PlanActionDto(plan)).toList();
 
-        return this.configService.buildReportNf(inputDto,planActionList, buildNonConformiteParam(nonConformite));
+        return this.configService.buildReportNf(inputDto, planActionList, buildNonConformiteParam(nonConformite));
     }
 
 
@@ -87,19 +87,19 @@ public class ReportingService {
         // Paramètres obligatoires
         parameterMap.put("REFERENCE", demande.getNumeroReference() != null ? demande.getNumeroReference() : "N/A");
         parameterMap.put("VERSION", demande.getVersion() != null ? demande.getVersion() : "1.0");
-        parameterMap.put("DATE_SOUMISSION",formatLocalDateTime(demande.getCreatedAt()));
+        parameterMap.put("DATE_SOUMISSION", formatLocalDateTime(demande.getCreatedAt()));
         parameterMap.put("NUMERO", demande.getNumeroReference() != null ? demande.getNumeroReference() : "");
 
         // Cases à cocher (doivent être "X" ou "")
-        parameterMap.put("CORRECTIVE", demande.getActionPreventive()!=null ? "X" : "");
-        parameterMap.put("PREVENTIVE", demande.getActionPreventive()==null ? "X" : "");
+        parameterMap.put("CORRECTIVE", demande.getActionPreventive() != null ? "X" : "");
+        parameterMap.put("PREVENTIVE", demande.getActionPreventive() == null ? "X" : "");
 
         // Champs texte
         parameterMap.put("SERVICE_PRODUIT", demande.getOrigineService() != null ? demande.getOrigineService() : "");
         parameterMap.put("ORIGINE", demande.getTypeNonConformiteLibelle() != null ? demande.getTypeNonConformiteLibelle() : "");
         parameterMap.put("DESCRIPTION", demande.getJustification() != null ? demande.getJustification() : "");
         parameterMap.put("REACTION",  "Pas de réaction");
-        parameterMap.put("JUSTIFICATION_PILOTE", demande.getJustificationPilote() != null ?stripTags(demande.getJustificationPilote()) : "");
+        parameterMap.put("JUSTIFICATION_PILOTE", demande.getJustificationPilote() != null ? stripTags(demande.getJustificationPilote()) : "");
         parameterMap.put("JUSTIFICATION_RS", demande.getJustificationRs() != null ? stripTags(demande.getJustificationRs()) : "");
         parameterMap.put("PARTICIPANTS",
                 demande.getParticipants() != null && demande.getParticipants().getFullNames() != null
@@ -109,7 +109,7 @@ public class ReportingService {
 
         // Dates supplémentaires
         parameterMap.put("DATE_PILOTE", formatLocalDateTime(demande.getDateVisaEmetteur()));
-        parameterMap.put("DATE_RS", demande.getDateSuivi()!=null ? formatLocalDateTime(demande.getDateSuivi()) : "");
+        parameterMap.put("DATE_RS", demande.getDateSuivi() != null ? formatLocalDateTime(demande.getDateSuivi()) : "");
 
         // Cases à cocher pour pertinence
         String pertinencePilote = demande.getPertinancePilote();

@@ -35,7 +35,7 @@ public class CategorieFichierServiceImpl implements CategorieFichierService {
 
     @Override
     public List<CategorieFichierDto> allCategorieFichier() {
-        return  categorieFichierMapper.toDtos(categorieFichierRepository.findAll()) ;
+        return categorieFichierMapper.toDtos(categorieFichierRepository.findAll());
     }
 
     @Override

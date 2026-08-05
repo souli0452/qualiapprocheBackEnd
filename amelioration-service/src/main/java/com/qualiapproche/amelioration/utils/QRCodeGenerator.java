@@ -14,7 +14,7 @@ public class QRCodeGenerator {
 
   public static String generateAndSaveQRCodeImage(NonConformiteDto demande) throws IOException, com.google.zxing.WriterException {
     String qrContent = generateQRContent(demande);
-    String fileName = "qr_" + demande.getNumeroReference().replace("/","_") + ".png";
+    String fileName = "qr_" + demande.getNumeroReference().replace("/", "_") + ".png";
 
     QRCodeWriter qrCodeWriter = new QRCodeWriter();
     BitMatrix bitMatrix = qrCodeWriter.encode(qrContent, BarcodeFormat.QR_CODE, 350, 350);

@@ -30,6 +30,12 @@
     "description": "Réception et prise en charge"
   },
   {
+    "code": "VALIDATION_RQ",
+    "nomEtape": "Validation RQ",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Validation par le responsable qualité et affectation à une structure"
+  },
+  {
     "code": "IMPUTATION",
     "nomEtape": "Imputation",
     "responsableRole": "PILOTE",
@@ -38,7 +44,7 @@
   {
     "code": "TRAITEMENT",
     "nomEtape": "Traitement",
-    "responsableRole": "AGENT_IMPUTE",
+    "responsableRole": "@TITULAIRE",
     "description": "Analyse et mise en œuvre du plan d'action"
   },
   {
@@ -67,21 +73,33 @@
   },
   {
     "code": "NON_TRAITER",
-    "nomEtape": "À Traiter",
-    "responsableRole": "AGENT_IMPUTE",
-    "description": "Plan d'action en attente de traitement par l'agent"
+    "nomEtape": "À réaliser",
+    "responsableRole": "@TITULAIRE",
+    "description": "Action corrective confiée à son responsable, en attente de réalisation"
+  },
+  {
+    "code": "EN_VERIFICATION",
+    "nomEtape": "Réalisation à vérifier",
+    "responsableRole": "PILOTE",
+    "description": "Le responsable déclare l'action réalisée ; le pilote doit le constater"
+  },
+  {
+    "code": "EFFICACITE_A_MESURER",
+    "nomEtape": "Efficacité à mesurer",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Le responsable qualité confronte le résultat au critère d'efficacité fixé"
   },
   {
     "code": "TRAITER",
-    "nomEtape": "Traité",
-    "responsableRole": "PILOTE",
-    "description": "Le plan d'action a été exécuté"
+    "nomEtape": "Soldée",
+    "responsableRole": "RESPONSABLE_QUALITE",
+    "description": "Action réalisée et reconnue efficace : elle ne retient plus la clôture du dossier"
   },
   {
     "code": "REJECTED",
-    "nomEtape": "Rejeté",
+    "nomEtape": "Déclinée",
     "responsableRole": "PILOTE",
-    "description": "Le plan d'action a été rejeté"
+    "description": "Attribution déclinée : l'action attend d'être confiée à quelqu'un d'autre"
   },
   {
     "code": "DEMANDE_SOUMISSION",

@@ -11,4 +11,4 @@ public interface DocumentMapper {
 
     DocumentQms toEntity(DocumentQmsDto dto);
 }
- 
+

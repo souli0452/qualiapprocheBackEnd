@@ -5,10 +5,10 @@ import com.qualiapproche.common.base.Participants;
 import com.qualiapproche.common.dto.AuditeDto;
 import com.qualiapproche.common.mappers.EntityMapper;
 import org.mapstruct.Mapper;
-import org.mapstruct.MappingTarget;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 @Mapper(componentModel = "spring")
 public interface AuditeMapper extends EntityMapper<AuditeDto, Audite> {
 

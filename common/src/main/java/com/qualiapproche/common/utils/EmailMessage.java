@@ -10,8 +10,8 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmailMessage {
-	private String to_address;
-	private String subject;
-	private String body;
-	private String cc_address;
+    private String toAddress;
+    private String subject;
+    private String body;
+    private String ccAddress;
 }

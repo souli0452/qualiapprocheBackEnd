@@ -6,9 +6,16 @@ import com.qualiapproche.support.service.QmsDocumentTypeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_TYPE;
@@ -27,10 +34,19 @@ public class QmsDocumentTypeController {
 
     private final QmsDocumentTypeService typeService;
 
+    /**
+     * Page des types documentaires, filtrée sur {@code search} le cas échéant.
+     *
+     * <p>Une {@code Page} explicite, là où une liste nue était paginée d'office par
+     * {@code GlobalResponseHandler} — donc tronquée à dix types sans que rien ne le dise,
+     * et sans moyen de chercher au-delà.</p>
+     */
     @GetMapping
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<List<QmsDocumentType>> getAllTypes() {
-        return ResponseEntity.ok(typeService.getAllTypes());
+    public ResponseEntity<org.springframework.data.domain.Page<QmsDocumentType>> getAllTypes(
+            @RequestParam(value = "search", required = false) String search,
+            @org.springdoc.core.annotations.ParameterObject org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(typeService.getTypes(search, pageable));
     }
 
     @GetMapping("/{id}")

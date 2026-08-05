@@ -22,6 +22,9 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
     Page<PlanAction> findPlanActionsByResponsableEmail(String responsableEmail, Pageable pageable);
     List<PlanAction> findPlanActionsByStatus(StatutEnum statut);
     List<PlanAction> findPlanActionsByNonConformeId(UUID nonConformeId);
+
+    /** Actions désignées par le moteur comme ouvertes à une décision de l'appelant. */
+    Page<PlanAction> findByIdIn(java.util.Collection<UUID> ids, Pageable pageable);
     @Query(value = "SELECT " +
             "EXTRACT(MONTH FROM created_at) AS mois, " +
             "status, " +
@@ -36,9 +39,11 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
             @Param("fin") LocalDateTime fin);
     PlanAction findPlanActionByNumeroNc(String numeroNc);
 
-    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
+    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id "
+            + "AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
     List<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId);
-    
-    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
+
+    @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id "
+            + "AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
     Page<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId, Pageable pageable);
 }

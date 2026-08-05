@@ -21,5 +21,21 @@ public class WorkflowStepFieldDto {
     private String fieldLabel;
     private String type;
     private boolean required;
+
+    /**
+     * Liste de choix : soit les valeurs séparées par des virgules, soit une source dont elles sont
+     * issues ({@code @STRUCTURES}, {@code @UTILISATEURS}).
+     */
     private String options;
+
+    /**
+     * Décision à laquelle ce champ se rapporte ({@code APPROUVE}, {@code REJETE}), ou {@code null}
+     * s'il vaut quelle que soit la décision.
+     *
+     * <p>Sans cette information, un justificatif de rejet se présentait aussi à qui approuvait :
+     * on lui demandait de motiver un refus qu'il n'était pas en train de prononcer. Le champ
+     * traverse ce DTO à chaque état de circuit rendu à un module métier — l'omettre ici suffisait
+     * à perdre la portée entre le moteur et l'écran.</p>
+     */
+    private String decision;
 }

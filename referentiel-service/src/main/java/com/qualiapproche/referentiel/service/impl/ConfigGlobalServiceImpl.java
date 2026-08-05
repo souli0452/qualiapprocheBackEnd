@@ -2,7 +2,7 @@ package com.qualiapproche.referentiel.service.impl;
 
 import com.qualiapproche.referentiel.entities.ConfigGlobal;
 import com.qualiapproche.referentiel.repository.ConfigGlobalRepository;
-import com.qualiapproche.referentiel.service.configGlobalService;
+import com.qualiapproche.referentiel.service.ConfigGlobalService;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
@@ -12,7 +12,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class ConfigGlobalServiceImpl implements configGlobalService {
+public class ConfigGlobalServiceImpl implements ConfigGlobalService {
     private  final ConfigGlobalRepository configGlobalRepository;
     @Override
     public ConfigGlobal getConfigGlobal() {
@@ -35,7 +35,7 @@ public class ConfigGlobalServiceImpl implements configGlobalService {
     }
 
     @Override
-    public ConfigGlobal updateConfigGlobal(ConfigGlobal c,String id) {
+    public ConfigGlobal updateConfigGlobal(ConfigGlobal c, String id) {
         ConfigGlobal configGlobal = configGlobalRepository.getReferenceById(UUID.fromString(id));
         configGlobal.setEmailRq(c.getEmailRq());
         configGlobal.setRappelEcheance(c.getRappelEcheance());

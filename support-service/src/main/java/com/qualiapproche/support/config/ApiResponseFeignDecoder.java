@@ -74,9 +74,9 @@ public class ApiResponseFeignDecoder implements Decoder {
     private boolean isCollectionOrPage(Type type) {
         if (type instanceof Class<?>) {
             Class<?> clazz = (Class<?>) type;
-            return Collection.class.isAssignableFrom(clazz) || 
-                   clazz.isArray() || 
-                   clazz.getName().contains("Page") || 
+            return Collection.class.isAssignableFrom(clazz) ||
+                   clazz.isArray() ||
+                   clazz.getName().contains("Page") ||
                    clazz.getName().contains("Slice");
         }
         if (type instanceof java.lang.reflect.ParameterizedType) {

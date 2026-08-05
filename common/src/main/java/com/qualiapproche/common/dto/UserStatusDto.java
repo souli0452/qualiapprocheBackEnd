@@ -1,19 +1,12 @@
 package com.qualiapproche.common.dto;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 
- 
 
 
-import org.hibernate.annotations.Cache;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
+
 
 @Data
 @NoArgsConstructor

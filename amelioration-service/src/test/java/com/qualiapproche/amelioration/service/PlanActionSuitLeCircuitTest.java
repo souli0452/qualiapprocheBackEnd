@@ -1,0 +1,85 @@
+package com.qualiapproche.amelioration.service;
+
+import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.repository.PlanActionRepository;
+import com.qualiapproche.amelioration.service.impl.PlanActionServiceImpl;
+import com.qualiapproche.amelioration.service.impl.PlansActionDeLaNonConformiteService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
+
+/**
+ * Ce que le circuit décide du plan d'action, et ce que le plan en retient.
+ *
+ * <p>Un plan décliné doit pouvoir être confié à quelqu'un d'autre. La désignation se fait dans le
+ * circuit, mais si elle n'atteint pas le plan lui-même, l'écran continue d'afficher l'ancien
+ * responsable : le moteur et la fiche nomment alors deux personnes différentes, et l'on ne sait plus
+ * laquelle répond de l'action corrective.</p>
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class PlanActionSuitLeCircuitTest {
+
+    @Mock private PlanActionRepository planActionRepository;
+    @Mock private PlansActionDeLaNonConformiteService plansActionService;
+
+    @InjectMocks private PlanActionServiceImpl service;
+
+    private PlanAction plan;
+    private final UUID ancienResponsable = UUID.randomUUID();
+
+    @BeforeEach
+    void planConfie() {
+        plan = new PlanAction();
+        plan.setId(UUID.randomUUID());
+        plan.setNonConformeId(UUID.randomUUID());
+        plan.setResponsableId(ancienResponsable);
+        when(planActionRepository.findById(plan.getId())).thenReturn(Optional.of(plan));
+    }
+
+    @Test
+    @DisplayName("La ré-attribution inscrit le nouveau responsable sur le plan")
+    void reattribution_changeLeResponsable() {
+        UUID nouveau = UUID.randomUUID();
+
+        service.updateWorkflowState(plan.getId(), "À Traiter", "NON_TRAITER",
+                Map.of("responsableId", nouveau.toString()));
+
+        assertThat(plan.getResponsableId()).isEqualTo(nouveau);
+    }
+
+    @Test
+    @DisplayName("Une transition sans désignation laisse le responsable en place")
+    void transitionOrdinaire_neTouchePasAuResponsable() {
+        // La plupart des franchissements ne nomment personne : ils ne doivent pas effacer ce que
+        // l'attribution avait établi.
+        service.updateWorkflowState(plan.getId(), "Traité", "TRAITER", Map.of());
+
+        assertThat(plan.getResponsableId()).isEqualTo(ancienResponsable);
+    }
+
+    @Test
+    @DisplayName("Une désignation illisible ne fait pas échouer le franchissement")
+    void designationIllisible_neBloquePas() {
+        // La valeur vient du réseau. Perdre l'étape franchie parce qu'un identifiant est mal formé
+        // coûterait plus cher que de conserver l'ancien responsable et de le signaler.
+        service.updateWorkflowState(plan.getId(), "À Traiter", "NON_TRAITER",
+                Map.of("responsableId", "pas-un-identifiant"));
+
+        assertThat(plan.getResponsableId()).isEqualTo(ancienResponsable);
+        assertThat(plan.getWorkflowStatus()).isEqualTo("À Traiter");
+    }
+}

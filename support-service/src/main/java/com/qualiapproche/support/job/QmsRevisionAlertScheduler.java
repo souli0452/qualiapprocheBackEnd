@@ -44,14 +44,14 @@ public class QmsRevisionAlertScheduler {
 
             if (daysRemaining < 0) {
                 log.warn("Document {} is overdue for revision!", doc.getDocumentNumber());
-                
+
                 doc.setEnRetardRevision(true);
                 doc.setAlerteEnvoyee("expire");
                 documentRepository.save(doc);
 
                 auditLogService.logAction(
-                        "ALERTE_REVISION_RETARD", 
-                        doc.getDocumentNumber(), 
+                        "ALERTE_REVISION_RETARD",
+                        doc.getDocumentNumber(),
                         "Le document est en retard de révision depuis le " + nextRevisionDate
                 );
 
@@ -64,8 +64,8 @@ public class QmsRevisionAlertScheduler {
                     documentRepository.save(doc);
 
                     auditLogService.logAction(
-                            "ALERTE_REVISION", 
-                            doc.getDocumentNumber(), 
+                            "ALERTE_REVISION",
+                            doc.getDocumentNumber(),
                             "Notification d'alerte de révision à " + daysRemaining + " jours."
                     );
 

@@ -9,7 +9,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -65,10 +73,19 @@ public class NiveauConfidentialiteController {
         return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(service.getAll()));
     }
 
+    /**
+     * Page du référentiel, filtrée sur {@code search} le cas échéant.
+     *
+     * <p>La recherche est servie ici plutôt que dans le navigateur : une liste déroulante
+     * paginée ne connaît que les pages déjà chargées, et y filtrer laisserait introuvable
+     * toute valeur située au-delà.</p>
+     */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping
-    public ResponseEntity<Page<NiveauConfidentialiteDto>> page(@ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(service.getAll(pageable));
+    public ResponseEntity<Page<NiveauConfidentialiteDto>> page(
+            @RequestParam(value = "search", required = false) String search,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(service.getAll(search, pageable));
     }
 
     @PreAuthorize("@perm.canRead(this)")

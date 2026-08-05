@@ -1,9 +1,11 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.workflow.model.SeveriteAction;
 import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowTransition;
+import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
@@ -215,5 +217,75 @@ class WorkflowEngineDAOAdapterTest {
         // Toutes les transitions sont chargées d'un coup : le regroupement par étape d'origine
         // doit donc écarter celles qui relèvent d'un autre circuit.
         assertThat(aResultat.getTransitions()).extracting(t -> t.getCode()).containsExactly("10");
+    }
+
+    @Test
+    @DisplayName("L'apparence déclarée sur la transition est reprise telle quelle")
+    void apparence_declaree() throws Exception {
+        Workflow aCircuit = circuitADeuxEtapes();
+        WorkflowStep aRedaction = aCircuit.getSteps().get(0);
+        WorkflowStep aVerification = aCircuit.getSteps().get(1);
+
+        WorkflowTransition aTransition = transition(10L, aRedaction, aVerification,
+                StepDecision.APPROUVE, false);
+        aTransition.setLabel("Soumettre pour vérification");
+        aTransition.setIcon("pi pi-send");
+        aTransition.setSeverity(SeveriteAction.INFO);
+
+        when(workflowRepository.findAllAvecEtapes()).thenReturn(List.of(aCircuit));
+        when(transitionRepository.findAll()).thenReturn(List.of(aTransition));
+
+        WorkflowPersistant aResultat = adapter.getAllWorkflow().get(0);
+
+        assertThat(aResultat.getTransitions()).singleElement().satisfies(t -> {
+            TransitionPersistante aPersistante = (TransitionPersistante) t;
+            assertThat(aPersistante.getLibelle()).isEqualTo("Soumettre pour vérification");
+            assertThat(aPersistante.getIcon()).isEqualTo("pi pi-send");
+            assertThat(aPersistante.getSeverite()).isEqualTo(SeveriteAction.INFO);
+        });
+    }
+
+    @Test
+    @DisplayName("Sans apparence déclarée, la décision fournit icône et couleur")
+    void apparence_repliSurLaDecision() throws Exception {
+        Workflow aCircuit = circuitADeuxEtapes();
+        WorkflowStep aRedaction = aCircuit.getSteps().get(0);
+        WorkflowStep aVerification = aCircuit.getSteps().get(1);
+
+        when(workflowRepository.findAllAvecEtapes()).thenReturn(List.of(aCircuit));
+        when(transitionRepository.findAll()).thenReturn(List.of(
+                transition(10L, aRedaction, aVerification, StepDecision.APPROUVE, false),
+                transition(12L, aVerification, aRedaction, StepDecision.REJETE, false)));
+
+        WorkflowPersistant aResultat = adapter.getAllWorkflow().get(0);
+
+        // Les circuits antérieurs à cette configuration ne portent ni icône ni couleur : leurs
+        // boutons doivent rester distinguables sans qu'on ait à les reconfigurer.
+        assertThat(aResultat.getTransitions())
+                .extracting(t -> ((TransitionPersistante) t).getIcon(),
+                        t -> ((TransitionPersistante) t).getSeverite())
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("pi pi-check", SeveriteAction.SUCCESS),
+                        org.assertj.core.groups.Tuple.tuple("pi pi-times", SeveriteAction.DANGER));
+    }
+
+    @Test
+    @DisplayName("Une icône vide vaut absence d'icône")
+    void apparence_iconeVideIgnoree() throws Exception {
+        Workflow aCircuit = circuitADeuxEtapes();
+        WorkflowStep aRedaction = aCircuit.getSteps().get(0);
+
+        WorkflowTransition aTransition = transition(10L, aRedaction, aCircuit.getSteps().get(1),
+                StepDecision.APPROUVE, false);
+        aTransition.setIcon("   ");
+
+        when(workflowRepository.findAllAvecEtapes()).thenReturn(List.of(aCircuit));
+        when(transitionRepository.findAll()).thenReturn(List.of(aTransition));
+
+        WorkflowPersistant aResultat = adapter.getAllWorkflow().get(0);
+
+        assertThat(aResultat.getTransitions()).singleElement()
+                .satisfies(t -> assertThat(((TransitionPersistante) t).getIcon())
+                        .isEqualTo("pi pi-check"));
     }
 }

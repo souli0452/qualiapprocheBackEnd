@@ -23,8 +23,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Vérifier le style de code (Checkstyle)
+        run: mvn -B checkstyle:check
+
       - name: Build contexte-service
-        run: mvn clean install -pl contexte-service -am -DskipTests
+        run: mvn clean install -pl contexte-service -am -DskipTests -Dcheckstyle.skip=true
 
       - name: Trigger Coolify Deployment
         run: |

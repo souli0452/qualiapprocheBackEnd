@@ -22,4 +22,13 @@ public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, Long
      */
     @EntityGraph(attributePaths = "fields")
     List<WorkflowStep> findAvecChampsByIdIn(Collection<Long> ids);
+
+    /**
+     * Étapes et leurs transitions sortantes en une requête.
+     *
+     * <p>Requête distincte de la précédente : joindre les deux collections dans le même graphe
+     * ferait un produit cartésien, et Hibernate refuse deux {@code List} en jointure de fetch.</p>
+     */
+    @EntityGraph(attributePaths = {"transitions", "transitions.toStep"})
+    List<WorkflowStep> findAvecTransitionsByIdIn(Collection<Long> ids);
 }

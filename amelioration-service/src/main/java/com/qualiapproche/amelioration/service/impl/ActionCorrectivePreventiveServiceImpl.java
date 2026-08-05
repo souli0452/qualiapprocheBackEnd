@@ -31,10 +31,10 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
     public ActionCorrectivePreventiveDto createAction(ActionCorrectivePreventiveDto actionCorrectivePreventiveDto) {
         ActionCorrectivePreventive actionCorrectivePreventive = actionMapper.toEntity(actionCorrectivePreventiveDto);
         actionCorrectivePreventive.setStatut(StatutEnum.ACTIF);
-        
+
         // On sauvegarde l'action d'abord pour avoir son ID
         ActionCorrectivePreventive savedAction = repository.save(actionCorrectivePreventive);
-        
+
         if (actionCorrectivePreventiveDto.getRisques() != null && !actionCorrectivePreventiveDto.getRisques().isEmpty()) {
             actionCorrectivePreventiveDto.getRisques().forEach(risque -> {
                 ActionRisque actionRisque = new ActionRisque();

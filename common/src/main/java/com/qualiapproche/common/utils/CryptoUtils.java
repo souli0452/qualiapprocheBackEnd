@@ -4,7 +4,12 @@ package com.qualiapproche.common.utils;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import javax.crypto.*;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -34,7 +39,7 @@ public class CryptoUtils {
     private static final int ITERATION_COUNT = 65536;
     private static final int KEY_LENGTH = 256;
     private static final String TRANSFORMATION = "AES/CBC/PKCS5Padding";
-    private static final String decryptMessage = "Une erreur s'est produit lors du décodage";
+    private static final String DECRYPT_ERROR_MESSAGE = "Une erreur s'est produit lors du décodage";
 
 
     public static String encrypt(final String strToEncrypt) {
@@ -83,19 +88,19 @@ public class CryptoUtils {
         try {
             cipher = Cipher.getInstance(TRANSFORMATION);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, decryptMessage);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, DECRYPT_ERROR_MESSAGE);
         }
 
         try {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, IVSPEC);
         } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, decryptMessage);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, DECRYPT_ERROR_MESSAGE);
         }
 
         try {
             return new String(cipher.doFinal(Base64.getUrlDecoder().decode(strToDecrypt)), StandardCharsets.UTF_8);
         } catch (IllegalBlockSizeException | BadPaddingException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, decryptMessage);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, DECRYPT_ERROR_MESSAGE);
         }
     }
 }

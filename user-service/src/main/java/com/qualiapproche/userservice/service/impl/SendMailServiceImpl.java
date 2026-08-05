@@ -94,7 +94,8 @@ public class SendMailServiceImpl implements SendMailService {
     }
 
     @Override
-    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName, String numeroNc, String observation) {
+    public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName,
+            String numeroNc, String observation) {
         // Simplified version for user-service as it doesn't have access to referentiel repository
         try {
             Map<String, Object> variables = new HashMap<>();
@@ -106,7 +107,7 @@ public class SendMailServiceImpl implements SendMailService {
             // Using dummy EmailMessage without CC for now
             com.qualiapproche.common.utils.EmailMessage emailMessage = com.qualiapproche.common.utils.EmailMessage.builder()
                     .subject(subject)
-                    .to_address(currentUserEmail)
+                    .toAddress(currentUserEmail)
                     .build();
 
             MailUtils.sendEmailWithTheamleafEngine(

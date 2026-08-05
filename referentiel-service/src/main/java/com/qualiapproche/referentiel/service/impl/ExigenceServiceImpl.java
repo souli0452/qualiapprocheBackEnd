@@ -38,7 +38,7 @@ public class ExigenceServiceImpl implements ExigenceService {
 
     @Override
     public List<ExigenceDto> allExigences() {
-        return  exigenceMapper.toDtos(exigenceRepository.findAll()) ;
+        return exigenceMapper.toDtos(exigenceRepository.findAll());
     }
 
     @Override

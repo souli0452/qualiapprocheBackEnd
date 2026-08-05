@@ -1,15 +1,11 @@
 package com.qualiapproche.common.dto;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
 
- 
+
 
 
 
@@ -24,7 +20,7 @@ import java.util.List;
 
 
 @SuperBuilder
-public class FournisseurDto extends AuditEntityDto{
+public class FournisseurDto extends AuditEntityDto {
     private String nom;
     private String adresse;
     private String telephone;
@@ -32,7 +28,7 @@ public class FournisseurDto extends AuditEntityDto{
     private String siteWeb;
     private String contactPrincipal;
     private String statut;
-    
+
     private List<CrictereEvaluationDto> criteresEvaluation;
 
 }

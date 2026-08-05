@@ -33,7 +33,7 @@ public class ReportingController {
     private final ReportingService reportingService;
 
 
-    @PostMapping( )
+    @PostMapping()
     public ResponseEntity<byte[]> generateReport(@RequestBody @Valid final ReportingInputDto inputDto)
             throws IOException, JRException {
         log.debug("Generate report: {}", inputDto);

@@ -8,7 +8,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -28,9 +32,37 @@ public class FeignConfig {
     @Value("${spring.security.oauth2.client.provider.keycloak.token-uri}")
     private String tokenUri;
 
+    /**
+     * En-tête des permissions applicatives, propagé aux appels entre services.
+     *
+     * <p>La gateway résout ces permissions une fois par requête entrante et les transmet dans
+     * {@code X-User-Permissions} ; le jeton Keycloak, lui, ne porte que des rôles techniques.
+     * Un appel de service à service ne passant pas par la gateway, l'en-tête se perdait en
+     * chemin : le service appelé ne voyait plus aucune permission applicative et refusait tout
+     * point d'entrée protégé par {@code @perm}.</p>
+     *
+     * <p>Propager la valeur reçue ne l'expose pas : la gateway écrase systématiquement tout
+     * {@code X-User-Permissions} venu du client. Ce qui circule ici est donc ce qu'elle a
+     * elle-même établi.</p>
+     */
+    private static final String PERMISSIONS_HEADER = "X-User-Permissions";
+
+    private void propagerLesPermissions(feign.RequestTemplate requestTemplate) {
+        var attributs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        if (!(attributs instanceof org.springframework.web.context.request.ServletRequestAttributes servlet)) {
+            return;
+        }
+        String permissions = servlet.getRequest().getHeader(PERMISSIONS_HEADER);
+        if (permissions != null && !permissions.isBlank()) {
+            requestTemplate.header(PERMISSIONS_HEADER, permissions);
+        }
+    }
+
     @Bean
     public RequestInterceptor requestInterceptor() {
         return requestTemplate -> {
+            propagerLesPermissions(requestTemplate);
+
             if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
                 return;
             }

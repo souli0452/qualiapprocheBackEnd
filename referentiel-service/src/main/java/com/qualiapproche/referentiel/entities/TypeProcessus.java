@@ -22,7 +22,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @SuperBuilder
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 
-public class TypeProcessus extends AuditEntity{
+public class TypeProcessus extends AuditEntity {
 
     private String libelle;
     private String description;

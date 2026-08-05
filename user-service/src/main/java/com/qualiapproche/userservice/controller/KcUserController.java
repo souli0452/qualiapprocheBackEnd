@@ -11,7 +11,15 @@ import lombok.RequiredArgsConstructor;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -26,14 +34,16 @@ import org.springdoc.core.annotations.ParameterObject;
 public class KcUserController {
     private final KcUserService kcUserService;
 
-    @Operation(summary = "Authentification utilisateur", description = "Permet de se connecter. Les tokens JWT sont déposés dans des cookies HTTP-Only sécurisés.")
+    @Operation(summary = "Authentification utilisateur",
+            description = "Permet de se connecter. Les tokens JWT sont déposés dans des cookies HTTP-Only sécurisés.")
     @PostMapping("/login")
     public ResponseEntity<Object> login(@RequestBody KcLoginRequestDto loginRequest,
                                         HttpServletResponse response) {
         return ResponseEntity.ok(kcUserService.login(loginRequest, response));
     }
 
-    @Operation(summary = "Rafraîchissement du token", description = "Lit le refresh_token depuis le cookie et émet un nouvel access_token via cookie HTTP-Only.")
+    @Operation(summary = "Rafraîchissement du token",
+            description = "Lit le refresh_token depuis le cookie et émet un nouvel access_token via cookie HTTP-Only.")
     @PostMapping("/refresh")
     public ResponseEntity<Object> refreshToken(HttpServletRequest request, HttpServletResponse response) {
         return kcUserService.refreshToken(request, response);
@@ -50,7 +60,7 @@ public class KcUserController {
         Page<KcUserDto> users = kcUserService.getAllUsers(pageable);
         return ResponseEntity.ok(users);
     }
-    
+
     @GetMapping("/users/{structureId}")
     public ResponseEntity<Page<KcUserDto>> getAllUsersByStructureId(@PathVariable String structureId, @ParameterObject Pageable pageable) {
         Page<KcUserDto> users = kcUserService.getUsersByStructure(structureId, pageable);
@@ -63,7 +73,8 @@ public class KcUserController {
         return ResponseEntity.ok(user);
     }
 
-    @Operation(summary = "Profil de l'utilisateur connecté", description = "Retourne le profil complet de l'utilisateur connecté en lisant l'access_token depuis les cookies HTTP-Only.")
+    @Operation(summary = "Profil de l'utilisateur connecté",
+            description = "Retourne le profil complet de l'utilisateur connecté en lisant l'access_token depuis les cookies HTTP-Only.")
     @GetMapping("/me")
     public ResponseEntity<java.util.Map<String, Object>> getMe(HttpServletRequest request) {
         return ResponseEntity.ok(kcUserService.getMe(request));
@@ -75,7 +86,9 @@ public class KcUserController {
      * size=10) à toute réponse de type List — inadapté ici : cette liste ne doit jamais être
      * tronquée, la gateway a besoin de l'ensemble complet des permissions.
      */
-    @Operation(summary = "Permissions de l'utilisateur connecté", description = "Usage interne : appelé par la gateway pour propager les permissions applicatives (AppRole) aux services en aval via l'en-tête X-User-Permissions.")
+    @Operation(summary = "Permissions de l'utilisateur connecté",
+            description = "Usage interne : appelé par la gateway pour propager les permissions "
+                    + "applicatives (AppRole) aux services en aval via l'en-tête X-User-Permissions.")
     @GetMapping("/me/permissions")
     public ResponseEntity<ApiResponse<List<String>>> getMyPermissions() {
         return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyPermissions()));
@@ -85,7 +98,9 @@ public class KcUserController {
      * Même précaution que {@code /me/permissions} : {@link ApiResponse} explicite pour échapper à
      * la pagination automatique appliquée par {@code GlobalResponseHandler} à toute List nue.
      */
-    @Operation(summary = "Rôles de l'utilisateur connecté", description = "Usage interne : permet aux services aval de contrôler une habilitation exprimée en rôle, que ni le jeton ni X-User-Permissions ne transportent.")
+    @Operation(summary = "Rôles de l'utilisateur connecté",
+            description = "Usage interne : permet aux services aval de contrôler une habilitation "
+                    + "exprimée en rôle, que ni le jeton ni X-User-Permissions ne transportent.")
     @GetMapping("/me/roles")
     public ResponseEntity<ApiResponse<List<java.util.Map<String, String>>>> getMyRoles() {
         return ResponseEntity.ok(ApiResponse.success(kcUserService.getMyRoles()));
@@ -151,8 +166,8 @@ public class KcUserController {
     }
 
     @PutMapping("/reinitialize-pwd")
-    public ResponseEntity<Void> reinitializePwd(@RequestParam String userId,@RequestParam String password, @RequestParam String token) {
-        kcUserService.reinitializePwd(userId,password, token);
+    public ResponseEntity<Void> reinitializePwd(@RequestParam String userId, @RequestParam String password, @RequestParam String token) {
+        kcUserService.reinitializePwd(userId, password, token);
         return ResponseEntity.ok().build();
     }
 

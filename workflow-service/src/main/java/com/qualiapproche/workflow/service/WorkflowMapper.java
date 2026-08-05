@@ -1,7 +1,16 @@
 package com.qualiapproche.workflow.service;
 
-import com.qualiapproche.workflow.dto.*;
-import com.qualiapproche.workflow.model.*;
+import com.qualiapproche.workflow.dto.WorkflowDto;
+import com.qualiapproche.workflow.dto.WorkflowStepDto;
+import com.qualiapproche.workflow.dto.WorkflowStepFieldDto;
+import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
+import com.qualiapproche.workflow.model.FieldType;
+import com.qualiapproche.workflow.model.SeveriteAction;
+import com.qualiapproche.workflow.model.StepDecision;
+import com.qualiapproche.workflow.model.Workflow;
+import com.qualiapproche.workflow.model.WorkflowStep;
+import com.qualiapproche.workflow.model.WorkflowStepField;
+import com.qualiapproche.workflow.model.WorkflowTransition;
 import org.springframework.stereotype.Component;
 
 import java.util.stream.Collectors;
@@ -10,7 +19,9 @@ import java.util.stream.Collectors;
 public class WorkflowMapper {
 
     public WorkflowDto toDto(Workflow entity) {
-        if (entity == null) return null;
+        if (entity == null) {
+            return null;
+        }
         return WorkflowDto.builder()
                 .id(entity.getId())
                 .nom(entity.getNom())
@@ -22,7 +33,9 @@ public class WorkflowMapper {
     }
 
     public WorkflowStepDto toDto(WorkflowStep entity) {
-        if (entity == null) return null;
+        if (entity == null) {
+            return null;
+        }
         return WorkflowStepDto.builder()
                 .id(entity.getId())
                 .code(entity.getCode())
@@ -33,16 +46,21 @@ public class WorkflowMapper {
                 .etatTraitement(entity.getEtatTraitement())
                 .emailTemplateCode(entity.getEmailTemplateCode())
                 .stepTemplateId(entity.getStepTemplateId())
+                .champTitulaire(entity.getChampTitulaire())
                 .transitions(entity.getTransitions() != null ? entity.getTransitions().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .fields(entity.getFields() != null ? entity.getFields().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .build();
     }
 
     public WorkflowTransitionDto toDto(WorkflowTransition entity) {
-        if (entity == null) return null;
+        if (entity == null) {
+            return null;
+        }
         return WorkflowTransitionDto.builder()
                 .id(entity.getId())
                 .label(entity.getLabel())
+                .icon(entity.getIcon())
+                .severity(entity.getSeverity() != null ? entity.getSeverity().getCode() : null)
                 .decision(entity.getDecision() != null ? entity.getDecision().name() : null)
                 .requiredRole(entity.getRequiredRole())
                 .toStepCode(entity.getToStep() != null ? entity.getToStep().getCode() : null)
@@ -50,11 +68,15 @@ public class WorkflowMapper {
                 .toStepName(entity.getToStep() != null ? entity.getToStep().getNomEtape() : null)
                 .toStepOrder(entity.getToStep() != null ? entity.getToStep().getStepOrder() : null)
                 .terminal(entity.isTerminal())
+                .conditionRequise(entity.getConditionRequise())
+                .conditionLibelle(entity.getConditionLibelle())
                 .build();
     }
 
     public WorkflowStepFieldDto toDto(WorkflowStepField entity) {
-        if (entity == null) return null;
+        if (entity == null) {
+            return null;
+        }
         return WorkflowStepFieldDto.builder()
                 .id(entity.getId())
                 .fieldName(entity.getFieldName())
@@ -62,11 +84,14 @@ public class WorkflowMapper {
                 .type(entity.getType() != null ? entity.getType().name() : null)
                 .required(entity.isRequired())
                 .options(entity.getOptions())
+                .decision(entity.getDecision() != null ? entity.getDecision().name() : null)
                 .build();
     }
 
     public Workflow toEntity(WorkflowDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         Workflow workflow = Workflow.builder()
                 .id(dto.getId())
                 .nom(dto.getNom())
@@ -86,7 +111,9 @@ public class WorkflowMapper {
     }
 
     public WorkflowStep toEntity(WorkflowStepDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         WorkflowStep step = WorkflowStep.builder()
                 .id(dto.getId())
                 .code(dto.getCode())
@@ -98,7 +125,7 @@ public class WorkflowMapper {
                 .emailTemplateCode(dto.getEmailTemplateCode())
                 .stepTemplateId(dto.getStepTemplateId())
                 .build();
-                
+
         if (dto.getTransitions() != null) {
             step.setTransitions(dto.getTransitions().stream().map(transitionDto -> {
                 WorkflowTransition transition = toEntity(transitionDto);
@@ -106,7 +133,7 @@ public class WorkflowMapper {
                 return transition;
             }).collect(Collectors.toList()));
         }
-        
+
         if (dto.getFields() != null) {
             step.setFields(dto.getFields().stream().map(fieldDto -> {
                 WorkflowStepField field = toEntity(fieldDto);
@@ -114,24 +141,62 @@ public class WorkflowMapper {
                 return field;
             }).collect(Collectors.toList()));
         }
-        
+
         return step;
     }
 
+    /**
+     * Couleur de bouton, signalée en 400 explicite plutôt qu'en erreur serveur si le jeton est
+     * inconnu. Partagé par la création — qui passe par ce mapper — et par la modification, qui
+     * fusionne les transitions dans {@code WorkflowService} : une faute de frappe dans l'écran de
+     * configuration doit se lire pareil des deux côtés.
+     */
+    static SeveriteAction severiteValide(String severite) {
+        try {
+            return SeveriteAction.depuis(severite);
+        } catch (IllegalArgumentException e) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    e.getMessage(), org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Fait exigé, ramené à la forme sous laquelle les modules métier le déclarent.
+     *
+     * <p>Un fait saisi avec une casse ou des espaces différents ne serait jamais reconnu : la
+     * transition resterait fermée sans que rien ne le signale, et l'on chercherait la faute du
+     * côté du module qui déclare pourtant bien son fait. La chaîne vide vaut « aucune
+     * condition » — et non « un fait sans nom », qui bloquerait la transition à jamais.</p>
+     */
+    static String normaliserFait(String fait) {
+        if (fait == null || fait.isBlank()) {
+            return null;
+        }
+        return fait.trim().toUpperCase(java.util.Locale.ROOT);
+    }
+
     public WorkflowTransition toEntity(WorkflowTransitionDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         return WorkflowTransition.builder()
                 .id(dto.getId())
                 .label(dto.getLabel())
+                .icon(dto.getIcon())
+                .severity(severiteValide(dto.getSeverity()))
                 .decision(dto.getDecision() != null ? StepDecision.valueOf(dto.getDecision()) : null)
                 .requiredRole(dto.getRequiredRole())
                 .terminal(dto.isTerminal())
+                .conditionRequise(normaliserFait(dto.getConditionRequise()))
+                .conditionLibelle(dto.getConditionLibelle())
                 // Note: toStep mapping needs to be resolved by ID later in the service or by a lookup
                 .build();
     }
 
     public WorkflowStepField toEntity(WorkflowStepFieldDto dto) {
-        if (dto == null) return null;
+        if (dto == null) {
+            return null;
+        }
         return WorkflowStepField.builder()
                 .id(dto.getId())
                 .fieldName(dto.getFieldName())
@@ -139,6 +204,8 @@ public class WorkflowMapper {
                 .type(dto.getType() != null ? FieldType.valueOf(dto.getType()) : null)
                 .isRequired(dto.isRequired())
                 .options(dto.getOptions())
+                .decision(dto.getDecision() != null && !dto.getDecision().isBlank()
+                        ? StepDecision.valueOf(dto.getDecision().toUpperCase()) : null)
                 .build();
     }
 }

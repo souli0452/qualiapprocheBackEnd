@@ -2,7 +2,6 @@ package com.qualiapproche.referentiel.service.impl;
 
 import com.qualiapproche.common.dto.DomaineApplicationDto;
 import com.qualiapproche.common.exception.BusinessException;
-import com.qualiapproche.referentiel.entities.DomaineApplication;
 import com.qualiapproche.referentiel.entities.mappers.DomaineApplicationMapper;
 import com.qualiapproche.referentiel.repository.DomaineApplicationRepository;
 import com.qualiapproche.referentiel.service.DomaineApplicationService;
@@ -53,8 +52,17 @@ public class DomaineApplicationServiceImpl implements DomaineApplicationService 
     }
 
     @Override
-    public Page<DomaineApplicationDto> getAll(Pageable pageable) {
-        return repository.findAll(pageable).map(mapper::toDto);
+    public Page<DomaineApplicationDto> getAll(String recherche, Pageable pageable) {
+        Pageable range = pageable.getSort().isSorted() ? pageable
+                : org.springframework.data.domain.PageRequest.of(
+                        pageable.getPageNumber(), pageable.getPageSize(), ORDRE);
+        if (recherche == null || recherche.isBlank()) {
+            return repository.findAll(range).map(mapper::toDto);
+        }
+        String terme = recherche.trim();
+        return repository
+                .findByLibelleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(terme, terme, range)
+                .map(mapper::toDto);
     }
 
     @Override

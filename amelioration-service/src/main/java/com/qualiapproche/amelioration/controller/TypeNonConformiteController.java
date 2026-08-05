@@ -9,7 +9,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -43,19 +50,19 @@ public class TypeNonConformiteController {
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_TYPE_NON_CONFORMITE)
     public ResponseEntity<TypeNonConformiteDto> update(@RequestBody TypeNonConformiteDto typeNonConformiteDto) {
-        TypeNonConformiteDto TypeNonConformiteDto1 = typeNonConformiteService.update(typeNonConformiteDto);
-        return new ResponseEntity<>(TypeNonConformiteDto1, HttpStatus.OK);
+        TypeNonConformiteDto typeNonConformiteDto1 = typeNonConformiteService.update(typeNonConformiteDto);
+        return new ResponseEntity<>(typeNonConformiteDto1, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_TYPE_NON_CONFORMITE)
     public ResponseEntity<Page<TypeNonConformiteDto>> allTypeNonConformite(@ParameterObject Pageable pageable) {
-        Page<TypeNonConformiteDto> typeNonConformiteDtos  = typeNonConformiteService.getAll(pageable);
+        Page<TypeNonConformiteDto> typeNonConformiteDtos = typeNonConformiteService.getAll(pageable);
         return new ResponseEntity<>(typeNonConformiteDtos, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_TYPE_NON_CONFORMITE_BY_ID)
     public ResponseEntity<TypeNonConformiteDto> getById(@PathVariable UUID id) {
-        TypeNonConformiteDto typeNonConformiteDto  = typeNonConformiteService.getById(id);
+        TypeNonConformiteDto typeNonConformiteDto = typeNonConformiteService.getById(id);
         return new ResponseEntity<>(typeNonConformiteDto, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canDelete(this)")

@@ -10,10 +10,8 @@ import java.util.UUID;
 import com.qualiapproche.common.dto.NcStats;
 import com.qualiapproche.common.dto.NcEvolutionDto;
 import com.qualiapproche.common.dto.NonConformiteDto;
-import com.qualiapproche.common.dto.RejectNonConformiteDto;
 import com.qualiapproche.common.dto.NcCountsDto;
 import com.qualiapproche.common.dto.NcDashboardDto;
-import com.qualiapproche.common.dto.ValidatePlanActionDto;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,12 +19,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
 
-import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.amelioration.service.NonConformiteService;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
@@ -49,7 +54,7 @@ public class NonConformiteController {
 
     /**
      * Endpoint pour créer une non-conformité
-     * 
+     *
      * @param dto Objet contenant les informations de la non-conformité
      * @return NonConformiteDto contenant les informations de la non-conformité
      *         créée
@@ -85,22 +90,23 @@ public class NonConformiteController {
     @GetMapping(GET_ALL_CONFORMITE_IMPUTED)
     public ResponseEntity<Page<NonConformiteDto>> getNonConformiteByUserId(@PathVariable Etat etapeTraitement,
             @PathVariable String userId, @ParameterObject Pageable pageable) throws IOException {
-        return ResponseEntity.ok(nonConformiteService.findImupted(userId, etapeTraitement, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findImupted(userId, etapeTraitement, pageable)));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTORIGIN)
     public ResponseEntity<Page<NonConformiteDto>> getNonConformitesByEtatAndOrigineId(
             @PathVariable Etat etapeTraitement, @PathVariable String structureId, @ParameterObject Pageable pageable) {
-        return ResponseEntity
-                .ok(nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(
+                nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId, pageable)));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTSOUMISSION)
     public ResponseEntity<Page<NonConformiteDto>> getNonConformitesByEtatAndStructureSoumission(
             @PathVariable Etat etapeTraitement, @PathVariable String structureId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId, pageable));
+        return ResponseEntity.ok(
+                avecEtatDuCircuit(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId, pageable)));
     }
 
     /*-----------------------------------------------------------------------/
@@ -132,8 +138,7 @@ public class NonConformiteController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_NON_CONFORMITE)
     public ResponseEntity<Page<NonConformiteDto>> allNonConformites(@ParameterObject Pageable pageable) {
-        Page<NonConformiteDto> nonConformite = nonConformiteService.allNonConformites(pageable);
-        return new ResponseEntity<>(nonConformite, HttpStatus.OK);
+        return new ResponseEntity<>(avecEtatDuCircuit(nonConformiteService.allNonConformites(pageable)), HttpStatus.OK);
     }
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de NonConformités par Etat                /
@@ -142,7 +147,92 @@ public class NonConformiteController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ETAT_BAY_NON_CONFORMITE)
     public Page<NonConformiteDto> getNonConformitesByEtat(@PathVariable Etat etapeTraitement, @ParameterObject Pageable pageable) {
-        return nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement, pageable);
+        return avecEtatDuCircuit(nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement, pageable));
+    }
+
+    /**
+     * Les non-conformités que l'appelant a à traiter — et elles seules.
+     *
+     * <p>Les écrans de traitement affichaient toutes les non-conformités portant un état donné :
+     * un utilisateur voyait les dossiers des autres structures, les ouvrait, et se heurtait au
+     * refus du moteur au moment de décider. C'est le circuit qui désigne les dossiers, puisque
+     * c'est lui qui porte l'habilitation de chaque étape.</p>
+     *
+     * <p>L'état du circuit accompagne chaque ligne : la fiche a besoin des actions ouvertes pour
+     * les afficher, et les demander une par une aurait multiplié les requêtes autant que de
+     * lignes.</p>
+     */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/a-traiter")
+    @Operation(summary = "Non-conformités sur lesquelles l'appelant peut décider")
+    public ResponseEntity<Page<NonConformiteDto>> aTraiter(@ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.aTraiterParLAppelant(pageable)));
+    }
+
+    /**
+     * Taille maximale d'un lot demandé au moteur, alignée sur ce qu'il accepte.
+     *
+     * <p>Au-delà, il refuse la demande entière. Une page plus grande que ce seuil aurait donc perdu
+     * toutes ses actions d'un coup, silencieusement : mieux vaut la découper.</p>
+     */
+    private static final int TAILLE_LOT_ETATS = 200;
+
+    /**
+     * Joint à chaque ligne l'état de son circuit.
+     *
+     * <p>Sans lui, la fiche ouverte depuis une liste n'a pas d'{@code workflowState} et n'affiche
+     * aucune action : elle ne le recevait que du point d'entrée « par identifiant », que les écrans
+     * de traitement n'appellent pas.</p>
+     *
+     * <p>Un appel par lot, et non un par ligne : demander l'état dossier par dossier multipliait
+     * les requêtes autant que de lignes affichées.</p>
+     *
+     * <p>Le moteur indisponible n'empêche pas de consulter la liste : elle s'affiche sans ses
+     * actions, ce qui vaut mieux qu'un écran en échec.</p>
+     */
+    private Page<NonConformiteDto> avecEtatDuCircuit(Page<NonConformiteDto> page) {
+        // Les actions correctives de chaque dossier sont demandées dans le même lot. La fiche est
+        // ouverte depuis la ligne de la liste, sans relecture : sans leur état, ses actions
+        // correctives s'affichaient sans aucune décision offerte, quel que soit le rôle de celui
+        // qui la regardait. Un aller-retour de plus par dossier aurait coûté bien davantage.
+        List<UUID> identifiants = new java.util.ArrayList<>(page.getContent().stream()
+                .map(NonConformiteDto::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList());
+        page.getContent().stream()
+                .map(NonConformiteDto::getPlanActions)
+                .filter(java.util.Objects::nonNull)
+                .flatMap(List::stream)
+                .map(com.qualiapproche.common.dto.PlanActionDto::getId)
+                .filter(java.util.Objects::nonNull)
+                .forEach(identifiants::add);
+
+        if (identifiants.isEmpty()) {
+            return page;
+        }
+
+        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = new java.util.HashMap<>();
+        for (int debut = 0; debut < identifiants.size(); debut += TAILLE_LOT_ETATS) {
+            List<UUID> lot = identifiants.subList(debut, Math.min(debut + TAILLE_LOT_ETATS, identifiants.size()));
+            try {
+                Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> reponse =
+                        workflowClient.getWorkflowStates(lot);
+                if (reponse != null) {
+                    etats.putAll(reponse);
+                }
+            } catch (Exception e) {
+                log.warn("États de circuit indisponibles pour {} non-conformité(s) de cette page : {}",
+                        lot.size(), e.getMessage());
+            }
+        }
+
+        page.getContent().forEach(nc -> {
+            nc.setWorkflowState(etats.get(nc.getId()));
+            if (nc.getPlanActions() != null) {
+                nc.getPlanActions().forEach(plan -> plan.setWorkflowState(etats.get(plan.getId())));
+            }
+        });
+        return page;
     }
 
     /*-----------------------------------------------------------------------/
@@ -153,7 +243,42 @@ public class NonConformiteController {
     public ResponseEntity<NonConformiteDto> getNonConformiteById(@PathVariable UUID id) {
         NonConformiteDto nonConformite = nonConformiteService.getNonConformiteById(id);
         nonConformite.setWorkflowState(etatWorkflow(id));
+        joindreLEtatDesPlans(nonConformite);
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
+    }
+
+    /**
+     * Joint à chaque plan d'action de la fiche l'état de son propre circuit.
+     *
+     * <p>La fiche n'affichait que {@code workflowStatus}, recopié sur le plan au fil des rappels du
+     * moteur : elle disait où le plan était passé, non où il en est. Celui qui doit apprécier
+     * l'efficacité des actions pour clore le dossier a besoin de la seconde information.</p>
+     *
+     * <p>Un seul appel pour toute la fiche, et une indisponibilité du moteur laisse la fiche
+     * lisible — les plans s'affichent alors avec la valeur recopiée.</p>
+     */
+    private void joindreLEtatDesPlans(NonConformiteDto nonConformite) {
+        List<com.qualiapproche.common.dto.PlanActionDto> plans = nonConformite.getPlanActions();
+        if (plans == null || plans.isEmpty()) {
+            return;
+        }
+        List<UUID> identifiants = plans.stream()
+                .map(com.qualiapproche.common.dto.PlanActionDto::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (identifiants.isEmpty()) {
+            return;
+        }
+        try {
+            Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats =
+                    workflowClient.getWorkflowStates(identifiants);
+            if (etats != null) {
+                plans.forEach(plan -> plan.setWorkflowState(etats.get(plan.getId())));
+            }
+        } catch (Exception e) {
+            log.warn("États de circuit indisponibles pour les plans d'action de la non-conformité {} : {}",
+                    nonConformite.getId(), e.getMessage());
+        }
     }
 
     /**
@@ -215,26 +340,26 @@ public class NonConformiteController {
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(path = "/stats/nf-struct/{annee}")
-    public ResponseEntity<Map<String, Long>> StatStruct(@PathVariable int annee) {
+    public ResponseEntity<Map<String, Long>> statStruct(@PathVariable int annee) {
 
         return ResponseEntity.ok(nonConformiteService.getNonConformiteStatsByStructure(annee));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(path = "/stats/nf/{annee}")
-    public ResponseEntity<Map<String, Map<String, Long>>> StatMensuel(@PathVariable int annee) {
+    public ResponseEntity<Map<String, Map<String, Long>>> statMensuel(@PathVariable int annee) {
         return ResponseEntity.ok(nonConformiteService.getStatsParAnnee(annee));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(path = "/stats/nf/status/{annee}")
-    public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> StatMensuelWithStatus(@PathVariable int annee) {
+    public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> statMensuelWithStatus(@PathVariable int annee) {
         return ResponseEntity.ok(nonConformiteService.getStatsDetailleesParAnnee(annee));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(path = "/stats/nf/status/{annee}/service/{id}")
-    public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> StatMensuelWithServiceStatus(
+    public ResponseEntity<Map<String, Map<String, Map<String, Long>>>> statMensuelWithServiceStatus(
             @PathVariable int annee, @PathVariable String id) {
         return ResponseEntity.ok(nonConformiteService.getStatsDetailleesServiceParAnnee(annee, id));
     }
@@ -255,15 +380,9 @@ public class NonConformiteController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("structure/{id}")
     public ResponseEntity<Page<NonConformiteDto>> getAllByStructure(@PathVariable String id, @ParameterObject Pageable pageable) {
-        Page<NonConformiteDto> nonConformiteDtos = nonConformiteService.getNonConformitesByStructure(id, pageable);
+        Page<NonConformiteDto> nonConformiteDtos =
+                avecEtatDuCircuit(nonConformiteService.getNonConformitesByStructure(id, pageable));
         return ResponseEntity.ok(nonConformiteDtos);
-    }
-
-    @PreAuthorize("@perm.canValidate(this)")
-    @PutMapping(path = "validate/plan")
-    public ResponseEntity<ValidatePlanActionDto> validate(@RequestBody ValidatePlanActionDto validatePlanActionDto) {
-        nonConformiteService.validatePlan(validatePlanActionDto);
-        return ResponseEntity.ok().build();
     }
 
     @PreAuthorize("@perm.canRead(this)")
@@ -290,18 +409,19 @@ public class NonConformiteController {
 
     // --- User specific lists ---
 
-    @Operation(summary = "NC créées par l'utilisateur", description = "Récupère toutes les NC actives (Brouillon, Publié, En cours) créées par l'utilisateur")
+    @Operation(summary = "NC créées par l'utilisateur",
+            description = "Récupère toutes les NC actives (Brouillon, Publié, En cours) créées par l'utilisateur")
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/user/{userId}")
     public ResponseEntity<Page<NonConformiteDto>> getNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(nonConformiteService.findByUser(userId, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findByUser(userId, pageable)));
     }
 
     @Operation(summary = "NC imputées à l'utilisateur", description = "Récupère toutes les NC qui ont été assignées à cet utilisateur")
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/user/{userId}/imputed")
     public ResponseEntity<Page<NonConformiteDto>> getImputedNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(nonConformiteService.findImputedByUser(userId, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findImputedByUser(userId, pageable)));
     }
 
     @Operation(summary = "NC archivées par l'utilisateur", description = "Récupère uniquement les NC archivées par cet utilisateur")
@@ -324,14 +444,15 @@ public class NonConformiteController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/structure/{structureId}")
     public ResponseEntity<Page<NonConformiteDto>> getNCByStructure(@PathVariable String structureId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(nonConformiteService.findByStructure(structureId, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findByStructure(structureId, pageable)));
     }
 
-    @Operation(summary = "NC de tous les utilisateurs de la structure", description = "Récupère toutes les NC créées par n'importe quel agent de cette structure")
+    @Operation(summary = "NC de tous les utilisateurs de la structure",
+            description = "Récupère toutes les NC créées par n'importe quel agent de cette structure")
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/structure/{structureId}/all-users")
     public ResponseEntity<Page<NonConformiteDto>> getNCByStructureAllUsers(@PathVariable String structureId, @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(nonConformiteService.findByStructureAllUsers(structureId, pageable));
+        return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findByStructureAllUsers(structureId, pageable)));
     }
 
     // --- Dashboard endpoints ---
@@ -357,7 +478,8 @@ public class NonConformiteController {
         return ResponseEntity.ok(nonConformiteService.getDashboardUser(userId));
     }
 
-    @Operation(summary = "Evolution des non-conformités", description = "Statistiques d'évolution des non-conformités filtrées par année, mois optionnel, et structure optionnelle")
+    @Operation(summary = "Evolution des non-conformités",
+            description = "Statistiques d'évolution des non-conformités filtrées par année, mois optionnel, et structure optionnelle")
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/stats/evolution")
     public ResponseEntity<NcEvolutionDto> getNcEvolution(

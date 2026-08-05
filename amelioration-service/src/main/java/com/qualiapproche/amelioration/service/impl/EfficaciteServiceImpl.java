@@ -3,10 +3,7 @@ package com.qualiapproche.amelioration.service.impl;
 import com.qualiapproche.common.dto.EfficaciteDto;
 import com.qualiapproche.amelioration.entities.Efficacite;
 import com.qualiapproche.amelioration.entities.mappers.EfficaciteMapper;
-import com.qualiapproche.amelioration.entities.mappers.EfficaciteMapper;
 import com.qualiapproche.amelioration.repository.EfficaciteRepository;
-import com.qualiapproche.amelioration.repository.EfficaciteRepository;
-import com.qualiapproche.amelioration.service.EfficaciteService;
 import com.qualiapproche.amelioration.service.EfficaciteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -43,7 +40,7 @@ public class EfficaciteServiceImpl implements EfficaciteService {
 
     @Override
     public List<EfficaciteDto> getAll() {
-        return  efficaciteMapper.toDtos(efficaciteRepository.findAll()) ;
+        return efficaciteMapper.toDtos(efficaciteRepository.findAll());
     }
 
     @Override
@@ -58,7 +55,7 @@ public class EfficaciteServiceImpl implements EfficaciteService {
 
     @Override
     public void delete(UUID id) {
-        Efficacite efficacite=efficaciteRepository.getReferenceById(id);
+        Efficacite efficacite = efficaciteRepository.getReferenceById(id);
         efficaciteRepository.delete(efficacite);
     }
 }

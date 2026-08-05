@@ -31,6 +31,15 @@ public class WorkflowStepDto {
      * à la désérialisation.
      */
     private java.util.UUID stepTemplateId;
+
+    /**
+     * Nom du champ dont la valeur désigne le titulaire du dossier, s'il y en a un.
+     *
+     * <p>Absent du DTO, il était perdu à chaque enregistrement du circuit depuis l'éditeur : une
+     * étape d'imputation cessait de nommer qui que ce soit, et les étapes réservées au titulaire
+     * devenaient indécidables — plus personne ne pouvait faire avancer le dossier.</p>
+     */
+    private String champTitulaire;
     @Builder.Default
     private List<WorkflowTransitionDto> transitions = new ArrayList<>();
     @Builder.Default

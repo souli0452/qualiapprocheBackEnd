@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
                 .stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining(", "));
-        
+
         ApiResponse<Void> response = ApiResponse.error("Erreur de validation: " + errors, HttpStatus.BAD_REQUEST.value());
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
@@ -93,7 +93,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-        ApiResponse<Void> response = ApiResponse.error("Une erreur interne est survenue: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value());
+        ApiResponse<Void> response = ApiResponse.error("Une erreur interne est survenue: " + ex.getMessage(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value());
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
