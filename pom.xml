@@ -16,6 +16,7 @@
 	
 	<modules>
 		<module>common</module>
+		<module>lib-storage</module>
 		<module>referentiel-service</module>
 		<module>user-service</module>
 		<module>amelioration-service</module>
@@ -63,6 +64,21 @@
 		<lombok.mapstruct.binding.version>0.2.0</lombok.mapstruct.binding.version>
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<springdoc.version>2.6.0</springdoc.version>
+
+		<!--
+		  Checkstyle. La version embarquée par défaut dans le plugin (9.3) ne connaît
+		  pas la grammaire Java 21 ; on épingle donc explicitement l'analyseur.
+
+		  maven.multiModuleProjectDirectory désigne la racine du réacteur : c'est ce
+		  qui permet aux modules de retrouver checkstyle.xml, posé à la racine.
+		-->
+		<maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+		<checkstyle.version>10.21.0</checkstyle.version>
+		<checkstyle.config.dir>${maven.multiModuleProjectDirectory}</checkstyle.config.dir>
+		<!-- Passer -Dcheckstyle.skip=true pour un build local pressé, ou             -->
+		<!-- -Dcheckstyle.failOnViolation=false pour lister les violations sans bloquer -->
+		<checkstyle.skip>false</checkstyle.skip>
+		<checkstyle.failOnViolation>true</checkstyle.failOnViolation>
 	</properties>
 
 	<dependencies>
@@ -180,9 +196,53 @@
 						</compilerArgs>
 					</configuration>
 				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-checkstyle-plugin</artifactId>
+					<version>${maven-checkstyle-plugin.version}</version>
+					<dependencies>
+						<dependency>
+							<groupId>com.puppycrawl.tools</groupId>
+							<artifactId>checkstyle</artifactId>
+							<version>${checkstyle.version}</version>
+						</dependency>
+					</dependencies>
+					<configuration>
+						<configLocation>${checkstyle.config.dir}/checkstyle.xml</configLocation>
+						<suppressionsLocation>${checkstyle.config.dir}/checkstyle-suppressions.xml</suppressionsLocation>
+						<!-- N'analyse que le code de production : ni les tests, ni les ressources. -->
+						<sourceDirectories>
+							<sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
+						</sourceDirectories>
+						<includeTestSourceDirectory>false</includeTestSourceDirectory>
+						<includeResources>false</includeResources>
+						<includeTestResources>false</includeTestResources>
+						<consoleOutput>true</consoleOutput>
+						<violationSeverity>error</violationSeverity>
+						<failOnViolation>${checkstyle.failOnViolation}</failOnViolation>
+						<!--
+						  failsOnError court-circuiterait violationSeverity : le build
+						  échoue déjà via failOnViolation, au seuil choisi.
+						-->
+						<failsOnError>false</failsOnError>
+					</configuration>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>checkstyle-validation</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

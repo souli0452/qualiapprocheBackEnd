@@ -91,8 +91,10 @@ class WorkflowControllerAutorisationTest {
                 WorkflowRepository pWorkflows, WorkflowValidationInstanceRepository pInstances,
                 WorkflowStepFieldRepository pStepFields, WorkflowFieldValueRepository pFieldValues,
                 WorkflowTransitionRepository pTransitions, WorkflowStepRepository pSteps) {
+            // Pas de proxy ici : ce contexte de test ne monte pas la gestion transactionnelle.
+            // Voir WorkflowService#self().
             return new WorkflowService(pMoteur, pHistory, pPublisher, pWorkflows, pInstances,
-                    pStepFields, pFieldValues, pTransitions, pSteps);
+                    pStepFields, pFieldValues, pTransitions, pSteps, null);
         }
 
         @Bean
@@ -226,7 +228,7 @@ class WorkflowControllerAutorisationTest {
         assertNonBloqueParLaSecurite(() -> controller.getAllWorkflows());
         assertNonBloqueParLaSecurite(() -> controller.getWorkflowState(UUID.randomUUID()));
         assertNonBloqueParLaSecurite(() -> controller.getLastValidationInstance(UUID.randomUUID()));
-        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId));
+        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId, null));
         assertNonBloqueParLaSecurite(() -> controller.validateStep(UUID.randomUUID(), null, null));
         assertNonBloqueParLaSecurite(() -> controller.rejectStep(UUID.randomUUID(), null, null));
     }

@@ -5,7 +5,6 @@ import com.qualiapproche.common.dto.auth.KcRoleDto;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.entities.mappers.KcRoleMapper;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
-import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RoleScopeResource;
@@ -13,9 +12,7 @@ import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
@@ -86,11 +83,11 @@ public class KcRoleService {
         List<String> existingRoleNames = existingRoles.stream()
                 .map(RoleRepresentation::getName)
                 .collect(Collectors.toList());
-        
+
         List<RoleRepresentation> rolesToRemove = existingRoles.stream()
                 .filter(role -> !newRoleNames.contains(role.getName()))
                 .collect(Collectors.toList());
-        
+
         RolesResource rolesResource = getRolesResource();
         List<RoleRepresentation> rolesToAdd = newRoleNames.stream()
                 .filter(roleName -> !existingRoleNames.contains(roleName))
@@ -103,7 +100,7 @@ public class KcRoleService {
                 })
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
-        
+
         if (!rolesToRemove.isEmpty()) {
             roleScopeResource.remove(rolesToRemove);
         }
@@ -120,7 +117,7 @@ public class KcRoleService {
                 .collect(Collectors.toList());
     }
 
-    private RolesResource getRolesResource(){
+    private RolesResource getRolesResource() {
         return keycloak.realm(realm).roles();
     }
 

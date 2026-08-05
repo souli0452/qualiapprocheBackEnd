@@ -27,26 +27,36 @@ public class PlanActionSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (numeroOdre != null && !numeroOdre.isBlank())
+            if (numeroOdre != null && !numeroOdre.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("numeroOdre")), "%" + numeroOdre.toLowerCase() + "%"));
-            if (responsableEmail != null && !responsableEmail.isBlank())
+            }
+            if (responsableEmail != null && !responsableEmail.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("responsableEmail")), "%" + responsableEmail.toLowerCase() + "%"));
-            if (responsableNomComplet != null && !responsableNomComplet.isBlank())
+            }
+            if (responsableNomComplet != null && !responsableNomComplet.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("responsableNomComplet")), "%" + responsableNomComplet.toLowerCase() + "%"));
-            if (numeroNc != null && !numeroNc.isBlank())
+            }
+            if (numeroNc != null && !numeroNc.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("numeroNc")), "%" + numeroNc.toLowerCase() + "%"));
-            if (status != null)
+            }
+            if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
-            if (nonConformeId != null)
+            }
+            if (nonConformeId != null) {
                 predicates.add(cb.equal(root.get("nonConformeId"), nonConformeId));
-            if (dateEcheanceFrom != null)
+            }
+            if (dateEcheanceFrom != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("dateEcheance"), dateEcheanceFrom));
-            if (dateEcheanceTo != null)
+            }
+            if (dateEcheanceTo != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("dateEcheance"), dateEcheanceTo));
-            if (dateTraitementFrom != null)
+            }
+            if (dateTraitementFrom != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("dateTraitement"), dateTraitementFrom));
-            if (dateTraitementTo != null)
+            }
+            if (dateTraitementTo != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("dateTraitement"), dateTraitementTo));
+            }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };

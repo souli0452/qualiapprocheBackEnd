@@ -12,7 +12,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,8 +24,8 @@ public class TypeProcessusServiceImpl implements TypeProcessusService {
 
     @Override
     public TypeProcessusDto create(TypeProcessusDto typeProcessusDto) {
-        TypeProcessus TypeProcessus = typeProcessusMapper.toEntity(typeProcessusDto);
-        return typeProcessusMapper.toDto(typeProcessusRepository.save(TypeProcessus));
+        TypeProcessus typeProcessus = typeProcessusMapper.toEntity(typeProcessusDto);
+        return typeProcessusMapper.toDto(typeProcessusRepository.save(typeProcessus));
     }
 
     @Override

@@ -11,7 +11,12 @@ public interface PrioriteDocumentService {
     PrioriteDocumentDto create(PrioriteDocumentDto dto);
     PrioriteDocumentDto update(PrioriteDocumentDto dto);
     PrioriteDocumentDto getById(UUID id);
-    Page<PrioriteDocumentDto> getAll(Pageable pageable);
+    /**
+     * Page du référentiel, restreinte au terme cherché s'il y en a un.
+     *
+     * @param recherche terme libre, facultatif ; vide, la page porte tout le référentiel
+     */
+    Page<PrioriteDocumentDto> getAll(String recherche, Pageable pageable);
     List<PrioriteDocumentDto> getAll();
     void delete(UUID id);
 }

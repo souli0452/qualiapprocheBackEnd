@@ -2,7 +2,6 @@ package com.qualiapproche.referentiel.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.qualiapproche.common.enumeration.ModuleAbonnement;
 import com.qualiapproche.common.enumeration.TypeStructure;
 import com.qualiapproche.common.dto.auth.KcUserDto;
 import com.qualiapproche.referentiel.client.UserClient;
@@ -14,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,7 +61,7 @@ public class TenantProvisioningService implements CommandLineRunner {
             log.info("Direction {} already exists, updating license if necessary.", libelleLong);
             Structure existingDirection = structureRepository.findByLibelleLong(libelleLong).get();
             updateLicenseForExistingDirection(existingDirection, node);
-            
+
             // Tenter de provisionner l'admin même si la direction existe
             JsonNode adminNode = node.get("superAdmin");
             if (adminNode != null) {

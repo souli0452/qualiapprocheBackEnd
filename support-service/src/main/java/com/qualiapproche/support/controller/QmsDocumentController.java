@@ -21,7 +21,16 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -29,7 +38,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_URL;
 
@@ -59,13 +67,20 @@ public class QmsDocumentController {
      * inaccessible ne rendrait aucun document, et sa seule présence dans le filtre trahirait un
      * classement qui ne le regarde pas. La restriction elle-même reste appliquée côté recherche —
      * cet écran ne fait que ne pas proposer l'inutile.</p>
+     *
+     * <p>Retour explicite en {@code ApiResponse}, comme les autres listes de référentiel :
+     * {@code GlobalResponseHandler} pagine d'office toute réponse de type {@code List}. Le
+     * sélecteur recevait alors un objet de pagination là où il attend un tableau — et se serait
+     * de toute façon arrêté aux dix premiers niveaux.</p>
      */
     @GetMapping("/filtres/niveaux-confidentialite")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<List<com.qualiapproche.common.dto.NiveauConfidentialiteDto>> niveauxFiltrables() {
+    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<
+            List<com.qualiapproche.common.dto.NiveauConfidentialiteDto>>> niveauxFiltrables() {
         var profil = profilUtilisateurService.profilCourant();
-        return ResponseEntity.ok(niveauxConfidentialiteService.visiblesPour(
-                profil.roles(), documentService.voitToutesLesStructures(profil)));
+        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(
+                niveauxConfidentialiteService.visiblesPour(
+                        profil.roles(), profil.estAdministrateur())));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -104,7 +119,28 @@ public class QmsDocumentController {
                 prioriteId, prioriteLibelle, niveauConfidentialiteId, niveauConfidentialiteLibelle,
                 domaineId, workflowId
         );
-        return ResponseEntity.ok(documentMapper.toDto(doc));
+        DocumentQmsDto dto = documentMapper.toDto(doc);
+        dto.setAvertissementConfidentialite(documentService.dernierAvertissementDeClassement());
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Change le niveau de confidentialité d'un document déposé.
+     *
+     * <p>Un classement se révise : le circuit évolue, un rôle disparaît, un document est classé
+     * par erreur. Sans ce point d'entrée, seule une intervention en base y remédiait.</p>
+     *
+     * <p>Le corps de la réponse porte l'avertissement lorsque le nouveau niveau n'admet aucun
+     * des rôles décidant des étapes du circuit — le classement est appliqué malgré tout.</p>
+     */
+    @PutMapping("/{id}/niveau-confidentialite")
+    @PreAuthorize("@perm.canUpdate(this)")
+    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<String>> reclasser(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "niveauConfidentialiteId", required = false) String niveauId,
+            @RequestParam(value = "niveauConfidentialiteLibelle", required = false) String niveauLibelle) {
+        String avertissement = documentService.reclasser(id, niveauId, niveauLibelle);
+        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(avertissement));
     }
 
     @PostMapping("/{id}/workflow")
@@ -154,7 +190,7 @@ public class QmsDocumentController {
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<byte[]> exportSecuredPdf(@PathVariable("id") UUID id) throws IOException {
         QmsDocumentService.ExportedDocument exported = documentService.securedExportPdf(id);
-        
+
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exported.getFilename() + "\"")
                 .contentType(MediaType.parseMediaType(exported.getContentType()))
@@ -177,9 +213,19 @@ public class QmsDocumentController {
         return ResponseEntity.ok(documentService.getAuditLogs(id));
     }
 
+    /**
+     * Recherche paginée, rendue en {@code Page} explicite.
+     *
+     * <p>Elle rendait la liste entière : {@code GlobalResponseHandler} la découpait alors en
+     * mémoire, à dix éléments faute de consigne, et le tableau n'en recevait jamais davantage.
+     * La découpe se fait désormais en base, et le total renvoyé est celui du fonds visible —
+     * c'est lui qui permet au tableau de dimensionner sa pagination.</p>
+     */
     @GetMapping("/search")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<List<DocumentQmsDto>> searchDocuments(
+    public ResponseEntity<org.springframework.data.domain.Page<DocumentQmsDto>> searchDocuments(
+            @org.springdoc.core.annotations.ParameterObject
+            org.springframework.data.domain.Pageable pageable,
             @RequestParam(value = "query",               required = false) String query,
             @RequestParam(value = "documentType",        required = false) String documentType,
             @RequestParam(value = "serviceId",           required = false) String serviceId,
@@ -205,7 +251,8 @@ public class QmsDocumentController {
             @RequestParam(value = "dateVigueurTo",       required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateVigueurTo,
             @RequestParam(value = "dateRevisionFrom",    required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRevisionFrom,
             @RequestParam(value = "dateRevisionTo",      required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRevisionTo,
-            @RequestParam(value = "datePublicationFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate datePublicationFrom,
+            @RequestParam(value = "datePublicationFrom",
+                    required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate datePublicationFrom,
             @RequestParam(value = "datePublicationTo",   required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate datePublicationTo,
             @RequestParam(value = "createdAtFrom",       required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdAtFrom,
             @RequestParam(value = "createdAtTo",         required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdAtTo,
@@ -246,11 +293,8 @@ public class QmsDocumentController {
                 .sortDirection(sortDirection)
                 .build();
 
-        List<DocumentQms> docs = documentService.searchDocuments(criteria);
-        List<DocumentQmsDto> dtos = docs.stream()
-                .map(this::versDtoSitue)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
+        return ResponseEntity.ok(documentService.searchDocuments(criteria, pageable)
+                .map(this::versDtoSitue));
     }
 
     /**
@@ -275,19 +319,6 @@ public class QmsDocumentController {
     }
 
     /**
-     * Statistique générique : regroupe et compte les documents visibles par l'utilisateur
-     * connecté (tous les documents si administrateur/manager) selon la dimension demandée.
-     * Ajouter une nouvelle statistique ne nécessite qu'une nouvelle constante dans
-     * {@link DocumentStatDimension}, ni contrôleur ni service à modifier.
-     *
-     * Dimensions disponibles : DOCUMENT_TYPE, STATUT, DOMAINE, SERVICE, STATUT_LEGAL,
-     * REDACTEUR, ORGANISME_EMETTEUR, WORKFLOW_STATUS, ANNEE_CREATION, MOIS_CREATION,
-     * CONFIDENTIALITE, DOCUMENT_EXTERNE.
-     */
-    @Operation(summary = "Statistique générique par dimension",
-            description = "Regroupe et compte les documents visibles par l'utilisateur connecté " +
-                    "(tous si administrateur/manager) selon la dimension demandée.")
-    /**
      * Dépôts par mois, pour la courbe de la vue d'ensemble. Mois vides compris, à zéro.
      */
     @GetMapping("/stats/mensuel")
@@ -298,6 +329,19 @@ public class QmsDocumentController {
                 documentService.getDocumentsParMois(mois)));
     }
 
+    /**
+     * Statistique générique : regroupe et compte les documents visibles par l'utilisateur
+     * connecté (tous les documents si administrateur/manager) selon la dimension demandée.
+     * Ajouter une nouvelle statistique ne nécessite qu'une nouvelle constante dans
+     * {@link DocumentStatDimension}, ni contrôleur ni service à modifier.
+     *
+     * <p>Dimensions disponibles : DOCUMENT_TYPE, STATUT, DOMAINE, SERVICE, STATUT_LEGAL,
+     * REDACTEUR, ORGANISME_EMETTEUR, WORKFLOW_STATUS, ANNEE_CREATION, MOIS_CREATION,
+     * CONFIDENTIALITE, DOCUMENT_EXTERNE.</p>
+     */
+    @Operation(summary = "Statistique générique par dimension",
+            description = "Regroupe et compte les documents visibles par l'utilisateur connecté " +
+                    "(tous si administrateur/manager) selon la dimension demandée.")
     @GetMapping("/stats/by/{dimension}")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<Map<String, Long>> getStatsByDimension(
@@ -356,7 +400,7 @@ public class QmsDocumentController {
         try {
             com.qualiapproche.common.dto.WorkflowStateDto state = workflowClient.getWorkflowState(id);
             dto.setWorkflowState(state);
-        } catch(Exception e) {
+        } catch (Exception e) {
             log.warn("Could not fetch workflow state for document {}: {}", id, e.getMessage());
         }
         return ResponseEntity.ok(dto);

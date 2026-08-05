@@ -16,20 +16,31 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * Service abstrait fournissant le socle de base pour la gestion des workflows.
- * 
+ *
  * <p>Ce service implémente les opérations fondamentales du cycle de vie d'une donnée
- * soumise à un workflow (initialisation, calcul des transitions possibles, exécution d'une transition, 
- * vérification des habilitations et historisation). Les services métiers spécifiques doivent 
- * hériter de cette classe et implémenter les méthodes abstraites pour lier le moteur 
+ * soumise à un workflow (initialisation, calcul des transitions possibles, exécution d'une transition,
+ * vérification des habilitations et historisation). Les services métiers spécifiques doivent
+ * hériter de cette classe et implémenter les méthodes abstraites pour lier le moteur
  * à leurs propres dépôts de données.</p>
  *
  * @param <D> Le type de l'entité gérée, devant implémenter {@link IWorkflowData}
  */
 public abstract class AbstractWorkflowService<D extends IWorkflowData> {
+
+    /**
+     * Clé du paramètre de contexte portant l'identifiant d'une action groupée.
+     *
+     * <p>Le contexte d'exécution est le point d'extension prévu pour ce qui appartient à
+     * l'application hôte : y loger cet identifiant évite de l'ajouter en paramètre à toute la
+     * chaîne du moteur, qui n'a pas à connaître la notion.</p>
+     */
+    protected static final String CLE_LOT = "lotId";
 
     protected final IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> moteur;
     protected final ValidationHistoryRepository historyRepository;
@@ -103,15 +114,38 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
 
     @Transactional
     public D executerTransition(UUID pId, String pCodeTransition, String comments) {
+        return this.executerTransition(pId, pCodeTransition, comments, null);
+    }
+
+    /**
+     * Franchit une transition en rattachant le franchissement à une action groupée.
+     *
+     * @param lotId identifiant de l'action groupée, {@code null} pour un franchissement unitaire.
+     *              Il accompagne l'événement publié : l'historique dit alors qu'une décision a été
+     *              prise dans le cadre d'un traitement en masse, ce qui n'est pas indifférent à qui
+     *              relit le dossier ou l'audite.
+     */
+    @Transactional
+    public D executerTransition(UUID pId, String pCodeTransition, String comments, String lotId) {
         D pData = this.fromDatabase(pId);
         pData.setObservation(comments);
-        return this.transitionDossier(pData, pCodeTransition);
+        return this.transitionDossier(pData, pCodeTransition, lotId);
     }
 
     protected D transitionDossier(D pData, String pCodeTransition) {
+        return this.transitionDossier(pData, pCodeTransition, null);
+    }
+
+    protected D transitionDossier(D pData, String pCodeTransition, String lotId) {
         ExecutionContext<IWorkflowData> aContexte = this.construireContexte(pData);
+        // Le contexte est le point d'extension prévu pour ce qui appartient à l'application hôte :
+        // le porter là évite d'ajouter un paramètre à toute la chaîne du moteur.
+        if (lotId != null) {
+            aContexte.putParametre(CLE_LOT, lotId);
+        }
         TransitionPersistante aTransition = this.resoudreTransition(pData, pCodeTransition);
         this.verifierEtatOrigine(pData, aTransition);
+        this.verifierConditionMetier(pData, aTransition);
         this.verifierHabilitation(aContexte, aTransition);
         return this.updateHistorique(pData, aTransition, aContexte);
     }
@@ -178,7 +212,7 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
             pData.appliquerEtat(null);
             return;
         }
-        
+
         // We set the state and code back to the entity.
         pData.appliquerEtat(aEtat);
     }
@@ -235,6 +269,28 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         }
     }
 
+    /**
+     * Refuse le franchissement tant que le dossier ne remplit pas la condition exigée.
+     *
+     * <p>Vérifiée <b>avant</b> l'habilitation, et non après : les deux refus passent par le même
+     * filtre côté moteur, et l'utilisateur se serait vu répondre qu'il n'a pas les droits alors que
+     * c'est le dossier qui n'est pas prêt. Deux causes distinctes méritent deux messages.</p>
+     */
+    protected void verifierConditionMetier(D pData, TransitionPersistante pTransition) {
+        String exigee = pTransition.getConditionRequise();
+        if (exigee == null || exigee.isBlank()) {
+            return;
+        }
+        String faits = pData instanceof com.qualiapproche.workflow.model.WorkflowValidationInstance instance
+                ? instance.getFaits() : null;
+        if (!com.qualiapproche.workflow.model.FaitsDuDossier.contient(faits, exigee)) {
+            throw new BusinessException(
+                    "Cette action n'est pas encore possible sur ce dossier : la condition « "
+                            + exigee + " » n'est pas remplie.",
+                    HttpStatus.CONFLICT);
+        }
+    }
+
     protected void verifierEtatOrigine(D pData, TransitionPersistante pTransition) {
         if (!pTransition.getEtatOrigine().equals(pData.getEtat())) {
             throw new BusinessException(
@@ -253,7 +309,7 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
                     "Cette action n'a pas pu être menée à son terme : " + e.getMessage(),
                     HttpStatus.CONFLICT);
         }
-        
+
         this.synchroniserEtat(pData);
         String aEtatApres = pData.getEtatCode();
         String aEtatApresLibelle = pData.getEtat() != null ? pData.getEtat().getLibelle() : aEtatApres;
@@ -272,7 +328,7 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
                 .validatorFullName(this.getCurrentUserFullName())
                 .decisionDate(LocalDateTime.now())
                 .build();
-                
+
         // For Quali SIRA, ValidationHistory has a ManyToOne to WorkflowValidationInstance.
         // We will inject the instance if it's indeed D.
         if (aSauvegardee instanceof com.qualiapproche.workflow.model.WorkflowValidationInstance) {
@@ -291,7 +347,8 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
                 aEtatAvant,
                 aEtatApres,
                 this.getCurrentUserId(),
-                pData.getObservation()
+                pData.getObservation(),
+                pContexte.getParametre(CLE_LOT, String.class).orElse(null)
         ));
 
         return aSauvegardee;

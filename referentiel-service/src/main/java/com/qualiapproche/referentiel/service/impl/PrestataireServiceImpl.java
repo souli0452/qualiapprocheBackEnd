@@ -36,7 +36,7 @@ public class PrestataireServiceImpl implements PrestataireService {
 
     @Override
     public List<PrestataireDto> allPrestataires() {
-        return  prestataireMapper.toDtos(prestataireRepository.findAll()) ;
+        return prestataireMapper.toDtos(prestataireRepository.findAll());
     }
 
     @Override

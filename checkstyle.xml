@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Configuration Checkstyle de quali-sira.
+
+  Elle dérive des Sun Code Conventions livrées avec Checkstyle, dont on a retiré
+  les règles qui entrent en conflit avec la façon dont Spring Boot, Lombok et
+  MapStruct structurent le code :
+
+    - FinalParameters, DesignForExtension : les beans Spring (@Service,
+      @RestController, @Configuration) sont proxyfiés par CGLIB, donc ni la
+      classe ni ses méthodes ne peuvent être finales.
+    - MissingJavadocMethod, JavadocMethod, JavadocVariable, JavadocType,
+      JavadocPackage : la Javadoc obligatoire sur chaque membre n'apporte rien
+      sur des DTO Lombok et des contrôleurs déjà décrits par OpenAPI. Seules
+      restent les règles qui vérifient la Javadoc *existante*.
+    - MagicNumber, HideUtilityClassConstructor, FileLength : trop bruyantes sur
+      des services applicatifs.
+
+  Ce qui reste vise les défauts réels : imports morts, imports étoilés, blocs
+  vides, comparaisons cassées, mise en forme.
+
+  Documentation : https://checkstyle.org
+-->
+
+<module name="Checker">
+
+    <property name="severity" value="error"/>
+
+    <property name="fileExtensions" value="java"/>
+
+    <!-- Exclut les fichiers 'module-info.java'                -->
+    <!-- Voir https://checkstyle.org/config_filefilters.html   -->
+    <module name="BeforeExecutionExclusionFileFilter">
+        <property name="fileNamePattern" value="module\-info\.java$"/>
+    </module>
+
+    <!-- Exclut les sources générées (MapStruct, annotation processors) -->
+    <module name="BeforeExecutionExclusionFileFilter">
+        <property name="fileNamePattern" value="[\\/](target|generated-sources)[\\/]"/>
+    </module>
+
+    <!-- https://checkstyle.org/config_filters.html#SuppressionFilter -->
+    <module name="SuppressionFilter">
+        <property name="file" value="${checkstyle.suppressions.file}"
+                  default="checkstyle-suppressions.xml"/>
+        <property name="optional" value="true"/>
+    </module>
+
+    <!-- Permet de neutraliser une règle ponctuellement via     -->
+    <!-- @SuppressWarnings("checkstyle:NomDeLaRegle")           -->
+    <module name="SuppressWarningsFilter"/>
+
+    <!-- Vérifie que les fichiers se terminent par une nouvelle ligne.     -->
+    <!-- Voir https://checkstyle.org/config_misc.html#NewlineAtEndOfFile   -->
+    <module name="NewlineAtEndOfFile"/>
+
+    <!-- Vérifie que les fichiers de propriétés contiennent les mêmes clés. -->
+    <!-- Voir https://checkstyle.org/config_misc.html#Translation           -->
+    <module name="Translation"/>
+
+    <!-- Violations de taille                          -->
+    <!-- Voir https://checkstyle.org/config_sizes.html -->
+    <module name="LineLength">
+        <property name="fileExtensions" value="java"/>
+        <property name="max" value="150"/>
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
+    </module>
+
+    <!-- Espacement                                         -->
+    <!-- Voir https://checkstyle.org/config_whitespace.html -->
+    <module name="FileTabCharacter"/>
+
+    <!-- Divers                                       -->
+    <!-- Voir https://checkstyle.org/config_misc.html -->
+    <module name="RegexpSingleline">
+        <property name="format" value="\s+$"/>
+        <property name="minimum" value="0"/>
+        <property name="maximum" value="0"/>
+        <property name="message" value="La ligne comporte des espaces en fin de ligne."/>
+    </module>
+
+    <module name="TreeWalker">
+
+        <!-- Nécessaire au SuppressWarningsFilter déclaré plus haut -->
+        <module name="SuppressWarningsHolder"/>
+
+        <!-- Javadoc : on ne l'impose pas, on vérifie celle qui existe. -->
+        <!-- Voir https://checkstyle.org/config_javadoc.html            -->
+        <module name="InvalidJavadocPosition"/>
+
+        <!-- Conventions de nommage                         -->
+        <!-- Voir https://checkstyle.org/config_naming.html -->
+        <module name="ConstantName"/>
+        <module name="LocalFinalVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="MethodName">
+            <!--
+              Spring Data dérive ses requêtes du nom de la méthode et se sert du '_'
+              pour désigner une propriété imbriquée (findByRole_Id). Le nom reste
+              camelCase, le souligné n'introduisant qu'un segment de traversée.
+            -->
+            <property name="format" value="^[a-z][a-zA-Z0-9]*(_[A-Z][a-zA-Z0-9]*)*$"/>
+        </module>
+        <module name="PackageName"/>
+        <module name="ParameterName"/>
+        <module name="StaticVariableName"/>
+        <module name="TypeName"/>
+
+        <!-- Imports                                        -->
+        <!-- Voir https://checkstyle.org/config_import.html -->
+        <module name="AvoidStarImport">
+            <!--
+              Les imports statiques groupés restent tolérés : les constantes de
+              routes (ApiUrls) sont importées en bloc dans les contrôleurs.
+            -->
+            <property name="allowStaticMemberImports" value="true"/>
+        </module>
+        <module name="IllegalImport"/> <!-- paquets sun.* par défaut -->
+        <module name="RedundantImport"/>
+        <module name="UnusedImports">
+            <property name="processJavadoc" value="true"/>
+        </module>
+
+        <!-- Violations de taille                          -->
+        <!-- Voir https://checkstyle.org/config_sizes.html -->
+        <module name="MethodLength">
+            <!--
+              Seuil relevé à 250 : la construction du prédicat de recherche documentaire
+              (QmsDocumentService#searchDocuments) enchaîne les critères sur 208 lignes.
+              À baisser une fois cette méthode découpée.
+            -->
+            <property name="max" value="250"/>
+        </module>
+
+        <!-- Espacement                                         -->
+        <!-- Voir https://checkstyle.org/config_whitespace.html -->
+        <module name="EmptyForIteratorPad"/>
+        <module name="GenericWhitespace"/>
+        <module name="MethodParamPad"/>
+        <module name="NoWhitespaceAfter"/>
+        <module name="NoWhitespaceBefore"/>
+        <module name="ParenPad"/>
+        <module name="TypecastParenPad"/>
+        <module name="WhitespaceAfter"/>
+        <module name="WhitespaceAround"/>
+
+        <!-- Modificateurs                                     -->
+        <!-- Voir https://checkstyle.org/config_modifiers.html -->
+        <module name="ModifierOrder"/>
+        <module name="RedundantModifier"/>
+
+        <!-- Blocs                                          -->
+        <!-- Voir https://checkstyle.org/config_blocks.html -->
+        <module name="AvoidNestedBlocks"/>
+        <module name="EmptyBlock"/>
+        <module name="LeftCurly"/>
+        <module name="NeedBraces"/>
+        <module name="RightCurly"/>
+
+        <!-- Erreurs de codage courantes                    -->
+        <!-- Voir https://checkstyle.org/config_coding.html -->
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
+        <module name="IllegalInstantiation"/>
+        <module name="InnerAssignment"/>
+        <module name="MissingSwitchDefault"/>
+        <module name="MultipleVariableDeclarations"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+
+        <!-- Conception des classes                         -->
+        <!-- Voir https://checkstyle.org/config_design.html -->
+        <module name="FinalClass"/>
+        <module name="InterfaceIsType"/>
+        <module name="VisibilityModifier">
+            <!-- Les entités JPA et les classes de test exposent des champs protected -->
+            <property name="protectedAllowed" value="true"/>
+        </module>
+
+        <!-- Divers                                       -->
+        <!-- Voir https://checkstyle.org/config_misc.html -->
+        <module name="ArrayTypeStyle"/>
+        <module name="UpperEll"/>
+
+        <!-- https://checkstyle.org/config_filters.html#SuppressionXpathFilter -->
+        <module name="SuppressionXpathFilter">
+            <property name="file" value="${checkstyle.suppressions.xpath.file}"
+                      default="checkstyle-xpath-suppressions.xml"/>
+            <property name="optional" value="true"/>
+        </module>
+
+    </module>
+
+</module>

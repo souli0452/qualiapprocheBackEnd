@@ -10,7 +10,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.qualiapproche.common.dto.FormationDto;
 import com.qualiapproche.common.dto.RisqueDto;
 import com.qualiapproche.amelioration.entities.Risque;
 
@@ -44,7 +43,7 @@ public class RisqueServiceImpl implements RisqueService {
 
     @Override
     public List<RisqueDto> allRisques() {
-        return  risqueMapper.toDtos(risqueRepository.findAll()) ;
+        return risqueMapper.toDtos(risqueRepository.findAll());
     }
 
     @Override

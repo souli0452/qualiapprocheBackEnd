@@ -1,8 +1,11 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.core.port.output.ITransitionCondition;
+import com.qualiapproche.workflow.model.FaitsDuDossier;
+import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.service.RolesUtilisateurService;
@@ -29,27 +32,111 @@ import java.util.Set;
 @Slf4j
 public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowData, TransitionPersistante> {
 
-    /** Rôle d'administration autorisé à débloquer un dossier quelle que soit l'étape. */
-    private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
-
     private final RolesUtilisateurService rolesUtilisateurService;
+
+    /**
+     * Habilitation qui ne désigne pas un rôle mais la personne à qui le dossier est confié.
+     *
+     * <p>Écrite dans la colonne d'habilitation de la transition, elle s'y distingue d'un nom de
+     * rôle par son préfixe : aucun rôle ne peut porter ce nom.</p>
+     */
+    private static final String HABILITATION_TITULAIRE = RolesPlateforme.HABILITATION_TITULAIRE;
 
     @Override
     public boolean estAutorise(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
+        // La condition métier avant l'habilitation : une action que le dossier n'admet pas encore
+        // ne doit être proposée à personne, fût-il habilité.
+        if (!conditionRemplie(pContexte, pTransition)) {
+            return false;
+        }
+
         String requiredRole = pTransition.getPermission();
         if (requiredRole == null || requiredRole.trim().isEmpty()) {
             // Transition non restreinte : ouverte à tout utilisateur authentifié.
             return true;
         }
 
+        if (HABILITATION_TITULAIRE.equalsIgnoreCase(requiredRole.trim())) {
+            return estLeTitulaire(pContexte);
+        }
+
         Set<String> rolesUtilisateur = rolesUtilisateurService.rolesDeLUtilisateurCourant();
         String attendu = requiredRole.trim().toUpperCase();
 
-        if (rolesUtilisateur.contains(attendu) || rolesUtilisateur.contains(ROLE_SUPER_ADMIN)) {
+        if (rolesUtilisateur.contains(attendu) || peutDeciderPartout(rolesUtilisateur)) {
             return true;
         }
 
         // Repli sur le jeton : couvre les circuits dont l'habilitation désigne un rôle du realm.
-        return SecurityUtils.hasRole(requiredRole) || SecurityUtils.hasRole(ROLE_SUPER_ADMIN);
+        return SecurityUtils.hasRole(requiredRole)
+                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole);
+    }
+
+    /**
+     * L'appelant est-il la personne à qui ce dossier a été confié ?
+     *
+     * <p>L'agent à qui une non-conformité est imputée traite <b>la sienne</b>. Un rôle ne sait pas
+     * exprimer cela : il aurait ouvert l'étape à tous ceux qui peuvent être imputés, sur tous les
+     * dossiers. La comparaison porte donc sur le titulaire inscrit à l'imputation.</p>
+     *
+     * <p>L'administration et la responsabilité qualité passent outre : c'est ce qui permet de
+     * débloquer un dossier dont le titulaire est absent, parti, ou n'existe plus.</p>
+     */
+    private boolean estLeTitulaire(ExecutionContext<IWorkflowData> pContexte) {
+        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
+                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+            return true;
+        }
+
+        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
+            return false;
+        }
+
+        String titulaire = instance.getTitulaireId();
+        if (titulaire == null || titulaire.isBlank()) {
+            // Étape réservée au titulaire sur un dossier qui n'en a pas : personne ne peut décider,
+            // et c'est préférable à l'ouvrir à tous. Le blocage se lève par l'administration.
+            log.warn("Le dossier {} atteint une étape réservée à son titulaire sans qu'aucun ne soit désigné.",
+                    instance.getResourceId());
+            return false;
+        }
+
+        return titulaire.equals(SecurityUtils.getCurrentUserId());
+    }
+
+    /**
+     * Le dossier remplit-il la condition que cette transition exige ?
+     *
+     * <p>Le moteur ne connaît pas les plans d'action, ni l'efficacité, ni rien de ce que les
+     * modules suivent : il compare le fait exigé par la transition à ceux que le module a inscrits
+     * sur le dossier. La règle métier reste chez qui la détient, et le circuit peut l'exiger sans
+     * la connaître.</p>
+     *
+     * <p>L'administration ne passe pas outre : une condition métier n'est pas une habilitation.
+     * Clore une non-conformité dont les plans d'action ne sont pas soldés reste faux, quel que soit
+     * celui qui le demande — c'est le dossier qui n'est pas prêt, pas l'utilisateur qui manque de
+     * droits.</p>
+     */
+    private boolean conditionRemplie(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
+        String exigee = pTransition.getConditionRequise();
+        if (exigee == null || exigee.isBlank()) {
+            return true;
+        }
+        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
+            return false;
+        }
+        return FaitsDuDossier.contient(instance.getFaits(), exigee);
+    }
+
+    /**
+     * L'appelant peut-il décider à n'importe quelle étape ?
+     *
+     * <p>L'administration seule, pour débloquer un dossier que son étape courante n'attribue à
+     * personne de disponible. Le responsable qualité en a été retiré : il voit tous les dossiers,
+     * mais n'agit qu'aux étapes qui lui sont confiées — sans quoi l'habilitation portée par les
+     * étapes n'aurait plus de sens à son égard.</p>
+     */
+    private boolean peutDeciderPartout(Set<String> rolesUtilisateur) {
+        return rolesUtilisateur.stream().anyMatch(RolesPlateforme.DECIDE_PARTOUT::contains);
     }
 }

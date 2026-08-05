@@ -54,7 +54,7 @@ public final class CatalogueEtapesStandard {
      */
     public static List<EtapeStandard> charger() {
         try (InputStream flux = new ClassPathResource(RESSOURCE).getInputStream()) {
-            return new ObjectMapper().readValue(flux, new TypeReference<List<EtapeStandard>>() {});
+            return new ObjectMapper().readValue(flux, new TypeReference<List<EtapeStandard>>() { });
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Catalogue des étapes standard (" + RESSOURCE + ") illisible.", e);

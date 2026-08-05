@@ -1,15 +1,11 @@
 package com.qualiapproche.common.dto;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
 
- 
+
 
 
 
@@ -25,13 +21,13 @@ import java.util.List;
 
 
 @SuperBuilder
-public class ReglementationDto extends AuditEntityDto{
+public class ReglementationDto extends AuditEntityDto {
 
     private String nomReglementation;
     private String descriptionReglementation;
     private String organismeReglementation;
-    
+
     private List<ExigenceDto> exigences;
-    
+
     private List<SuiviAuditInspectionDto> suiviAuditInspections;
 }

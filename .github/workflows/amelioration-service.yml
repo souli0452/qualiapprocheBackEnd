@@ -7,6 +7,9 @@ on:
 
     paths:
       - 'amelioration-service/**'
+      # Le dépôt de fichiers vient de lib-storage : une correction de la librairie doit
+      # redéployer le service, faute de quoi il continue de tourner sur l'ancienne version.
+      - 'lib-storage/**'
 
 jobs:
   deploy:
@@ -23,8 +26,11 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Vérifier le style de code (Checkstyle)
+        run: mvn -B checkstyle:check
+
       - name: Build amelioration-service
-        run: mvn clean install -pl amelioration-service -am -DskipTests
+        run: mvn clean install -pl amelioration-service -am -DskipTests -Dcheckstyle.skip=true
 
       - name: Trigger Coolify Deployment
         run: |

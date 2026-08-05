@@ -1,7 +1,6 @@
 package com.qualiapproche.referentiel.service;
 
 import com.qualiapproche.common.dto.TypeProcessusDto;
-import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;

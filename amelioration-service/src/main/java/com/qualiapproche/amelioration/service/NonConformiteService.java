@@ -6,14 +6,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
-import com.qualiapproche.common.dto.*;
+import com.qualiapproche.common.dto.NcCountsDto;
+import com.qualiapproche.common.dto.NcDashboardDto;
+import com.qualiapproche.common.dto.NcEvolutionDto;
+import com.qualiapproche.common.dto.NcStats;
+import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
 import com.qualiapproche.common.enumeration.Circuit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.transaction.annotation.Transactional;
 
 public interface NonConformiteService {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
@@ -62,7 +65,6 @@ public interface NonConformiteService {
 
     Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId);
 
-    ValidatePlanActionDto validatePlan(ValidatePlanActionDto validatePlanActionDto);
 
     Map<String, Map<String, Map<String, Long>>> getStatsNiveauParAnnee(int annee, String origineServiceId);
 
@@ -93,5 +95,28 @@ public interface NonConformiteService {
             LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
             Pageable pageable);
 
-    void updateWorkflowState(UUID nonConformiteId, String newStateName, String newEtatTraitement);
+    /**
+     * Non-conformités sur lesquelles l'appelant a une décision à prendre.
+     *
+     * <p>La liste de traitement se composait de toutes les non-conformités portant un état donné :
+     * chacun voyait celles des autres structures et ouvrait des dossiers sur lesquels le moteur
+     * refusait ensuite toute action. Ce sont désormais les circuits qui désignent les dossiers, et
+     * eux seuls — l'habilitation d'étape est une propriété du circuit, pas de l'état du dossier.</p>
+     */
+    Page<NonConformiteDto> aTraiterParLAppelant(Pageable pageable);
+
+    /**
+     * Reporte sur la non-conformité l'issue d'une transition franchie.
+     *
+     * @param issue       ce que le moteur a établi : {@code EN_COURS}, {@code APPROVED} ou
+     *                    {@code REJECTED}. C'est lui qui fait foi.
+     * @param nomEtape    libellé de l'étape atteinte, conservé pour l'affichage seulement
+     * @param etatCode    état de traitement métier porté par l'étape ({@code VALIDATION_RS},
+     *                    {@code CLOTURE}…), nul sur une fin de circuit
+     * @param champs      valeurs saisies lors de la décision, indexées par nom de champ. Le moteur
+     *                    ne transporte que des chaînes : un champ de type fichier y porte la
+     *                    référence de l'objet déposé, pas son contenu.
+     */
+    void updateWorkflowState(UUID nonConformiteId, String issue, String nomEtape, String etatCode,
+                             java.util.Map<String, String> champs);
 }

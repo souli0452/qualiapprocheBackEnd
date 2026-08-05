@@ -113,8 +113,8 @@ public class SendMailServiceImpl implements SendMailService {
 
         EmailMessage emailMessage = EmailMessage.builder()
                 .subject(subject)
-                .to_address(currentUserEmail)
-                .cc_address(emailRq)
+                .toAddress(currentUserEmail)
+                .ccAddress(emailRq)
                 .build();
 
         try {

@@ -1,11 +1,11 @@
 package com.qualiapproche.workflow.event;
 
 import com.qualiapproche.common.dto.DestinataireDto;
+import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
-import com.qualiapproche.workflow.service.SmtpEmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -32,6 +32,8 @@ public class NotificateurEtapeParEmail {
     private final EmailTemplateRepository emailTemplateRepository;
     private final com.qualiapproche.workflow.service.WorkflowNotificationService notificationService;
     private final DestinatairesEtapeService destinatairesEtapeService;
+    private final com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository
+            validationInstanceRepository;
 
     /**
      * Motif du lien inséré dans les courriels, avec {@code {resourceType}} et {@code {resourceId}}.
@@ -66,8 +68,7 @@ public class NotificateurEtapeParEmail {
             return;
         }
 
-        List<DestinataireDto> destinataires =
-                destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole());
+        List<DestinataireDto> destinataires = destinatairesDe(step, event);
         if (destinataires.isEmpty()) {
             log.warn("Étape « {} » atteinte : aucun utilisateur joignable ne porte le rôle {}. "
                             + "Personne n'est prévenu.",
@@ -93,6 +94,32 @@ public class NotificateurEtapeParEmail {
                 log.error("Notification par e-mail '{}' non enregistrée pour {} à l'étape '{}' : {}",
                         templateCode, destinataire.getEmail(), step.getNomEtape(), e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Qui prévenir : les porteurs du rôle de l'étape, ou la seule personne à qui le dossier a été
+     * confié.
+     *
+     * <p>Une étape réservée au titulaire ne porte pas de rôle — la chercher par rôle ne renverrait
+     * jamais personne, et l'agent qui vient de recevoir une imputation n'apprendrait par aucun
+     * courriel qu'il a un dossier à traiter.</p>
+     */
+    private List<DestinataireDto> destinatairesDe(WorkflowStep step, TransitionFranchieEvent event) {
+        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(
+                step.getResponsableRole() == null ? "" : step.getResponsableRole().trim())) {
+            return destinatairesEtapeService.destinataire(titulaireDe(event));
+        }
+        return destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole());
+    }
+
+    private String titulaireDe(TransitionFranchieEvent event) {
+        try {
+            return validationInstanceRepository.findById(java.util.UUID.fromString(event.getEntityId()))
+                    .map(com.qualiapproche.workflow.model.WorkflowValidationInstance::getTitulaireId)
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

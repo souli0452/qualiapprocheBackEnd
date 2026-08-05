@@ -38,7 +38,7 @@ public class ProduitServiceImpl implements ProduitService {
 
     @Override
     public List<ProduitDto> allProduits() {
-        return  produitMapper.toDtos(produitRepository.findAll()) ;
+        return produitMapper.toDtos(produitRepository.findAll());
     }
 
     @Override

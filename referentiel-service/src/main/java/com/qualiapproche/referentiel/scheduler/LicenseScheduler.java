@@ -29,13 +29,13 @@ public class LicenseScheduler {
         for (AbonnementDirection abo : abonnements) {
             if (abo.getDateFin() != null) {
                 long daysRemaining = ChronoUnit.DAYS.between(now, abo.getDateFin());
-                
+
                 if (daysRemaining == 30 || daysRemaining == 15 || daysRemaining == 7 || daysRemaining == 3 || daysRemaining == 1) {
                     sendExpirationAlert(abo, daysRemaining);
                 } else if (daysRemaining == 0) {
                     sendExpirationAlert(abo, 0);
                 } else if (daysRemaining < 0 && daysRemaining >= -7) {
-                    log.warn("License for direction {} is in grace period ({} days remaining)", 
+                    log.warn("License for direction {} is in grace period ({} days remaining)",
                         abo.getDirection().getLibelleLong(), 7 + daysRemaining);
                 }
             }
@@ -45,14 +45,14 @@ public class LicenseScheduler {
     private void sendExpirationAlert(AbonnementDirection abo, long days) {
         String directionName = abo.getDirection().getLibelleLong();
         String recipientEmail = abo.getDirection().getEmail(); // On envoie à l'email de la direction (Super Admin)
-        
+
         String subject = "Alerte : Expiration de votre licence QualiSira";
-        String message = days == 0 
+        String message = days == 0
             ? "Votre licence expire aujourd'hui. Une période de grâce de 7 jours est activée."
             : "Votre licence expire dans " + days + " jours. Pensez à la renouveler.";
 
         log.info("Sending expiration alert for {}: {} days remaining", directionName, days);
-        
+
         try {
             // Utilisation d'un template générique si disponible, sinon mail simple
             sendMailService.sendMail(recipientEmail, subject, message, false);

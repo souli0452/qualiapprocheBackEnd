@@ -11,7 +11,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class PermissionChecker {
 
@@ -47,6 +46,33 @@ public class PermissionChecker {
 
     public boolean canResetPassword(final Object controller) {
         return check(controller, RequirePermissions::resetPassword);
+    }
+
+    /**
+     * L'appelant détient-il l'un de ces rôles ou permissions ?
+     *
+     * <p>Contrairement aux {@code canXxx}, ne consulte pas l'annotation du contrôleur : sert à
+     * décider d'une <b>portée</b> — voir les dossiers de toutes les structures plutôt que de la
+     * sienne — et non d'un droit d'accès au point d'entrée, lequel reste porté par
+     * {@link RequirePermissions}.</p>
+     *
+     * <p>Même source et mêmes équivalences que le reste : rôles du jeton et permissions
+     * applicatives, avec ou sans préfixe {@code ROLE_}.</p>
+     */
+    public boolean detient(final String... rolesOuPermissions) {
+        if (rolesOuPermissions == null || rolesOuPermissions.length == 0) {
+            return false;
+        }
+        Set<String> userPerms = resolveUserPermissions();
+        if (userPerms.isEmpty()) {
+            return false;
+        }
+        return Arrays.stream(rolesOuPermissions)
+                .filter(java.util.Objects::nonNull)
+                .map(String::toUpperCase)
+                .anyMatch(req -> userPerms.contains(req)
+                        || userPerms.contains("ROLE_" + req)
+                        || (req.startsWith("ROLE_") && userPerms.contains(req.substring(5))));
     }
 
     private boolean check(final Object controller, final Function<RequirePermissions, String[]> extractor) {

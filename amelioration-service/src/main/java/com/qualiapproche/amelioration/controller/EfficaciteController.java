@@ -7,7 +7,14 @@ import com.qualiapproche.amelioration.service.EfficaciteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -36,20 +43,21 @@ public class EfficaciteController {
 
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_EFFICACITE)
-    public ResponseEntity<EfficaciteDto> update(@RequestBody EfficaciteDto EfficaciteDto) {
-        EfficaciteDto EfficaciteDto1 = efficaciteService.update(EfficaciteDto);
-        return new ResponseEntity<>(EfficaciteDto1, HttpStatus.OK);
+    public ResponseEntity<EfficaciteDto> update(@RequestBody EfficaciteDto efficaciteDto) {
+        EfficaciteDto efficaciteDto1 = efficaciteService.update(efficaciteDto);
+        return new ResponseEntity<>(efficaciteDto1, HttpStatus.OK);
     }
+
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_EFFICACITE)
     public ResponseEntity<List<EfficaciteDto>> allEfficacites() {
-        List<EfficaciteDto> efficaciteDtos  = efficaciteService.getAll();
+        List<EfficaciteDto> efficaciteDtos = efficaciteService.getAll();
         return new ResponseEntity<>(efficaciteDtos, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_EFFICACITE_BY_ID)
     public ResponseEntity<EfficaciteDto> getEfficaciteById(@PathVariable UUID id) {
-        EfficaciteDto efficaciteDto  = efficaciteService.getById(id);
+        EfficaciteDto efficaciteDto = efficaciteService.getById(id);
         return new ResponseEntity<>(efficaciteDto, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canDelete(this)")

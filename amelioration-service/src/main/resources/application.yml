@@ -50,9 +50,13 @@ eureka:
   instance:
     prefer-ip-address: true
 
-docs:
-  pj:
-    directory: ${DOCS_PJ_DIRECTORY:${user.home}/PIECES_JOINTES}
+# Serveur d'objets commun à la plateforme : mêmes coordonnées que support-service, le bucket
+# est partagé et les modules s'y distinguent par le préfixe de dossier.
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:qualisira_admin_minio}
+  secret-key: ${MINIO_SECRET_KEY:qualisira_admin_password}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}
 
 frontend:
   url: ${FRONTEND_URL:http://localhost:4200}

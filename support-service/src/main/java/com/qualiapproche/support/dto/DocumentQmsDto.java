@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
-import java.util.Map;
 import com.qualiapproche.common.dto.WorkflowStateDto;
 
 @Data
@@ -27,8 +26,8 @@ public class DocumentQmsDto {
     private boolean esTraiter;
     private boolean enRetardRevision;
     private boolean obsolete;
-    private int versionMajeure;
-    private int versionMineure;
+    /** Rang de révision, à partir de zéro : v0 au dépôt, v1 après la première révision acceptée. */
+    private int numeroVersion;
     private LocalDateTime dateVigueur;
     private LocalDateTime dateProchRevision;
     private Integer periodiciteMois;
@@ -68,4 +67,15 @@ public class DocumentQmsDto {
      * refuserait — un bouton qui mène à un refus est pire que pas de bouton.</p>
      */
     private boolean suiviInterneAutorise;
+
+    /**
+     * Avertissement sur le classement, adressé à qui vient de déposer ou de reclasser.
+     *
+     * <p>Renseigné lorsque le niveau retenu n'admet aucun des rôles qui décident des étapes du
+     * circuit : le document est alors enregistré, mais aucun de ses décideurs ne le verra. Le
+     * dépôt n'est pas refusé pour autant — le circuit peut être remanié, ou le niveau changé —
+     * mais le silence, ici, se paierait d'un document immobile que personne ne saurait
+     * expliquer.</p>
+     */
+    private String avertissementConfidentialite;
 }

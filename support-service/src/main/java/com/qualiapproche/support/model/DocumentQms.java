@@ -3,8 +3,17 @@ package com.qualiapproche.support.model;
 import com.qualiapproche.common.base.AuditEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
@@ -55,11 +64,20 @@ public class DocumentQms extends AuditEntity {
     private boolean obsolete;
 
 
+    /**
+     * Rang de révision du document, à partir de zéro.
+     *
+     * <p>Un document déposé est en v0. Chaque modification aboutie d'une demande le fait passer
+     * au rang suivant : v1, v2, et ainsi de suite. Rien d'autre ne le change — ni le dépôt d'un
+     * fichier corrigé pendant le circuit initial, ni une reprise après rejet : tant que la
+     * révision n'a pas été demandée, instruite et acceptée, le document reste à son rang.</p>
+     *
+     * <p>Remplace le couple majeure/mineure, qui distinguait une retouche d'une révision alors
+     * que seule la seconde existe dans le circuit documentaire.</p>
+     */
     @Builder.Default
-    private int versionMajeure = 1;
-
-    @Builder.Default
-    private int versionMineure = 0;
+    @Column(name = "numero_version", nullable = false)
+    private int numeroVersion = 0;
 
     private LocalDateTime dateVigueur;
     private LocalDateTime dateProchRevision;
@@ -73,14 +91,13 @@ public class DocumentQms extends AuditEntity {
     private String domaine;
     private String statutLegal;
 
-    /**
-     * Code du document saisi par son auteur, distinct du numéro attribué par le système.
-     *
-     * <p>Le champ {@code reference} existait déjà en base mais n'était offert par aucun écran : les
-     * organisations qui numérotent leurs documents selon leur propre convention n'avaient nulle
-     * part où l'inscrire.</p>
+    /*
+     * Code du document saisi par son auteur, distinct du numéro attribué par le système :
+     * le champ `reference` déclaré plus haut tient ce rôle, aucune colonne nouvelle n'est
+     * nécessaire. Il existait déjà en base mais n'était offert par aucun écran — les
+     * organisations qui numérotent leurs documents selon leur propre convention n'avaient
+     * nulle part où l'inscrire.
      */
-    // (le champ `reference` ci-dessus tient ce rôle ; aucune colonne nouvelle n'est nécessaire)
 
     /** Priorité, choisie dans le référentiel paramétrable servi par referentiel-service. */
     private String prioriteId;

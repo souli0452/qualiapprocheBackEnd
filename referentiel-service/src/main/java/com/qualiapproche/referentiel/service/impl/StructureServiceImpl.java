@@ -15,11 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
@@ -96,16 +95,32 @@ public class StructureServiceImpl implements StructureService {
     }
 
     @Override
-    public Page<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId, Pageable pageable) {
-        if (isNull(typeStructure) && isNull(directionId)) {
-            return structureRepository.findAll(pageable).map(mapper::toDto);
-        } else if (isNull(typeStructure)) {
-            return structureRepository.findAllByDirectionId(directionId, pageable).map(mapper::toDto);
-        } else if (isNull(directionId)) {
-            return structureRepository.findAllByTypeStructure(typeStructure, pageable).map(mapper::toDto);
-        } else {
-            return structureRepository.findAllByDirectionIdAndTypeStructure(directionId, typeStructure, pageable).map(mapper::toDto);
+    public Page<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId,
+                                               String recherche, Pageable pageable) {
+        // Une spécification composée plutôt qu'un arbre de si : chaque critère facultatif
+        // doublait le nombre de branches, et la recherche libre l'aurait encore doublé.
+        org.springframework.data.jpa.domain.Specification<Structure> criteres =
+                (racine, requete, cb) -> cb.conjunction();
+
+        if (!isNull(typeStructure)) {
+            criteres = criteres.and((racine, requete, cb) ->
+                    cb.equal(racine.get("typeStructure"), typeStructure));
         }
+        if (!isNull(directionId)) {
+            criteres = criteres.and((racine, requete, cb) ->
+                    cb.equal(racine.get("direction").get("id"), directionId));
+        }
+        if (recherche != null && !recherche.isBlank()) {
+            String motif = "%" + recherche.trim().toLowerCase() + "%";
+            criteres = criteres.and((racine, requete, cb) -> cb.or(
+                    cb.like(cb.lower(racine.get("libelleLong")), motif),
+                    cb.like(cb.lower(racine.get("libelleCourt")), motif)));
+        }
+
+        Pageable range = pageable.getSort().isSorted() ? pageable
+                : org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(),
+                        pageable.getPageSize(), Sort.by("libelleLong"));
+        return structureRepository.findAll(criteres, range).map(mapper::toDto);
     }
 
     @Override

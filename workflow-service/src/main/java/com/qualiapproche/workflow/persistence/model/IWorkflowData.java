@@ -45,7 +45,7 @@ public interface IWorkflowData extends IData {
 
     /**
      * Applique l'état du moteur à l'entité JPA.
-     * Cette méthode doit synchroniser la représentation moteur (objet Etat) 
+     * Cette méthode doit synchroniser la représentation moteur (objet Etat)
      * avec la représentation JPA (ex: string etatCode).
      *
      * @param etat l'état à appliquer

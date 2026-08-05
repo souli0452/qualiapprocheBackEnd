@@ -52,6 +52,24 @@ public class SecurityUtils {
         return null;
     }
 
+    /**
+     * Structure de rattachement de l'appelant, telle que le jeton la déclare.
+     *
+     * <p>Sert à borner ce qu'un utilisateur voit : sans elle, les listes générales rendaient les
+     * dossiers de toutes les structures à quiconque savait les demander — la restriction n'existait
+     * que dans le choix des écrans, pas dans le service.</p>
+     *
+     * @return l'identifiant de structure, ou {@code null} si le jeton ne le porte pas
+     */
+    public static String getCurrentUserStructureId() {
+        Jwt jwt = getJwt();
+        if (jwt == null) {
+            return null;
+        }
+        String structureId = jwt.getClaimAsString("structure_id");
+        return structureId == null || structureId.isBlank() ? null : structureId;
+    }
+
     public static boolean hasRole(String role) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) {

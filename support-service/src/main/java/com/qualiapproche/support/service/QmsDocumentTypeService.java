@@ -2,7 +2,6 @@ package com.qualiapproche.support.service;
 
 import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.repository.QmsDocumentTypeRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -39,6 +38,25 @@ public class QmsDocumentTypeService {
 
     public List<QmsDocumentType> getAllTypes() {
         return typeRepository.findAll();
+    }
+
+    /**
+     * Page des types documentaires, restreinte au terme cherché s'il y en a un.
+     *
+     * <p>Rangée par libellé à défaut de tri demandé : sans ordre stable, deux pages
+     * successives peuvent ramener la même entrée et en taire une autre.</p>
+     */
+    public org.springframework.data.domain.Page<QmsDocumentType> getTypes(
+            String recherche, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Pageable range = pageable.getSort().isSorted() ? pageable
+                : org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(),
+                        pageable.getPageSize(), org.springframework.data.domain.Sort.by("libelle"));
+        if (recherche == null || recherche.isBlank()) {
+            return typeRepository.findAll(range);
+        }
+        String terme = recherche.trim();
+        return typeRepository.findByCodeContainingIgnoreCaseOrLibelleContainingIgnoreCase(
+                terme, terme, range);
     }
 
     public QmsDocumentType getTypeById(UUID id) {

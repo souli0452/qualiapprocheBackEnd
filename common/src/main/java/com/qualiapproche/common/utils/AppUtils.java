@@ -1,5 +1,4 @@
 package com.qualiapproche.common.utils;
-import org.apache.commons.lang3.StringUtils;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
@@ -14,7 +13,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * @author : <a href="siguizana08@gmail.com">BRAHIMA TRAORE </a>.
@@ -25,7 +26,7 @@ import java.util.*;
 public final class AppUtils {
     public static final String DATE_FORMAT = "dd/MM/yyyy";
     public static final String DATE_FORMAT_HOUR = "dd/MM/yyyy HH:mm:ss";
-    private static final String key = "o9szYIOq1rRMiouNhNvaq96lqUvCekxR";
+    private static final String ENCRYPTION_KEY = "o9szYIOq1rRMiouNhNvaq96lqUvCekxR";
 
     public static LocalDate formateStringToLocalDate(final String date) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d/MM/yyyy");
@@ -182,7 +183,7 @@ public final class AppUtils {
 
     public static String encrypt(String value) {
         try {
-            Key clef = new SecretKeySpec(key.getBytes("UTF-8"), "Blowfish");
+            Key clef = new SecretKeySpec(ENCRYPTION_KEY.getBytes("UTF-8"), "Blowfish");
             Cipher cipher = Cipher.getInstance("Blowfish");
             cipher.init(Cipher.ENCRYPT_MODE, clef);
             return new String(cipher.doFinal(value.getBytes()));
@@ -193,7 +194,7 @@ public final class AppUtils {
 
     public String decrypt(String value) {
         try {
-            Key clef = new SecretKeySpec(key.getBytes("UTF-8"), "Blowfish");
+            Key clef = new SecretKeySpec(ENCRYPTION_KEY.getBytes("UTF-8"), "Blowfish");
             Cipher cipher = Cipher.getInstance("Blowfish");
             cipher.init(Cipher.DECRYPT_MODE, clef);
             return new String(cipher.doFinal(value.getBytes()));

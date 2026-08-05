@@ -116,13 +116,21 @@ class NiveauxConfidentialiteServiceTest {
     }
 
     @Test
-    @DisplayName("Qui échappe à la restriction se voit proposer le référentiel entier")
-    void niveauxFiltrables_pourQuiVoitTout() {
+    @DisplayName("Voir toutes les structures ne dispense pas du classement")
+    void niveauxFiltrables_aucuneDispense() {
         when(client.niveauxConfidentialite()).thenReturn(List.of(
                 niveau(NIVEAU_RESTREINT, "Confidentiel", List.of("DIRECTION")),
                 niveau(NIVEAU_OUVERT, "Public", List.of())));
 
-        assertThat(service.visiblesPour(Set.of("AGENT"), true)).hasSize(2);
+        // Le responsable qualité s'affranchit de la barrière de structure, non du classement :
+        // un niveau dont il n'a pas le rôle ne lui rendrait rien, autant ne pas le lui proposer.
+        assertThat(service.visiblesPour(Set.of("RESPONSABLE_QUALITE"), false))
+                .extracting(NiveauConfidentialiteDto::getLibelle)
+                .containsExactly("Public");
+
+        // L'administration générale, elle, reste dispensée : c'est par elle qu'un document
+        // classé à tort se répare.
+        assertThat(service.visiblesPour(Set.of("SUPER_ADMIN"), true)).hasSize(2);
     }
 
     @Test

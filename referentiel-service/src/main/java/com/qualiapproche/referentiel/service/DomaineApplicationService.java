@@ -11,7 +11,12 @@ public interface DomaineApplicationService {
     DomaineApplicationDto create(DomaineApplicationDto dto);
     DomaineApplicationDto update(DomaineApplicationDto dto);
     DomaineApplicationDto getById(UUID id);
-    Page<DomaineApplicationDto> getAll(Pageable pageable);
+    /**
+     * Page du référentiel, restreinte au terme cherché s'il y en a un.
+     *
+     * @param recherche terme libre, facultatif ; vide, la page porte tout le référentiel
+     */
+    Page<DomaineApplicationDto> getAll(String recherche, Pageable pageable);
     List<DomaineApplicationDto> getAll();
     void delete(UUID id);
 }

@@ -1,6 +1,7 @@
 package com.qualiapproche.workflow.service;
 
 import com.qualiapproche.common.dto.DestinataireDto;
+import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.workflow.client.UserRoleClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,12 @@ public class DestinatairesEtapeService {
         if (role == null || role.isBlank()) {
             return List.of();
         }
+        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(role.trim())) {
+            // Ce n'est pas un rôle : personne ne le porte, et l'interroger comme tel ne
+            // renverrait jamais personne. Le destinataire est le titulaire du dossier, que seul
+            // l'appelant connaît — voir destinataire(String utilisateurId).
+            return List.of();
+        }
         String aCle = role.trim().toUpperCase();
 
         Entree aEntree = cache.get(aCle);
@@ -74,6 +81,44 @@ public class DestinatairesEtapeService {
             return aEntree.destinataires();
         }
         return List.of();
+    }
+
+    /**
+     * Destinataire unique, désigné nommément.
+     *
+     * <p>Une étape réservée au titulaire du dossier ne porte pas de rôle : il n'y a personne à
+     * chercher par rôle, et seul l'appelant sait de qui il s'agit. Sans cette lecture, l'agent à
+     * qui une non-conformité vient d'être imputée n'était prévenu par rien.</p>
+     *
+     * @return une liste d'au plus un destinataire, jamais {@code null}
+     */
+    public List<DestinataireDto> destinataire(String utilisateurId) {
+        if (utilisateurId == null || utilisateurId.isBlank()) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> reponse = userRoleClient.getUserById(utilisateurId.trim());
+            Object donnees = reponse != null ? reponse.getOrDefault("data", reponse) : null;
+            if (!(donnees instanceof Map<?, ?> utilisateur)) {
+                log.warn("Réponse inattendue de user-service pour l'utilisateur {}.", utilisateurId);
+                return List.of();
+            }
+            String email = texte(utilisateur.get("email"));
+            if (email == null) {
+                log.warn("L'utilisateur {} n'a pas d'adresse : il ne peut pas être prévenu.", utilisateurId);
+                return List.of();
+            }
+            String nom = texte(utilisateur.get("nomComplet"));
+            return List.of(DestinataireDto.builder()
+                    .userId(utilisateurId.trim())
+                    .email(email)
+                    .nomComplet(nom != null ? nom : email)
+                    .build());
+        } catch (Exception e) {
+            log.error("Impossible de récupérer l'utilisateur {} auprès de user-service : {}",
+                    utilisateurId, e.getMessage());
+            return List.of();
+        }
     }
 
     /** @return les destinataires, ou {@code null} si l'interrogation a échoué. */

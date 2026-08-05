@@ -83,10 +83,6 @@ public class WorkflowNotificationService {
     private WorkflowNotificationService self;
 
     /**
-     * Enregistre la notification à remettre. Appelé avant le commit de la transition pour que les
-     * deux soient atomiques.
-     */
-    /**
      * Enregistre un courriel à remettre, avec les mêmes garanties que les appels métier.
      *
      * <p>Contrairement à ceux-ci, il n'est pas écrit dans la transaction de la transition : les
@@ -108,6 +104,10 @@ public class WorkflowNotificationService {
                 WorkflowNotification.CanalRemise.EMAIL);
     }
 
+    /**
+     * Enregistre la notification à remettre. Appelé avant le commit de la transition pour que les
+     * deux soient atomiques.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public WorkflowNotification enregistrer(String resourceId, String resourceType, Map<String, Object> payload) {
         return enregistrerAvecCanal(resourceId, resourceType, payload,
@@ -226,7 +226,7 @@ public class WorkflowNotificationService {
     }
 
     private void appelerServiceMetier(WorkflowNotification notification) throws Exception {
-        Map<String, Object> payload = objectMapper.readValue(notification.getPayload(), new TypeReference<>() {});
+        Map<String, Object> payload = objectMapper.readValue(notification.getPayload(), new TypeReference<>() { });
 
         if (notification.getCanal() == WorkflowNotification.CanalRemise.EMAIL) {
             remettreCourriel(payload);

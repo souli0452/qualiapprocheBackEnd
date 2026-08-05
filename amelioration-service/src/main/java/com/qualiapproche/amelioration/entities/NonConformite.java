@@ -7,8 +7,20 @@ import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
 import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.common.base.Participants;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -63,10 +75,10 @@ public class NonConformite extends AuditEntity {
   private UUID typeNonConformiteId;
   private UUID typeProcessusId;
   private String delaisMiseOeuvre;
-  
+
   @Column(name = "workflow_status")
   private String workflowStatus;
-  
+
   @Column(name = "workflow_id")
   private UUID workflowId;
 

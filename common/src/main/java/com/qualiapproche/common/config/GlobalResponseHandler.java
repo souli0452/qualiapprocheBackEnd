@@ -24,10 +24,10 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
         if (className.contains("springdoc") || className.contains("swagger")) {
             return false;
         }
-        
+
         Class<?> paramType = returnType.getParameterType();
-        if (paramType.equals(ApiResponse.class) || 
-            paramType.equals(byte[].class) || 
+        if (paramType.equals(ApiResponse.class) ||
+            paramType.equals(byte[].class) ||
             org.springframework.core.io.Resource.class.isAssignableFrom(paramType)) {
             return false;
         }
@@ -45,7 +45,7 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
     public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
                                   Class<? extends HttpMessageConverter<?>> selectedConverterType,
                                   ServerHttpRequest request, ServerHttpResponse response) {
-        
+
         // If the body is already an ApiResponse, return it as is.
         if (body instanceof ApiResponse) {
             return body;
@@ -56,40 +56,40 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
             PaginatedResponse<?> paginatedResponse = new PaginatedResponse<>((Page<?>) body);
             return ApiResponse.success(paginatedResponse);
         }
-        
+
         // Automatic in-memory pagination for Lists
         if (body instanceof List) {
             List<?> list = (List<?>) body;
-            
+
             int page = 0;
             int size = 10; // default size
-            
+
             try {
-                String pageParam = request.getURI().getQuery() != null ? 
+                String pageParam = request.getURI().getQuery() != null ?
                     java.util.Arrays.stream(request.getURI().getQuery().split("&"))
                         .filter(s -> s.startsWith("page="))
                         .map(s -> s.substring(5))
                         .findFirst().orElse("0") : "0";
-                        
-                String sizeParam = request.getURI().getQuery() != null ? 
+
+                String sizeParam = request.getURI().getQuery() != null ?
                     java.util.Arrays.stream(request.getURI().getQuery().split("&"))
                         .filter(s -> s.startsWith("size="))
                         .map(s -> s.substring(5))
                         .findFirst().orElse("10") : "10";
-                        
+
                 page = Integer.parseInt(pageParam);
                 size = Integer.parseInt(sizeParam);
             } catch (Exception e) {
                 // Ignore parse errors, use defaults
             }
-            
+
             int totalElements = list.size();
             int totalPages = (int) Math.ceil((double) totalElements / size);
             int start = Math.min(page * size, totalElements);
             int end = Math.min((page + 1) * size, totalElements);
-            
+
             List<?> pagedList = list.subList(start, end);
-            
+
             PaginatedResponse<Object> paginatedResponse = PaginatedResponse.builder()
                     .content((List<Object>) pagedList)
                     .pageNumber(page)
@@ -98,7 +98,7 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
                     .totalPages(totalPages)
                     .isLast(page >= totalPages - 1)
                     .build();
-                    
+
             return ApiResponse.success(paginatedResponse);
         }
 
@@ -108,7 +108,7 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
             // It's tricky to wrap Strings directly without custom configuration or Jackson mapping.
             // For simplicity, we can let Strings pass through, or serialize it manually.
             // Returning the string directly to avoid ClassCastException in StringHttpMessageConverter
-            return body; 
+            return body;
         }
 
         return ApiResponse.success(body);

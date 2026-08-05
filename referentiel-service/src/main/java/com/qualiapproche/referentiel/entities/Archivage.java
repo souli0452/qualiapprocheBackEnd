@@ -3,8 +3,10 @@ import com.qualiapproche.common.base.AuditEntity;
 
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.OneToOne;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 

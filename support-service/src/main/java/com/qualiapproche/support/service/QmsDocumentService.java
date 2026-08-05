@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.support.dto.DocumentSearchCriteria;
 import com.qualiapproche.support.dto.DocumentUpdateDto;
@@ -45,7 +46,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -67,7 +67,7 @@ public class QmsDocumentService {
     private final ProfilUtilisateurService profilUtilisateurService;
     private final NiveauxConfidentialiteService niveauxConfidentialiteService;
     private final QmsAuditLogService auditLogService;
-    private final MinioService minioService;
+    private final StorageService storageService;
     private final QmsDocumentTypeService typeService;
     private final MailService mailService;
     private final WorkflowClient workflowClient;
@@ -116,7 +116,7 @@ public class QmsDocumentService {
         UUID finalWorkflowId = workflowId;
         if (finalWorkflowId == null) {
             finalWorkflowId = docType.getWorkflowId();
-            
+
             // Repli si le type de document ne désigne pas encore de circuit : on demande celui qui
             // est actif pour les documents.
             //
@@ -140,7 +140,8 @@ public class QmsDocumentService {
         if (finalWorkflowId == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + docType.getLibelle() + "'. Veuillez d'abord configurer le type de document avec un workflow valide."
+                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + docType.getLibelle()
+                            + "'. Veuillez d'abord configurer le type de document avec un workflow valide."
             );
         }
 
@@ -157,7 +158,8 @@ public class QmsDocumentService {
         if (workflow == null || workflow.get("steps") == null || ((List<?>) workflow.get("steps")).isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Le circuit de validation '" + workflow.get("nom") + "' n'a aucune étape configurée. Veuillez configurer les étapes du workflow avant de créer un document."
+                    "Le circuit de validation '" + workflow.get("nom")
+                            + "' n'a aucune étape configurée. Veuillez configurer les étapes du workflow avant de créer un document."
             );
         }
 
@@ -171,7 +173,7 @@ public class QmsDocumentService {
             String processusFolder = (serviceSigle != null && !serviceSigle.isBlank()) ? serviceSigle : serviceLibelle;
             String typeFolder = (docType.getFolderName() != null && !docType.getFolderName().isBlank())
                     ? docType.getFolderName() : docType.getCode();
-            objectName = minioService.uploadFile(file, processusFolder, typeFolder);
+            objectName = storageService.uploadFile(file, processusFolder, typeFolder);
         } catch (Exception e) {
             log.error("Failed to upload file to Minio", e);
             throw new RuntimeException("Échec du dépôt du fichier dans le stockage Minio.");
@@ -188,8 +190,7 @@ public class QmsDocumentService {
                 .serviceLibelle(serviceLibelle)
                 .serviceSigle(serviceSigle)
                 .redacteur(redacteur)
-                .versionMajeure(1)
-                .versionMineure(0)
+                .numeroVersion(0)
                 .periodiciteMois(periodiciteMois != null ? periodiciteMois : 12)
                 .confidentiel(confidentiel)
                 .documentExterne(documentExterne)
@@ -209,10 +210,12 @@ public class QmsDocumentService {
 
         document = documentRepository.save(document);
 
+        inscrireAuteurSurDocumentClasse(document);
+
         // 6. Create version history record in local DB
         QmsDocumentVersion version = QmsDocumentVersion.builder()
                 .document(document)
-                .versionLabel("1.0")
+                .versionLabel("v0")
                 .dateCreation(LocalDateTime.now())
                 .createdBy(getCurrentUser())
                 .comment("Dépôt initial")
@@ -230,6 +233,9 @@ public class QmsDocumentService {
         // 8. Associate workflow immediately
         WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", finalWorkflowId);
         document.setWorkflowId(finalWorkflowId);
+        // Le classement se confronte au circuit une fois celui-ci rattaché : c'est lui qui
+        // désigne les rôles décideurs.
+        avertissementDuDepot.set(avertissementSurLeClassement(document));
         if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
             document.setCurrentEtape(workflowInstance.getCurrentStateName());
         }
@@ -253,9 +259,9 @@ public class QmsDocumentService {
         if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
             document.setCurrentEtape(workflowInstance.getCurrentStateName());
         }
-        
+
         auditLogService.logAction("ASSIGNATION_WORKFLOW", document.getDocumentNumber(), "Un circuit de validation a été assigné au document.");
-        
+
         return documentRepository.save(document);
     }
 
@@ -265,14 +271,16 @@ public class QmsDocumentService {
     }
 
     /**
-     * @param versionMajeure vrai pour passer à la version majeure suivante (v1.3 → v2.0), comme
-     *                       l'exige le remplacement d'un document après une demande de modification
-     *                       acceptée : le changement a été instruit et décidé, ce n'est pas une
-     *                       retouche.
+     * @param revision vrai lorsque le dépôt fait passer le document au rang suivant : v0 → v1,
+     *                 v1 → v2. Seul le remplacement à l'issue d'une demande de modification
+     *                 acceptée le justifie — le changement a été demandé, instruit et décidé.
+     *                 Faux pour tout autre dépôt : une correction pendant le circuit, ou une
+     *                 reprise après rejet, versent un fichier au même rang. Le document ne
+     *                 change de rang que lorsque sa révision a été validée.
      */
     @Transactional
     public QmsDocumentVersion addVersion(UUID documentId, MultipartFile file, String comments,
-                                         boolean versionMajeure) throws Exception {
+                                         boolean revision) throws Exception {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document introuvable"));
         exigerAccesInterne(document);
@@ -284,21 +292,18 @@ public class QmsDocumentService {
                 ? document.getServiceSigle() : document.getServiceLibelle();
         String typeFolder = (docType.getFolderName() != null && !docType.getFolderName().isBlank())
                 ? docType.getFolderName() : docType.getCode();
-        String objectName = minioService.uploadFile(file, processusFolder, typeFolder);
+        String objectName = storageService.uploadFile(file, processusFolder, typeFolder);
 
         // Le document était validé : le contenu change, il doit repasser par le circuit de validation
         // avant de pouvoir de nouveau être considéré comme "VALIDE" (ISO 9001 §7.5.2).
         boolean requiresRevalidation = document.isEsTraiter();
 
-        if (versionMajeure) {
-            document.setVersionMajeure(document.getVersionMajeure() + 1);
-            document.setVersionMineure(0);
-        } else {
-            document.setVersionMineure(document.getVersionMineure() + 1);
+        if (revision) {
+            document.setNumeroVersion(document.getNumeroVersion() + 1);
         }
         documentRepository.save(document);
 
-        String versionLabel = document.getVersionMajeure() + "." + document.getVersionMineure();
+        String versionLabel = "v" + document.getNumeroVersion();
 
         QmsDocumentVersion version = QmsDocumentVersion.builder()
                 .document(document)
@@ -368,9 +373,10 @@ public class QmsDocumentService {
                 doc.setDateProchRevision(doc.getDateVigueur().plusMonths(doc.getPeriodiciteMois()));
             }
 
-            // Incrément version
-            doc.setVersionMajeure(doc.getVersionMajeure() + 1);
-            doc.setVersionMineure(0);
+            // Le rang ne bouge pas ici : l'entrée en vigueur consacre la version en cours, elle
+            // n'en crée pas une nouvelle. Un document déposé puis validé reste en v0 ; c'est le
+            // remplacement à l'issue d'une demande de modification qui le fait passer en v1.
+            // L'incrémenter des deux côtés faisait sauter un rang à chaque révision.
         } else if ("obsolete".equalsIgnoreCase(nextStatus)) {
             doc.setEsTraiter(false);
             doc.setObsolete(true);
@@ -392,7 +398,8 @@ public class QmsDocumentService {
         }
 
         doc = documentRepository.save(doc);
-        auditLogService.logAction("TRANSITION_STATUT", doc.getDocumentNumber(), "Transition de " + oldState + " vers " + nextStatus + ". Raison : " + reason);
+        auditLogService.logAction("TRANSITION_STATUT", doc.getDocumentNumber(), "Transition de " + oldState + " vers " + nextStatus + ". Raison : "
+                + reason);
 
         return doc;
     }
@@ -601,7 +608,7 @@ public class QmsDocumentService {
         doc.getVersions().forEach(version -> {
             try {
                 if (version.getObjectName() != null) {
-                    minioService.deleteFile(version.getObjectName());
+                    storageService.deleteFile(version.getObjectName());
                 }
             } catch (Exception e) {
                 log.error("Fichier {} non supprimé du stockage : {}", version.getObjectName(), e.getMessage());
@@ -642,7 +649,9 @@ public class QmsDocumentService {
             // Trigger revision: reset step and esTraiter to back to draft
             doc.setEsTraiter(false);
             doc.setObsolete(false);
-            doc.setVersionMineure(doc.getVersionMineure() + 1);
+            // Le document repasse en rédaction sans changer de rang : la révision n'est pas
+            // encore faite, seulement décidée. Le rang suivra le remplacement effectif, s'il
+            // passe par une demande de modification.
             doc.setLastModifiedReason("Modification initiée par Action Corrective suite à NC : " + ncRef);
         }
 
@@ -663,9 +672,15 @@ public class QmsDocumentService {
             this.contentType = contentType;
         }
 
-        public byte[] getBytes() { return bytes; }
-        public String getFilename() { return filename; }
-        public String getContentType() { return contentType; }
+        public byte[] getBytes() {
+            return bytes;
+        }
+        public String getFilename() {
+            return filename;
+        }
+        public String getContentType() {
+            return contentType;
+        }
     }
 
     /**
@@ -685,10 +700,11 @@ public class QmsDocumentService {
 
         QmsDocumentVersion lastVersion = versions.get(0);
         String objectName = lastVersion.getObjectName();
-        String filename = lastVersion.getOriginalFilename() != null ? lastVersion.getOriginalFilename() : "document_" + doc.getDocumentNumber() + ".pdf";
+        String filename = lastVersion.getOriginalFilename() != null ? lastVersion.getOriginalFilename() : "document_" + doc.getDocumentNumber()
+                + ".pdf";
 
         byte[] originalPdf;
-        try (InputStream is = minioService.downloadFile(objectName)) {
+        try (InputStream is = storageService.downloadFile(objectName)) {
             originalPdf = is.readAllBytes();
         } catch (Exception e) {
             log.error("Failed to download file from Minio for objectName: " + objectName, e);
@@ -719,7 +735,7 @@ public class QmsDocumentService {
         }
 
         // 3. PDFBox Overlay Watermarking
-        String versionLabel = doc.getVersionMajeure() + "." + doc.getVersionMineure();
+        String versionLabel = "v" + doc.getNumeroVersion();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
         String watermarkText = String.format("%s - V%s - IMPRIME PAR %s LE %s",
                 getDocumentDisplayState(doc), versionLabel, getCurrentUser().toUpperCase(), timestamp);
@@ -804,6 +820,11 @@ public class QmsDocumentService {
         INTERNE
     }
 
+    /** Même question, posée depuis l'extérieur du service (composition du filtre de recherche). */
+    public boolean voitToutesLesStructures(ProfilUtilisateurService.Profil profil) {
+        return voitTout(profil);
+    }
+
     /**
      * Voit-on l'ensemble des documents, toutes structures confondues ?
      *
@@ -812,11 +833,6 @@ public class QmsDocumentService {
      * administrateur n'a pas nécessairement de rôle technique correspondant — s'en tenir au jeton
      * le ramenait au rang d'utilisateur ordinaire, borné à sa propre structure.</p>
      */
-    /** Même question, posée depuis l'extérieur du service (composition du filtre de recherche). */
-    public boolean voitToutesLesStructures(ProfilUtilisateurService.Profil profil) {
-        return voitTout(profil);
-    }
-
     private boolean voitTout(ProfilUtilisateurService.Profil profil) {
         return SecurityUtils.hasRole("ADMIN")
                 || SecurityUtils.hasRole("MANAGE")
@@ -833,27 +849,203 @@ public class QmsDocumentService {
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
 
         boolean voitTout = voitTout(profil);
+        boolean estAuteur = currentUserId.equals(document.getCreatedById());
+        boolean partageNominatif = accessRepository
+                .findByDocumentIdAndUserId(document.getId(), currentUserId).isPresent();
 
-        // Le niveau de confidentialité s'applique avant tout le reste : appartenir à la structure
-        // n'ouvre pas un document classé à qui n'en a pas le rôle. Le responsable qualité, lui,
-        // accompagne l'ensemble des dossiers.
-        if (!voitTout && !niveauxConfidentialiteService.peutVoir(
-                document.getNiveauConfidentialiteId(), profil.roles())) {
+        // Le niveau de confidentialité s'applique avant tout le reste, et il est opposable au
+        // responsable qualité comme aux autres : voir toutes les structures dispense de la
+        // barrière de structure, pas du classement.
+        //
+        // Deux situations le lèvent. Le partage nominatif, parce qu'il désigne la personne et
+        // non un périmètre — un partage à une structure entière y reste soumis, c'est ce qui
+        // distingue les deux gestes. Et l'administration générale, pour qu'un document classé
+        // sur un rôle que plus personne ne détient reste réparable.
+        //
+        // L'auteur, lui, n'est pas une exception : il se voit inscrire un accès nominatif au
+        // dépôt d'un document classé. Son droit se lit alors dans l'écran de partage, et s'y
+        // retire — un accès que nul ne peut révoquer n'a pas sa place dans un système qualité.
+        if (!partageNominatif && !profil.estAdministrateur()
+                && !niveauxConfidentialiteService.peutVoir(
+                        document.getNiveauConfidentialiteId(), profil.roles())) {
             return Portee.AUCUNE;
         }
 
-        if (voitTout
-                || currentUserId.equals(document.getCreatedById())
+        if (voitTout || estAuteur
                 || (profil.structureId() != null && profil.structureId().equals(document.getServiceId()))) {
             return Portee.INTERNE;
         }
 
-        boolean partageNominatif = accessRepository
-                .findByDocumentIdAndUserId(document.getId(), currentUserId).isPresent();
         boolean partageStructure = profil.structureId() != null && structureAccessRepository
                 .findByDocumentIdAndStructureId(document.getId(), profil.structureId()).isPresent();
 
         return (partageNominatif || partageStructure) ? Portee.PARTAGE : Portee.AUCUNE;
+    }
+
+    /**
+     * Inscrit l'auteur parmi les accès nominatifs d'un document classé.
+     *
+     * <p>Le classement s'oppose à qui n'a pas le rôle admis, auteur compris : sans cette
+     * inscription, un rédacteur pourrait perdre de vue le document qu'il vient de déposer, et ne
+     * plus le corriger si le circuit le lui retourne.</p>
+     *
+     * <p>Un accès nominatif ordinaire, et non une exception dans la règle : il se lit dans
+     * l'écran de partage, l'audit le trace, et le responsable qualité peut l'y retirer. Un droit
+     * que personne ne peut ni voir ni révoquer n'a pas sa place dans un système qualité.</p>
+     */
+    private void inscrireAuteurSurDocumentClasse(DocumentQms document) {
+        String niveau = document.getNiveauConfidentialiteId();
+        if (niveau == null || niveau.isBlank() || document.getCreatedById() == null) {
+            return;
+        }
+        if (accessRepository.findByDocumentIdAndUserId(document.getId(), document.getCreatedById())
+                .isPresent()) {
+            return;
+        }
+        accessRepository.save(DocumentUserAccess.builder()
+                .document(document)
+                .userId(document.getCreatedById())
+                .userFullName(document.getRedacteur())
+                .role("READ_ONLY")
+                .build());
+        auditLogService.logAction("PARTAGE_AUTEUR", document.getDocumentNumber(),
+                "Accès nominatif inscrit pour le rédacteur : le document est classé.");
+    }
+
+    /**
+     * Avertissement lorsque le classement d'un document ferme son propre circuit.
+     *
+     * <p>Les étapes désignent leurs décideurs par rôle ; le niveau de confidentialité en admet
+     * un autre ensemble. Rien n'oblige les deux à se recouper — et lorsqu'ils ne se recoupent
+     * pas, les titulaires des étapes ne voient pas le document, ne sont pas en mesure de décider,
+     * et le dossier s'immobilise sans qu'aucun message ne l'explique.</p>
+     *
+     * <p>Le dépôt n'est pas refusé : le circuit peut être remanié, ou le niveau changé, et un
+     * refus interdirait de classer un document avant d'avoir réglé son circuit. C'est un
+     * avertissement, rendu à l'appelant et consigné.</p>
+     *
+     * @return le message, ou {@code null} si le classement laisse le circuit praticable
+     */
+    private String avertissementSurLeClassement(DocumentQms document) {
+        java.util.Set<String> admis = niveauxConfidentialiteService.rolesAdmis(
+                document.getNiveauConfidentialiteId());
+        if (admis.isEmpty() || document.getWorkflowId() == null) {
+            return null;
+        }
+
+        java.util.Set<String> rolesDuCircuit = rolesDecideursDuCircuit(document.getWorkflowId());
+        if (rolesDuCircuit.isEmpty()) {
+            return null;
+        }
+
+        List<String> exclus = rolesDuCircuit.stream()
+                .filter(role -> !admis.contains(role))
+                .sorted()
+                .toList();
+        if (exclus.isEmpty()) {
+            return null;
+        }
+
+        String message = "Le niveau « " + document.getNiveauConfidentialiteLibelle()
+                + " » n'admet pas " + String.join(", ", exclus)
+                + (exclus.size() > 1 ? ", qui décident" : ", qui décide")
+                + " d'étapes du circuit : ces titulaires ne verront pas le document et ne pourront"
+                + " pas le traiter. Ajoutez ces rôles au niveau, ou classez le document autrement.";
+        log.warn("Document {} : {}", document.getDocumentNumber(), message);
+        return message;
+    }
+
+    /** Rôles habilités à décider d'au moins une étape du circuit, tels que le circuit les déclare. */
+    private java.util.Set<String> rolesDecideursDuCircuit(UUID workflowId) {
+        try {
+            Map<String, Object> circuit = workflowClient.getWorkflowById(workflowId);
+            Object etapes = circuit == null ? null : circuit.get("steps");
+            if (!(etapes instanceof List<?> liste)) {
+                return java.util.Set.of();
+            }
+            java.util.Set<String> roles = new java.util.HashSet<>();
+            for (Object etape : liste) {
+                if (!(etape instanceof Map<?, ?> champs)) {
+                    continue;
+                }
+                ajouterRole(roles, champs.get("responsableRole"));
+                if (champs.get("transitions") instanceof List<?> transitions) {
+                    for (Object transition : transitions) {
+                        if (transition instanceof Map<?, ?> t) {
+                            ajouterRole(roles, t.get("requiredRole"));
+                        }
+                    }
+                }
+            }
+            return roles;
+        } catch (Exception e) {
+            // Circuit illisible : on ne peut pas se prononcer, et un avertissement inventé serait
+            // pire que pas d'avertissement du tout.
+            log.warn("Circuit {} illisible, classement non vérifié : {}", workflowId, e.getMessage());
+            return java.util.Set.of();
+        }
+    }
+
+    private void ajouterRole(java.util.Set<String> roles, Object valeur) {
+        if (valeur != null && !valeur.toString().isBlank()) {
+            roles.add(valeur.toString().trim().toUpperCase());
+        }
+    }
+
+    /**
+     * Change le niveau de confidentialité d'un document déjà déposé.
+     *
+     * <p>Réservé à l'administration générale et au responsable qualité : le classement décide de
+     * qui voit quoi, et un document classé à tort n'est réparable que par eux. Un niveau vide
+     * déclasse le document, qui redevient visible de sa structure.</p>
+     *
+     * <p>L'auteur est réinscrit parmi les accès nominatifs si le document devient classé : sans
+     * quoi une reclassification priverait le rédacteur du document qu'il a déposé.</p>
+     *
+     * @return l'avertissement à afficher si le nouveau classement ferme le circuit, sinon {@code null}
+     */
+    @Transactional
+    public String reclasser(UUID documentId, String niveauId, String niveauLibelle) {
+        ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
+        if (!profil.estAdministrateur() && !profil.estResponsableQualite()) {
+            throw new AccessDeniedException(
+                    "Le niveau de confidentialité d'un document ne se change qu'au titre de la "
+                            + "qualité ou de l'administration générale.");
+        }
+
+        DocumentQms document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Document introuvable avec l'ID: " + documentId));
+
+        String ancien = document.getNiveauConfidentialiteLibelle();
+        boolean classe = niveauId != null && !niveauId.isBlank();
+        document.setNiveauConfidentialiteId(classe ? niveauId : null);
+        document.setNiveauConfidentialiteLibelle(classe ? niveauLibelle : null);
+        document.setConfidentiel(classe);
+        document = documentRepository.save(document);
+
+        inscrireAuteurSurDocumentClasse(document);
+
+        auditLogService.logAction("RECLASSEMENT", document.getDocumentNumber(),
+                "Niveau de confidentialité : « " + (ancien == null ? "aucun" : ancien)
+                        + " » → « " + (classe ? niveauLibelle : "aucun") + " ».");
+
+        return avertissementSurLeClassement(document);
+    }
+
+    /**
+     * Avertissement du dernier dépôt, relevé par le contrôleur pour le joindre à sa réponse.
+     *
+     * <p>Porté par la requête et non par le service : deux dépôts simultanés se marcheraient
+     * dessus sur un champ partagé.</p>
+     */
+    private final ThreadLocal<String> avertissementDuDepot = new ThreadLocal<>();
+
+    /** Avertissement du dépôt qui vient d'avoir lieu, consommé une fois. */
+    public String dernierAvertissementDeClassement() {
+        String message = avertissementDuDepot.get();
+        avertissementDuDepot.remove();
+        return message;
     }
 
     private void exigerAcces(DocumentQms document) {
@@ -892,14 +1084,46 @@ public class QmsDocumentService {
      * (sauf administrateur / manager qui voit tout).
      */
     public List<DocumentQms> searchDocuments(DocumentSearchCriteria criteria) {
-        // Tri dynamique
-        String sortField = (criteria.getSortBy() != null && !criteria.getSortBy().isBlank())
-                ? criteria.getSortBy() : "documentNumber";
-        Sort.Direction direction = "DESC".equalsIgnoreCase(criteria.getSortDirection())
-                ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Sort sort = Sort.by(direction, sortField);
+        return documentRepository.findAll(specificationDe(criteria), triDe(criteria));
+    }
 
-        return documentRepository.findAll((root, cq, cb) -> {
+    /**
+     * Même recherche, rendue page par page.
+     *
+     * <p>La découpe se fait en base et non en mémoire : la variante qui rend une liste chargeait
+     * l'intégralité du fonds visible pour n'en présenter qu'une page.</p>
+     *
+     * @param pageable page demandée ; son tri, s'il est renseigné, prime sur celui des critères
+     */
+    public org.springframework.data.domain.Page<DocumentQms> searchDocuments(
+            DocumentSearchCriteria criteria, org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Pageable range = pageable.getSort().isSorted() ? pageable
+                : org.springframework.data.domain.PageRequest.of(
+                        pageable.getPageNumber(), pageable.getPageSize(), triDe(criteria));
+        return documentRepository.findAll(specificationDe(criteria), range);
+    }
+
+    /** Tri retenu pour une recherche : celui demandé, ou du plus récent au plus ancien. */
+    private Sort triDe(DocumentSearchCriteria criteria) {
+        // Le classement se faisait par numéro de document croissant, si bien qu'un document
+        // fraîchement déposé — donc portant le numéro le plus élevé — se retrouvait en toute fin
+        // de liste. Son auteur ne le voyait pas revenir de sa création, et le croyait perdu.
+        boolean triDemande = criteria.getSortBy() != null && !criteria.getSortBy().isBlank();
+        String sortField = triDemande ? criteria.getSortBy() : "createdAt";
+        Sort.Direction direction;
+        if (criteria.getSortDirection() != null && !criteria.getSortDirection().isBlank()) {
+            direction = "DESC".equalsIgnoreCase(criteria.getSortDirection())
+                    ? Sort.Direction.DESC : Sort.Direction.ASC;
+        } else {
+            direction = triDemande ? Sort.Direction.ASC : Sort.Direction.DESC;
+        }
+        return Sort.by(direction, sortField);
+    }
+
+    /** Critères de recherche traduits en prédicats, visibilité de l'appelant comprise. */
+    private org.springframework.data.jpa.domain.Specification<DocumentQms> specificationDe(
+            DocumentSearchCriteria criteria) {
+        return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             // ---- Contrôle d'accès (skip pour admin) ----
@@ -1097,17 +1321,13 @@ public class QmsDocumentService {
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
-        }, sort);
+        };
     }
 
     /**
-     * Ajoute la restriction de visibilité standard : un administrateur/manager voit tout,
-     * un utilisateur normal ne voit que les documents qu'il a créés ou auxquels un accès
-     * explicite lui a été accordé ({@link DocumentUserAccess}). Partagé par {@link #searchDocuments}
-     * et par les méthodes de statistiques pour qu'elles restent cohérentes entre elles.
-     */
-    /**
-     * Restreint toute recherche aux documents que l'appelant a le droit de voir.
+     * Restreint toute recherche aux documents que l'appelant a le droit de voir. Partagé par
+     * {@link #searchDocuments} et par les méthodes de statistiques, pour qu'elles restent
+     * cohérentes entre elles.
      *
      * <p>La règle, telle qu'elle se lit du point de vue de l'utilisateur :</p>
      * <ul>
@@ -1140,20 +1360,34 @@ public class QmsDocumentService {
         }
 
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
-        boolean voitTout = voitTout(profil);
-        if (voitTout) {
-            return;
-        }
-
-        ajouterRestrictionConfidentialite(predicates, root, cb, profil);
 
         Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
         Join<DocumentQms, com.qualiapproche.support.model.DocumentStructureAccess> structureJoin =
                 root.join("structureAccessList", JoinType.LEFT);
+        cq.distinct(true);
+
+        Predicate estAuteur = cb.equal(root.get("createdById"), currentUserId);
+        Predicate partageNominatif = cb.equal(accessJoin.get("userId"), currentUserId);
+
+        // 1. Le classement, opposable au responsable qualité comme aux autres : voir toutes les
+        //    structures dispense de la barrière de structure, pas du classement.
+        //
+        //    Le partage nominatif le lève, parce qu'il désigne la personne et non un périmètre ;
+        //    un partage à une structure entière y reste soumis. L'auteur d'un document classé
+        //    figure parmi ces partages nominatifs, inscrit au dépôt.
+        if (!profil.estAdministrateur()) {
+            predicates.add(cb.or(confidentialiteAdmise(root, cb, profil), partageNominatif));
+        }
+
+        // 2. La voie d'accès, dont seuls s'affranchissent les rôles qui voient toutes les
+        //    structures (super administration, responsable qualité).
+        if (voitTout(profil)) {
+            return;
+        }
 
         List<Predicate> acces = new ArrayList<>();
-        acces.add(cb.equal(root.get("createdById"), currentUserId));
-        acces.add(cb.equal(accessJoin.get("userId"), currentUserId));
+        acces.add(estAuteur);
+        acces.add(partageNominatif);
 
         if (profil.structureId() != null) {
             acces.add(cb.equal(root.get("serviceId"), profil.structureId()));
@@ -1161,33 +1395,30 @@ public class QmsDocumentService {
         }
 
         predicates.add(cb.or(acces.toArray(new Predicate[0])));
-        cq.distinct(true);
     }
 
     /**
-     * Écarte les documents dont le niveau de confidentialité exige un rôle que l'appelant n'a pas.
+     * Condition de classement : le niveau du document admet-il l'un des rôles de l'appelant ?
      *
-     * <p>Cette restriction s'ajoute à celle de la structure : relever du bon service ne suffit pas
-     * si le document est classé. Un document sans niveau, ou dont le niveau n'exige aucun rôle,
-     * n'est jamais écarté ici.</p>
+     * <p>Un document sans niveau, ou dont le niveau n'exige aucun rôle, la satisfait toujours.
+     * Elle se combine par un OU aux liens qui désignent nommément la personne — dépôt et partage
+     * nominatif — et par un ET à tout le reste.</p>
      */
-    private void ajouterRestrictionConfidentialite(List<Predicate> predicates, Root<DocumentQms> root,
-                                                    CriteriaBuilder cb,
-                                                    ProfilUtilisateurService.Profil profil) {
+    private Predicate confidentialiteAdmise(Root<DocumentQms> root, CriteriaBuilder cb,
+                                            ProfilUtilisateurService.Profil profil) {
         if (niveauxConfidentialiteService.restrictionIndecidable()) {
             // Référentiel injoignable : on ne peut établir le droit de personne sur un document
-            // classé. Seuls les documents sans niveau restent visibles.
-            predicates.add(cb.isNull(root.get("niveauConfidentialiteId")));
-            return;
+            // classé. Seuls les documents sans niveau restent admis.
+            return cb.isNull(root.get("niveauConfidentialiteId"));
         }
 
         java.util.Set<String> interdits = niveauxConfidentialiteService.niveauxInterdits(profil.roles());
         if (interdits.isEmpty()) {
-            return;
+            return cb.conjunction();
         }
-        predicates.add(cb.or(
+        return cb.or(
                 cb.isNull(root.get("niveauConfidentialiteId")),
-                cb.not(root.get("niveauConfidentialiteId").in(interdits))));
+                cb.not(root.get("niveauConfidentialiteId").in(interdits)));
     }
 
     /**
@@ -1227,11 +1458,6 @@ public class QmsDocumentService {
     }
 
     /**
-     * Retourne les statistiques globales sur les documents.
-     * Les admins/managers voient les stats sur tous les documents ; les autres utilisateurs
-     * ne voient que les stats sur leurs propres documents (créés ou partagés avec eux).
-     */
-    /**
      * Nombre de documents déposés par mois, sur les {@code mois} derniers mois.
      *
      * <p>Les mois sans dépôt figurent à zéro : une courbe qui saute les mois vides déforme la
@@ -1263,6 +1489,11 @@ public class QmsDocumentService {
         return serie;
     }
 
+    /**
+     * Statistiques globales sur les documents. Les administrateurs et responsables qualité les
+     * obtiennent sur l'ensemble du fonds ; les autres utilisateurs, sur les seuls documents
+     * qu'ils ont déposés ou qui leur ont été partagés.
+     */
     public DocumentStatsDto getDocumentStats() {
         List<DocumentQms> documents = visibleDocuments(false);
 
@@ -1511,7 +1742,7 @@ public class QmsDocumentService {
                 .serviceSigle(doc.getServiceSigle())
                 .redacteur(doc.getRedacteur())
                 .domaine(doc.getDomaine())
-                .versionLabel(doc.getVersionMajeure() + "." + doc.getVersionMineure())
+                .versionLabel("v" + doc.getNumeroVersion())
                 .dateVigueur(doc.getDateVigueur())
                 .dateProchRevision(doc.getDateProchRevision())
                 .confidentiel(doc.isConfidentiel());
@@ -1548,10 +1779,18 @@ public class QmsDocumentService {
     }
 
     public String getDocumentDisplayState(DocumentQms doc) {
-        if (doc.isArchived()) return "ARCHIVE";
-        if (doc.isObsolete()) return "OBSOLETE";
-        if (doc.isEsTraiter()) return "VALIDE";
-        if (doc.getCurrentEtape() != null && !doc.getCurrentEtape().isBlank()) return doc.getCurrentEtape();
+        if (doc.isArchived()) {
+            return "ARCHIVE";
+        }
+        if (doc.isObsolete()) {
+            return "OBSOLETE";
+        }
+        if (doc.isEsTraiter()) {
+            return "VALIDE";
+        }
+        if (doc.getCurrentEtape() != null && !doc.getCurrentEtape().isBlank()) {
+            return doc.getCurrentEtape();
+        }
         return "BROUILLON";
     }
 

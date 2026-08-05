@@ -36,7 +36,7 @@ public class DepartementServiceImpl implements DepartementService {
 
     @Override
     public List<DepartementDto> getallDepartement() {
-        return  departementMapper.toDtos(departementRepository.findAll()) ;
+        return departementMapper.toDtos(departementRepository.findAll());
     }
 
     @Override
@@ -49,7 +49,7 @@ public class DepartementServiceImpl implements DepartementService {
 
     @Override
     public void delete(UUID id) {
-        Departement departement=departementRepository.getReferenceById(id);
+        Departement departement = departementRepository.getReferenceById(id);
         departementRepository.delete(departement);
     }
 }

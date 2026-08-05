@@ -1,11 +1,14 @@
 package com.qualiapproche.support.controller.internal;
 
-import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.service.QmsDocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
@@ -23,7 +26,7 @@ public class SupportInternalCallbackController {
     public ResponseEntity<Void> updateDocumentStatus(
             @PathVariable("documentId") UUID documentId,
             @RequestBody Map<String, Object> payload) {
-        
+
         log.info("Received workflow callback for document {}: {}", documentId, payload);
 
         // Contrat unifié émis par workflow-service :
@@ -62,13 +65,13 @@ public class SupportInternalCallbackController {
     public ResponseEntity<Void> logDocumentAudit(
             @PathVariable("documentId") UUID documentId,
             @RequestBody Map<String, Object> payload) {
-        
+
         log.info("Received workflow audit for document {}: {}", documentId, payload);
         String action = (String) payload.get("action");
         String details = (String) payload.get("details");
-        
+
         documentService.logWorkflowAudit(documentId, action != null ? action : "WORKFLOW_ACTION", details);
-        
+
         return ResponseEntity.ok().build();
     }
 }

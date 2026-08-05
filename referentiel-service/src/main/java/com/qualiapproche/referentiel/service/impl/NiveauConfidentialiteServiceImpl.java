@@ -2,7 +2,6 @@ package com.qualiapproche.referentiel.service.impl;
 
 import com.qualiapproche.common.dto.NiveauConfidentialiteDto;
 import com.qualiapproche.common.exception.BusinessException;
-import com.qualiapproche.referentiel.entities.NiveauConfidentialite;
 import com.qualiapproche.referentiel.entities.mappers.NiveauConfidentialiteMapper;
 import com.qualiapproche.referentiel.repository.NiveauConfidentialiteRepository;
 import com.qualiapproche.referentiel.service.NiveauConfidentialiteService;
@@ -53,8 +52,17 @@ public class NiveauConfidentialiteServiceImpl implements NiveauConfidentialiteSe
     }
 
     @Override
-    public Page<NiveauConfidentialiteDto> getAll(Pageable pageable) {
-        return repository.findAll(pageable).map(mapper::toDto);
+    public Page<NiveauConfidentialiteDto> getAll(String recherche, Pageable pageable) {
+        Pageable range = pageable.getSort().isSorted() ? pageable
+                : org.springframework.data.domain.PageRequest.of(
+                        pageable.getPageNumber(), pageable.getPageSize(), ORDRE);
+        if (recherche == null || recherche.isBlank()) {
+            return repository.findAll(range).map(mapper::toDto);
+        }
+        String terme = recherche.trim();
+        return repository
+                .findByLibelleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(terme, terme, range)
+                .map(mapper::toDto);
     }
 
     @Override

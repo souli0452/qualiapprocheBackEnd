@@ -4,13 +4,12 @@ import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
-import java.time.LocalDate;
 
 public class UtilsClass {
 private NonConformiteRepository nonConformiteRepository;
         /*-------------------------------------------------------------------------------------------------/
-	/*    Méthode de géneration du code unique pour la suivie des statut d'une demande                /
-	/*----------------------------------------------------------------------------------------------*/
+    /*    Méthode de géneration du code unique pour la suivie des statut d'une demande                /
+    /*----------------------------------------------------------------------------------------------*/
 
 
     public static String generateNumeroReferences(int length) {

@@ -8,11 +8,27 @@ import com.qualiapproche.workflow.dto.WorkflowDto;
 import com.qualiapproche.workflow.dto.WorkflowStepDto;
 import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
 import com.qualiapproche.workflow.event.CatalogueWorkflowModifieEvent;
-import com.qualiapproche.workflow.model.*;
+import com.qualiapproche.workflow.model.FieldType;
+import com.qualiapproche.workflow.model.StepDecision;
+import com.qualiapproche.workflow.model.TypeRessource;
+import com.qualiapproche.workflow.model.ValidationHistory;
+import com.qualiapproche.workflow.model.ValidationStatus;
+import com.qualiapproche.workflow.model.Workflow;
+import com.qualiapproche.workflow.model.WorkflowFieldValue;
+import com.qualiapproche.workflow.model.WorkflowStep;
+import com.qualiapproche.workflow.model.WorkflowStepField;
+import com.qualiapproche.workflow.model.WorkflowTransition;
+import com.qualiapproche.workflow.model.WorkflowValidationInstance;
+import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
+import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
+import com.qualiapproche.workflow.repository.WorkflowRepository;
+import com.qualiapproche.workflow.repository.WorkflowStepFieldRepository;
+import com.qualiapproche.workflow.repository.WorkflowStepRepository;
+import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
+import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
-import com.qualiapproche.workflow.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,7 +46,7 @@ import java.util.UUID;
  *
  * <p>Ce service hérite de {@link AbstractWorkflowService} pour centraliser le pilotage
  * des instances spécifiques au métier. Il se charge d'initialiser les workflows,
- * de vérifier les champs de saisie requis lors d'une transition et d'enregistrer 
+ * de vérifier les champs de saisie requis lors d'une transition et d'enregistrer
  * les valeurs des champs dynamiques.</p>
  */
 @Service
@@ -44,6 +60,28 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowStepRepository stepRepository;
 
+    /**
+     * Ce service vu à travers son proxy.
+     *
+     * <p>{@code @Transactional} ne s'applique qu'aux appels qui passent par le proxy Spring : une
+     * méthode qui en appelle une autre au sein de la même classe s'en affranchit. La décision
+     * groupée en dépend — sans ce détour, les N décisions partageraient une seule transaction, et
+     * un refus sur le dernier dossier annulerait tous les précédents.</p>
+     */
+    @org.springframework.context.annotation.Lazy
+    private final WorkflowService self;
+
+    /**
+     * Ce service à travers son proxy, ou lui-même à défaut.
+     *
+     * <p>Un test qui construit le service directement n'a pas de proxy : les décisions du lot
+     * partagent alors la transaction de l'appelant. Le comportement métier est le même, seul
+     * l'isolement transactionnel diffère — et un test unitaire n'en a pas.</p>
+     */
+    private WorkflowService self() {
+        return self != null ? self : this;
+    }
+
     public WorkflowService(
             IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> moteur,
             ValidationHistoryRepository historyRepository,
@@ -53,8 +91,10 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             WorkflowStepFieldRepository stepFieldRepository,
             WorkflowFieldValueRepository fieldValueRepository,
             WorkflowTransitionRepository transitionRepository,
-            WorkflowStepRepository stepRepository) {
+            WorkflowStepRepository stepRepository,
+            @org.springframework.context.annotation.Lazy WorkflowService self) {
         super(moteur, historyRepository, eventPublisher);
+        this.self = self;
         this.workflowRepository = workflowRepository;
         this.validationInstanceRepository = validationInstanceRepository;
         this.stepFieldRepository = stepFieldRepository;
@@ -296,7 +336,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         List<WorkflowStep> merged = new java.util.ArrayList<>();
         java.util.Set<Long> seenStepIds = new java.util.HashSet<>();
-        /** Étapes existantes déjà reprises, pour qu'aucune ne soit rattachée deux fois. */
+        // Étapes existantes déjà reprises, pour qu'aucune ne soit rattachée deux fois.
         java.util.Set<Long> dejaRattachees = new java.util.HashSet<>();
 
         for (WorkflowStepDto stepDto : incomingSteps) {
@@ -334,16 +374,61 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             step.setEtatTraitement(stepDto.getEtatTraitement());
             step.setEmailTemplateCode(stepDto.getEmailTemplateCode());
             step.setStepTemplateId(stepDto.getStepTemplateId());
+            // Absent du DTO, il était remis à zéro à chaque enregistrement : l'étape d'imputation
+            // cessait de nommer le titulaire, et les étapes qui lui sont réservées devenaient
+            // indécidables.
+            step.setChampTitulaire(stepDto.getChampTitulaire());
             step.setWorkflow(existing);
             mergeTransitions(step, stepDto);
             mergeFields(step, stepDto);
             merged.add(step);
         }
 
+        refuserLaSuppressionDEtapesOccupees(existing, merged);
+
         existing.getSteps().clear();
         existing.getSteps().addAll(merged);
         // Les étapes ajoutées lors de cette modification n'ont pas encore de code.
         attribuerCodesEtapes(existing);
+    }
+
+    /**
+     * Interdit la suppression d'une étape où des dossiers se trouvent.
+     *
+     * <p>La collection des étapes est en {@code orphanRemoval} : une étape absente de ce que
+     * l'éditeur renvoie est <b>supprimée</b>. Les dossiers en cours désignent pourtant leur étape
+     * courante par son identifiant — ils se retrouvaient rattachés à une étape disparue, refusés
+     * ensuite par {@code rattacherEtat} et bloqués sans issue : plus aucune décision ne pouvait les
+     * faire avancer, ni en arrière ni en avant.</p>
+     *
+     * <p>La suppression du circuit entier est déjà protégée de la même façon. Il n'y avait aucune
+     * raison que sa modification le soit moins : elle détruit tout autant.</p>
+     */
+    private void refuserLaSuppressionDEtapesOccupees(Workflow existing, List<WorkflowStep> conservees) {
+        java.util.Set<Long> gardees = conservees.stream()
+                .map(WorkflowStep::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<WorkflowStep> supprimees = existing.getSteps().stream()
+                .filter(step -> step.getId() != null && !gardees.contains(step.getId()))
+                .toList();
+        if (supprimees.isEmpty()) {
+            return;
+        }
+
+        List<String> codes = supprimees.stream().map(step -> String.valueOf(step.getId())).toList();
+        if (!validationInstanceRepository.existsByEtatCodeInAndStatus(codes, ValidationStatus.EN_COURS)) {
+            return;
+        }
+
+        String noms = supprimees.stream()
+                .map(step -> step.getNomEtape() != null ? step.getNomEtape() : step.getCode())
+                .collect(java.util.stream.Collectors.joining(", "));
+        throw new com.qualiapproche.common.exception.BusinessException(
+                "Impossible de supprimer l'étape « " + noms + " » : des dossiers s'y trouvent "
+                        + "actuellement. Faites-les avancer avant de retirer cette étape du circuit.",
+                org.springframework.http.HttpStatus.CONFLICT);
     }
 
     /**
@@ -414,12 +499,30 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             field.setType(typeDeChamp(fieldDto.getType()));
             field.setRequired(fieldDto.isRequired());
             field.setOptions(fieldDto.getOptions());
+            // La portée était perdue à chaque enregistrement du circuit : le justificatif de rejet
+            // redevenait un champ de toutes les décisions, réclamé à l'approbation comme au rejet.
+            field.setDecision(decisionDeChamp(fieldDto.getDecision()));
             field.setStep(step);
             merged.add(field);
         }
 
         step.getFields().clear();
         step.getFields().addAll(merged);
+    }
+
+    /** Portée d'un champ, signalée en 400 explicite plutôt qu'en erreur serveur si le libellé est inconnu. */
+    private StepDecision decisionDeChamp(String decision) {
+        if (decision == null || decision.isBlank()) {
+            return null;
+        }
+        try {
+            return StepDecision.valueOf(decision.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Portée de champ inconnue : '" + decision + "'. Valeurs admises : "
+                            + java.util.Arrays.toString(StepDecision.values()) + ", ou vide pour toutes.",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
     }
 
     /** Type de champ, signalé en 400 explicite plutôt qu'en erreur serveur si le libellé est inconnu. */
@@ -442,20 +545,20 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         Map<Long, WorkflowTransition> existingById = step.getTransitions().stream()
                 .filter(t -> t.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getId, t -> t));
-        
+
         Map<StepDecision, WorkflowTransition> existingByDecision = step.getTransitions().stream()
                 .filter(t -> t.getDecision() != null)
                 .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getDecision, t -> t, (t1, t2) -> t1));
 
         List<WorkflowTransition> merged = new java.util.ArrayList<>();
         java.util.Set<StepDecision> seenDecisions = new java.util.HashSet<>();
-        
+
         for (WorkflowTransitionDto transitionDto : incoming) {
             StepDecision decision = transitionDto.getDecision() != null ? StepDecision.valueOf(transitionDto.getDecision()) : null;
             if (decision != null && !seenDecisions.add(decision)) {
                 continue;
             }
-            
+
             WorkflowTransition transition = null;
             if (transitionDto.getId() != null) {
                 transition = existingById.get(transitionDto.getId());
@@ -463,13 +566,17 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             if (transition == null && decision != null) {
                 transition = existingByDecision.get(decision);
             }
-            
+
             if (transition == null) {
                 transition = new WorkflowTransition();
             }
             transition.setDecision(decision);
             transition.setRequiredRole(transitionDto.getRequiredRole());
             transition.setLabel(transitionDto.getLabel());
+            transition.setIcon(transitionDto.getIcon());
+            transition.setSeverity(WorkflowMapper.severiteValide(transitionDto.getSeverity()));
+            transition.setConditionRequise(WorkflowMapper.normaliserFait(transitionDto.getConditionRequise()));
+            transition.setConditionLibelle(transitionDto.getConditionLibelle());
             transition.setFromStep(step);
             merged.add(transition);
         }
@@ -683,7 +790,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         return construireEtat(instance, transitions,
                 decisionsDesTransitions(List.of(transitions)),
-                champsDesEtapes(List.of(instance)));
+                etapesCourantes(List.of(instance)));
     }
 
     /**
@@ -693,27 +800,36 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             WorkflowValidationInstance instance,
             java.util.Set<TransitionPersistante> transitions,
             Map<Long, String> decisions,
-            Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champs) {
+            Map<Long, WorkflowStep> etapes) {
 
         List<com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto> actions = transitions.stream()
                 .map(t -> com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto.builder()
                         .code(t.getCode())
                         .libelle(t.getLibelle())
+                        .icon(t.getIcon())
+                        .severity(t.getSeverite() != null ? t.getSeverite().getCode() : null)
                         .permission(t.getPermission())
                         .decision(decisions.get(identifiantNumerique(t.getCode())))
                         .build())
                 .toList();
 
         Long etapeCourante = identifiantNumerique(instance.getEtatCode());
+        WorkflowStep etape = etapeCourante == null ? null : etapes.get(etapeCourante);
+        WorkflowMapper mapper = new WorkflowMapper();
 
         return com.qualiapproche.workflow.dto.WorkflowStateDto.builder()
                 .instanceId(instance.getId())
                 .status(instance.getStatus().name())
                 .currentStateCode(instance.getEtatCode())
                 .currentStateName(instance.getEtat() != null ? instance.getEtat().getLibelle() : null)
+                // Qui est attendu à cette étape. Sans cette information, un écran qui n'offre aucune
+                // action ne peut que se taire : l'utilisateur voit un dossier immobile sans savoir
+                // s'il doit agir, attendre, ou relancer quelqu'un.
+                .currentStepRole(etape == null ? null : etape.getResponsableRole())
                 .allowedActions(actions)
-                .currentStepFields(etapeCourante != null
-                        ? champs.getOrDefault(etapeCourante, List.of()) : List.of())
+                .currentStepFields(etape == null ? List.of()
+                        : etape.getFields().stream().map(mapper::toDto).toList())
+                .pendingDecisions(decisionsEnAttente(instance, etapeCourante))
                 .build();
     }
 
@@ -741,12 +857,41 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /**
-     * Champs de saisie des étapes courantes, en une seule requête, leurs champs compris.
+     * Décisions que l'étape prévoit mais qu'une condition non remplie retient.
+     *
+     * <p>Le moteur les retire des actions offertes, et c'est bien : proposer une clôture que le
+     * dossier n'admet pas ne mènerait qu'à un refus. Mais rien ne les mentionnait ensuite, et le
+     * responsable qualité voyait un dossier arrêté sans que rien ne lui dise qu'il attendait le
+     * solde des actions correctives. Ce n'est pas une question d'habilitation — c'est le dossier
+     * qui n'est pas prêt — d'où l'absence de filtrage par rôle : la raison de l'attente intéresse
+     * tout le monde, y compris celui qui doit agir ailleurs pour la lever.</p>
+     */
+    private List<com.qualiapproche.workflow.dto.WorkflowStateDto.DecisionEnAttenteDto> decisionsEnAttente(
+            WorkflowValidationInstance instance, Long etapeCourante) {
+        if (etapeCourante == null) {
+            return List.of();
+        }
+        return stepRepository.findAvecTransitionsByIdIn(java.util.Set.of(etapeCourante)).stream()
+                .flatMap(step -> step.getTransitions().stream())
+                .filter(t -> t.getConditionRequise() != null && !t.getConditionRequise().isBlank())
+                .filter(t -> !com.qualiapproche.workflow.model.FaitsDuDossier.contient(
+                        instance.getFaits(), t.getConditionRequise()))
+                .map(t -> com.qualiapproche.workflow.dto.WorkflowStateDto.DecisionEnAttenteDto.builder()
+                        .libelle(t.getLabel() != null ? t.getLabel()
+                                : (t.getDecision() != null ? t.getDecision().name() : null))
+                        .condition(t.getConditionRequise())
+                        .conditionLibelle(t.getConditionLibelle())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * Étapes courantes des dossiers cités, en une seule requête, leurs champs compris.
      *
      * <p>Une étape terminale ne correspond à aucune ligne : elle est simplement absente du
-     * résultat, et l'appelant obtient une liste vide.</p>
+     * résultat, et l'appelant obtient une vue sans champs ni responsable.</p>
      */
-    private Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champsDesEtapes(
+    private Map<Long, WorkflowStep> etapesCourantes(
             java.util.Collection<WorkflowValidationInstance> instances) {
         java.util.Set<Long> etapes = instances.stream()
                 .map(i -> identifiantNumerique(i.getEtatCode()))
@@ -756,11 +901,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         if (etapes.isEmpty()) {
             return Map.of();
         }
-        WorkflowMapper mapper = new WorkflowMapper();
         return stepRepository.findAvecChampsByIdIn(etapes).stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        WorkflowStep::getId,
-                        step -> step.getFields().stream().map(mapper::toDto).toList()));
+                .collect(java.util.stream.Collectors.toMap(WorkflowStep::getId, step -> step));
     }
 
     /**
@@ -784,6 +926,48 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
     /** Au-delà, la demande est refusée plutôt que servie au prix d'un balayage sans borne. */
     static final int TAILLE_LOT_MAX = 200;
+
+    /**
+     * Ressources d'une famille sur lesquelles l'appelant a au moins une décision ouverte.
+     *
+     * <p>C'est ici, et nulle part ailleurs, que se décide « qui peut agir sur quoi » : l'appartenance
+     * à l'étape courante et l'habilitation qu'elle exige sont des propriétés du circuit. Les modules
+     * métier composaient jusqu'ici leurs propres listes à partir de l'état de traitement du dossier,
+     * si bien qu'un utilisateur voyait — et ouvrait — des dossiers sur lesquels le moteur refusait
+     * ensuite toute décision.</p>
+     *
+     * <p>Le parcours porte sur les circuits <b>en cours</b> de la famille demandée, et les
+     * transitions possibles se calculent en mémoire sur le catalogue : aucune requête par
+     * ressource.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> ressourcesADeciderParLAppelant(String resourceType) {
+        String famille = TypeRessource.normaliser(resourceType);
+        List<WorkflowValidationInstance> enCours =
+                validationInstanceRepository.findByResourceTypeAndStatus(famille, ValidationStatus.EN_COURS);
+
+        List<UUID> ressources = new java.util.ArrayList<>();
+        for (WorkflowValidationInstance instance : enCours) {
+            try {
+                rattacherEtat(instance);
+                if (transitionsPossiblesDe(instance).isEmpty()) {
+                    continue;
+                }
+            } catch (com.qualiapproche.common.exception.BusinessException e) {
+                // Étape disparue du circuit : le dossier est écarté plutôt que de faire échouer
+                // la liste entière. Il reste visible en consultation.
+                log.warn("Circuit de la ressource {} non exploitable, elle est écartée du « à traiter » : {}",
+                        instance.getResourceId(), e.getMessage());
+                continue;
+            }
+            try {
+                ressources.add(UUID.fromString(instance.getResourceId()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
+            }
+        }
+        return ressources;
+    }
 
     /**
      * États de plusieurs ressources en un appel, à coût constant en nombre de requêtes.
@@ -831,12 +1015,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         }
 
         Map<Long, String> decisions = decisionsDesTransitions(actionsParRessource.values());
-        Map<Long, List<com.qualiapproche.workflow.dto.WorkflowStepFieldDto>> champs =
-                champsDesEtapes(instances.values());
+        Map<Long, WorkflowStep> etapes = etapesCourantes(instances.values());
 
         for (Map.Entry<UUID, java.util.Set<TransitionPersistante>> entree : actionsParRessource.entrySet()) {
             etats.put(entree.getKey(),
-                    construireEtat(instances.get(entree.getKey()), entree.getValue(), decisions, champs));
+                    construireEtat(instances.get(entree.getKey()), entree.getValue(), decisions, etapes));
         }
         return etats;
     }
@@ -921,6 +1104,20 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      */
     @Transactional
     public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId) {
+        return initiateWorkflow(resourceId, resourceType, workflowId, null);
+    }
+
+    /**
+     * Ouvre un circuit en désignant d'emblée la personne à qui le dossier est confié.
+     *
+     * <p>Certains dossiers naissent avec leur titulaire : un plan d'action a un responsable dès sa
+     * rédaction, et c'est lui — non « un agent » — qui doit le traiter. La non-conformité, elle,
+     * n'en a pas à la soumission : le sien est nommé plus tard, à l'imputation, par un champ
+     * d'étape. Les deux chemins mènent au même {@code titulaireId}.</p>
+     */
+    @Transactional
+    public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId,
+                                                String titulaireId) {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
                         "Circuit de validation introuvable.", org.springframework.http.HttpStatus.NOT_FOUND));
@@ -945,6 +1142,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .resourceType(resourceType)
                 .status(ValidationStatus.EN_COURS)
                 .startedAt(LocalDateTime.now())
+                .titulaireId(titulaireId == null || titulaireId.isBlank() ? null : titulaireId.trim())
                 .build();
 
         WorkflowValidationInstance saved = this.initialiser(instance, workflow.getId().toString());
@@ -984,6 +1182,151 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         processStepDecision(resourceId, userId, request, StepDecision.REJETE);
     }
 
+    /**
+     * Prend la même décision sur plusieurs dossiers, chacun jugé pour lui-même.
+     *
+     * <p>Le traitement groupé qui existait côté écran poussait la même charge utile sur toute une
+     * sélection, en supposant qu'elle passerait partout. Or le moteur juge dossier par dossier :
+     * l'appelant peut être habilité sur les uns et pas sur les autres, et un dossier peut avoir
+     * changé d'étape depuis l'affichage de la liste. Chaque décision est donc tentée séparément, et
+     * le compte rendu dit ce qui est passé et ce qui ne l'est pas.</p>
+     *
+     * <p><b>Une transaction par dossier</b>, et non une pour l'ensemble : un refus sur le dernier
+     * annulerait sinon toutes les décisions valides qui le précèdent. C'est la raison du passage
+     * par {@code self}, le proxy Spring — un appel direct d'une méthode à l'autre ne franchit
+     * aucune frontière transactionnelle.</p>
+     *
+     * <p>Toutes les décisions du lot portent le même identifiant : l'historique dit alors qu'une
+     * décision a été prise dans le cadre d'un traitement en masse, ce qui n'est pas indifférent à
+     * qui relit le dossier.</p>
+     */
+    public List<com.qualiapproche.workflow.dto.ResultatDecisionDto> deciderEnLot(
+            List<UUID> resourceIds, StepDecision decision, WorkflowValidationRequestDto request) {
+
+        if (resourceIds == null || resourceIds.isEmpty()) {
+            return List.of();
+        }
+        if (resourceIds.size() > TAILLE_LOT_MAX) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Trop de dossiers en une fois (" + resourceIds.size() + "). "
+                            + "Le maximum est de " + TAILLE_LOT_MAX + ".",
+                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        }
+
+        String lotId = UUID.randomUUID().toString();
+        List<com.qualiapproche.workflow.dto.ResultatDecisionDto> resultats = new java.util.ArrayList<>();
+
+        for (UUID resourceId : resourceIds.stream().filter(Objects::nonNull).distinct().toList()) {
+            try {
+                self().processStepDecision(resourceId, SecurityUtils.getCurrentUserId(), request, decision, lotId);
+                resultats.add(com.qualiapproche.workflow.dto.ResultatDecisionDto.builder()
+                        .resourceId(resourceId).aboutie(true).build());
+            } catch (com.qualiapproche.common.exception.BusinessException e) {
+                // Refus métier : c'est une issue normale d'un traitement groupé, pas une panne.
+                resultats.add(com.qualiapproche.workflow.dto.ResultatDecisionDto.builder()
+                        .resourceId(resourceId).aboutie(false).motif(e.getMessage()).build());
+            } catch (Exception e) {
+                log.error("Décision groupée : échec inattendu sur le dossier {}", resourceId, e);
+                resultats.add(com.qualiapproche.workflow.dto.ResultatDecisionDto.builder()
+                        .resourceId(resourceId).aboutie(false)
+                        .motif("Une erreur inattendue a empêché cette décision.").build());
+            }
+        }
+
+        long abouties = resultats.stream().filter(
+                com.qualiapproche.workflow.dto.ResultatDecisionDto::isAboutie).count();
+        log.info("Décision groupée {} : {} aboutie(s) sur {}", lotId, abouties, resultats.size());
+        return resultats;
+    }
+
+    /**
+     * Faits connus de la plateforme, à proposer dans l'éditeur de circuits.
+     *
+     * <p>Le moteur ne peut pas tenir la liste des faits métier : il ignore ce qu'est un plan
+     * d'action ou une mesure d'efficacité, et c'est précisément ce qui permet à un circuit
+     * d'exprimer une condition sans rien connaître du module qui la remplit. La liste est donc
+     * <b>observée</b>, non décrétée : ce que des transitions exigent déjà, plus ce que des dossiers
+     * portent déjà. L'éditeur reste ouvert à un fait inédit — sans quoi le premier usage d'un
+     * nouveau fait serait impossible à déclarer.</p>
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<String> faitsConnus() {
+        java.util.Set<String> faits = new java.util.TreeSet<>();
+
+        transitionRepository.faitsExiges().stream()
+                .map(WorkflowMapper::normaliserFait)
+                .filter(java.util.Objects::nonNull)
+                .forEach(faits::add);
+
+        validationInstanceRepository.faitsDeclares().stream()
+                .map(com.qualiapproche.workflow.model.FaitsDuDossier::lire)
+                .forEach(faits::addAll);
+
+        return java.util.List.copyOf(faits);
+    }
+
+    /**
+     * Redésigne le titulaire d'un dossier en cours.
+     *
+     * <p>Le titulaire est ordinairement nommé par une étape qui déclare un {@code champTitulaire}.
+     * Certains circuits permettent de le changer en cours de route — un pilote qui confie l'action à
+     * quelqu'un d'autre après en avoir constaté la réalisation — sans que cela passe par une
+     * décision. Sans ce point d'entrée, le module métier changeait le responsable de son côté et le
+     * moteur continuait de réserver l'étape à l'ancien : l'un croyait avoir transféré la
+     * responsabilité, l'autre l'ouvrait toujours à celui qui ne l'avait plus.</p>
+     */
+    @Transactional
+    public void designerTitulaire(UUID resourceId, String titulaireId) {
+        WorkflowValidationInstance instance = validationInstanceRepository
+                .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        "Aucun circuit en cours pour ce dossier : personne n'y est titulaire.",
+                        org.springframework.http.HttpStatus.NOT_FOUND));
+
+        String ancien = instance.getTitulaireId();
+        instance.setTitulaireId(titulaireId == null || titulaireId.isBlank() ? null : titulaireId.trim());
+        validationInstanceRepository.save(instance);
+        log.info("Dossier {} : titulaire changé de {} à {}.", resourceId, ancien, instance.getTitulaireId());
+    }
+
+    /**
+     * Déclare, remplace ou retire un fait établi sur un dossier.
+     *
+     * <p>C'est le module métier qui sait quand la condition devient vraie — tous les plans d'action
+     * soldés, l'efficacité mesurée — et lui seul. Il le déclare ici ; le circuit peut alors
+     * l'exiger sans rien connaître de la règle. Le fait est retiré quand la condition cesse d'être
+     * vraie : un plan rouvert doit refermer la porte que sa clôture avait ouverte.</p>
+     *
+     * @param etabli vrai pour inscrire le fait, faux pour le retirer
+     */
+    @Transactional
+    public void declarerFait(UUID resourceId, String fait, boolean etabli) {
+        if (fait == null || fait.isBlank()) {
+            return;
+        }
+        WorkflowValidationInstance instance = validationInstanceRepository
+                .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
+                .orElse(null);
+        if (instance == null) {
+            // Aucun circuit en cours : il n'y a pas de dossier à qualifier. Ce n'est pas une erreur
+            // — le module peut suivre des dossiers que le moteur ne pilote pas.
+            log.debug("Fait « {} » ignoré : aucun circuit en cours pour la ressource {}.", fait, resourceId);
+            return;
+        }
+
+        java.util.Set<String> faits = new java.util.LinkedHashSet<>(
+                com.qualiapproche.workflow.model.FaitsDuDossier.lire(instance.getFaits()));
+        boolean modifie = etabli ? faits.add(fait.trim().toUpperCase())
+                : faits.remove(fait.trim().toUpperCase());
+        if (!modifie) {
+            return;
+        }
+
+        instance.setFaits(com.qualiapproche.workflow.model.FaitsDuDossier.ecrire(faits));
+        validationInstanceRepository.save(instance);
+        log.info("Dossier {} : fait « {} » {}", resourceId, fait, etabli ? "établi" : "retiré");
+    }
+
     @Transactional
     public void executeDynamicTransition(UUID resourceId, String userId, String transitionCode, WorkflowValidationRequestDto request) {
         WorkflowValidationInstance instance = validationInstanceRepository
@@ -993,7 +1336,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
         verifierEtapeAttendue(instance, request);
-        verifierChampsRequis(instance, request);
+        verifierChampsRequis(instance, request, decisionDeLaTransition(transitionCode));
 
         String comments = request != null ? request.getComments() : null;
 
@@ -1003,7 +1346,14 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         attachHistoryFields(updatedInstance, request);
     }
 
-    private void processStepDecision(UUID resourceId, String userId, WorkflowValidationRequestDto request, StepDecision decision) {
+    private void processStepDecision(UUID resourceId, String userId, WorkflowValidationRequestDto request,
+                                     StepDecision decision) {
+        processStepDecision(resourceId, userId, request, decision, null);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void processStepDecision(UUID resourceId, String userId, WorkflowValidationRequestDto request,
+                                    StepDecision decision, String lotId) {
         WorkflowValidationInstance instance = validationInstanceRepository
                 .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS)
                 .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
@@ -1011,12 +1361,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
         verifierEtapeAttendue(instance, request);
-        verifierChampsRequis(instance, request);
+        verifierChampsRequis(instance, request, decision);
 
         String comments = request != null ? request.getComments() : null;
 
         WorkflowValidationInstance updatedInstance =
-                this.executerTransition(instance.getId(), resoudreCodeTransition(instance, decision), comments);
+                this.executerTransition(instance.getId(), resoudreCodeTransition(instance, decision), comments, lotId);
 
         attachHistoryFields(updatedInstance, request);
     }
@@ -1048,14 +1398,20 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * <p>La vérification n'existait que sur les champs effectivement transmis, et intervenait après
      * le franchissement : un champ requis simplement omis passait sans erreur, et la transition
      * était déjà jouée quand la validation échouait. Elle a donc lieu ici, avant toute exécution.</p>
+     *
+     * <p>Seuls sont exigés les champs que la décision prise réclame : un champ propre au rejet ne
+     * saurait bloquer une approbation.</p>
      */
-    private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request) {
+    private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request,
+                                      StepDecision decisionPrise) {
         Long stepId = identifiantNumerique(instance.getEtatCode());
         if (stepId == null) {
             return; // état terminal : aucune saisie attendue
         }
 
-        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndIsRequiredTrue(stepId);
+        List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndIsRequiredTrue(stepId).stream()
+                .filter(field -> concerneLaDecision(field, decisionPrise))
+                .toList();
         if (requis.isEmpty()) {
             return;
         }
@@ -1076,6 +1432,26 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                     "Champ(s) obligatoire(s) non renseigné(s) : " + String.join(", ", manquants) + ".",
                     org.springframework.http.HttpStatus.BAD_REQUEST);
         }
+    }
+
+    /** Décision que porte une transition désignée par son code, ou {@code null} si elle est inconnue. */
+    private StepDecision decisionDeLaTransition(String transitionCode) {
+        Long id = identifiantNumerique(transitionCode);
+        if (id == null) {
+            return null;
+        }
+        return transitionRepository.findById(id).map(WorkflowTransition::getDecision).orElse(null);
+    }
+
+    /**
+     * Le champ se rapporte-t-il à la décision prise ?
+     *
+     * <p>Un champ sans portée vaut pour toutes les décisions. Une décision inconnue de l'appelant
+     * — franchissement par code de transition, où la décision n'est pas donnée — ne restreint
+     * rien : mieux vaut demander un champ de trop que d'en laisser passer un requis.</p>
+     */
+    private boolean concerneLaDecision(WorkflowStepField field, StepDecision decisionPrise) {
+        return field.getDecision() == null || decisionPrise == null || field.getDecision() == decisionPrise;
     }
 
     /**
@@ -1133,8 +1509,37 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                             .value(entry.getValue())
                             .build();
                     fieldValueRepository.save(fieldValue);
+
+                    designerTitulaire(updatedInstance, field, entry.getValue());
                 }
             }
         }
+    }
+
+    /**
+     * Inscrit sur le dossier la personne que cette saisie désigne, si l'étape le prévoit.
+     *
+     * <p>Une étape d'imputation ne fait pas qu'avancer le dossier : elle en nomme le titulaire. Le
+     * champ qui porte cette désignation est déclaré par l'étape ({@code champTitulaire}) — le moteur
+     * n'a pas à connaître le nom métier employé par le module, {@code userImputId} pour les
+     * non-conformités.</p>
+     *
+     * <p>C'est ce qui permet aux étapes suivantes d'être réservées à cette personne plutôt qu'à un
+     * rôle : un rôle « agent imputé » aurait ouvert le traitement de <b>tout</b> dossier à
+     * <b>tout</b> agent imputable.</p>
+     */
+    private void designerTitulaire(WorkflowValidationInstance instance, WorkflowStepField field, String valeur) {
+        WorkflowStep etape = field.getStep();
+        if (etape == null || etape.getChampTitulaire() == null
+                || !etape.getChampTitulaire().equals(field.getFieldName())) {
+            return;
+        }
+        if (valeur == null || valeur.isBlank()) {
+            return;
+        }
+
+        instance.setTitulaireId(valeur.trim());
+        validationInstanceRepository.save(instance);
+        log.info("Dossier {} confié à {}", instance.getResourceId(), valeur.trim());
     }
 }

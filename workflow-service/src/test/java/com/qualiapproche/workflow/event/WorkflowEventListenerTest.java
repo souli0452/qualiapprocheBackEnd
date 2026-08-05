@@ -3,7 +3,11 @@ package com.qualiapproche.workflow.event;
 import com.qualiapproche.workflow.model.ValidationStatus;
 import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
+import com.qualiapproche.workflow.model.ValidationHistory;
+import com.qualiapproche.workflow.model.WorkflowFieldValue;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
+import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
+import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.SmtpEmailService;
@@ -44,6 +48,8 @@ class WorkflowEventListenerTest {
     @Mock private EmailTemplateRepository emailTemplateRepository;
     @Mock private SmtpEmailService emailService;
     @Mock private WorkflowValidationInstanceRepository validationInstanceRepository;
+    @Mock private ValidationHistoryRepository historyRepository;
+    @Mock private WorkflowFieldValueRepository fieldValueRepository;
     @Mock private WorkflowNotificationService notificationService;
 
     @InjectMocks private WorkflowEventListener listener;
@@ -146,6 +152,44 @@ class WorkflowEventListenerTest {
         assertThat(aCharge.getValue())
                 .as("le circuit n'est pas terminé : il ne doit pas être annoncé comme tel")
                 .containsEntry("status", "EN_COURS");
+    }
+
+    @Test
+    @DisplayName("Les valeurs saisies à l'étape accompagnent la notification, indexées par nom de champ")
+    void champsSaisis_transmisAuServiceMetier() {
+        instanceExistante();
+        ValidationHistory aHistorique = ValidationHistory.builder().id(7L).build();
+        when(historyRepository.findTopByValidationInstanceOrderByDecisionDateDesc(any()))
+                .thenReturn(Optional.of(aHistorique));
+        when(fieldValueRepository.findByHistory_Id(7L)).thenReturn(java.util.List.of(
+                WorkflowFieldValue.builder().fieldName("docRejet").value("NON_CONFORMITE/DSI/abc.pdf").build(),
+                // Un champ sans valeur n'a rien à dire au module métier : le transmettre à vide
+                // écraserait la donnée déjà en place.
+                WorkflowFieldValue.builder().fieldName("observationRejet").value(null).build()));
+
+        TransitionFranchieEvent aEvenement = evenement();
+        listener.enregistrerNotification(aEvenement);
+
+        @SuppressWarnings("unchecked")
+        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
+        assertThat((Map<?, ?>) aCharge.getValue().get("fields"))
+                .isEqualTo(Map.of("docRejet", "NON_CONFORMITE/DSI/abc.pdf"));
+    }
+
+    @Test
+    @DisplayName("Une décision sans saisie ne transmet pas de champs")
+    void aucuneSaisie_champsVides() {
+        instanceExistante();
+        when(historyRepository.findTopByValidationInstanceOrderByDecisionDateDesc(any()))
+                .thenReturn(Optional.empty());
+
+        listener.enregistrerNotification(evenement());
+
+        @SuppressWarnings("unchecked")
+        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
+        assertThat((Map<?, ?>) aCharge.getValue().get("fields")).isEmpty();
     }
 
     @Test

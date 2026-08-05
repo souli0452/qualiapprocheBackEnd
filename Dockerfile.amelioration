@@ -2,13 +2,14 @@ FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY . .
 
-# On compile UNIQUEMENT amelioration-service et ses dépendances (common)
+# On compile UNIQUEMENT amelioration-service et ses dépendances (common, lib-storage)
 RUN mvn clean package -DskipTests -pl amelioration-service -am
 
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
-# Création du dossier pour les pièces jointes
-RUN mkdir -p /app/attachments && chmod 777 /app/attachments
+# Aucun dossier de pièces jointes : les fichiers vont sur le serveur d'objets, jamais sur le
+# disque du conteneur — un fichier écrit ici n'était lisible que depuis le nœud qui l'avait reçu,
+# et disparaissait au redéploiement.
 
 COPY --from=build /app/amelioration-service/target/*.jar amelioration-service.jar
 EXPOSE 8083

@@ -3,7 +3,6 @@ package com.qualiapproche.referentiel.service;
 import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.common.enumeration.TypeStructure;
 
-import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -15,12 +14,18 @@ public interface StructureService {
     StructureDto getStructureById(UUID directionId);
     String getStructureNameById(UUID directionId);
 
-    Page<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId, Pageable pageable);
+    /**
+     * Page des structures, restreinte aux critères renseignés.
+     *
+     * @param recherche terme libre sur le libellé long ou court, facultatif
+     */
+    Page<StructureDto> getAllStructures(TypeStructure typeStructure, UUID directionId,
+                                        String recherche, Pageable pageable);
     Page<StructureDto> getAllStructuresAll(Pageable pageable);
 
     StructureDto updateStructure(StructureDto direction) throws Exception;
 
-    void deleteStructure(UUID id) ;
+    void deleteStructure(UUID id);
 
     StructureDto findStructureByLibelle(String libelle);
     StructureDto getDirection();

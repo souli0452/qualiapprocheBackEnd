@@ -102,7 +102,12 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
 
                     TransitionPersistante transition = new TransitionPersistante(dbTrans.getId().toString(), origine, destination);
                     transition.setLibelle(dbTrans.getLabel() != null ? dbTrans.getLabel() : dbTrans.getDecision().name());
+                    transition.setIcon(dbTrans.getIcon() != null && !dbTrans.getIcon().isBlank()
+                            ? dbTrans.getIcon() : dbTrans.getDecision().getIconeParDefaut());
+                    transition.setSeverite(dbTrans.getSeverity() != null
+                            ? dbTrans.getSeverity() : dbTrans.getDecision().getSeveriteParDefaut());
                     transition.setPermission(habilitationDe(dbTrans, dbStep));
+                    transition.setConditionRequise(dbTrans.getConditionRequise());
 
                     // Résoudre l'action via le bean factory (DefaultTransitionAction par défaut si non trouvé)
                     try {
@@ -127,9 +132,9 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
     @Override
     public List<WorkflowConfig<IWorkflowData, TransitionPersistante, WorkflowPersistant>> getAllWorkflowConfigs(
             Map<String, WorkflowPersistant> pWorkflows) throws WorkflowException {
-        
+
         List<WorkflowConfig<IWorkflowData, TransitionPersistante, WorkflowPersistant>> configs = new ArrayList<>();
-        
+
         for (WorkflowPersistant wf : pWorkflows.values()) {
             WorkflowConfig<IWorkflowData, TransitionPersistante, WorkflowPersistant> config = new WorkflowConfig<>(
                     IWorkflowData.class, wf, conditionAdapter);
@@ -138,7 +143,7 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
 
         return configs;
     }
-    
+
     /**
      * Habilitation exigée pour franchir une transition.
      *

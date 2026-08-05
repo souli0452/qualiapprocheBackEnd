@@ -36,7 +36,7 @@ public class ReglementationServiceImpl implements ReglementationService {
 
     @Override
     public List<ReglementationDto> allReglementations() {
-        return  reglementationMapper.toDtos(reglementationRepository.findAll()) ;
+        return reglementationMapper.toDtos(reglementationRepository.findAll());
     }
 
     @Override

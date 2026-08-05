@@ -2,8 +2,11 @@ package com.qualiapproche.workflow.config;
 
 import com.qualiapproche.common.referentiel.CatalogueEtapesStandard;
 import com.qualiapproche.common.referentiel.CatalogueEtapesStandard.EtapeStandard;
+import com.qualiapproche.workflow.model.SeveriteAction;
+import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
 import com.qualiapproche.workflow.model.WorkflowStep;
+import com.qualiapproche.workflow.model.WorkflowTransition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -86,7 +89,12 @@ class WorkflowDataInitializerCatalogueTest {
         assertThat(catalogue).allSatisfy(entree -> {
             assertThat(entree.code()).isNotBlank();
             assertThat(entree.nomEtape()).isNotBlank();
-            assertThat(entree.responsableRole()).isNotBlank();
+            // Toujours renseigné : soit un rôle, soit l'habilitation réservant l'étape au
+            // titulaire du dossier. Un vide ne dirait ni l'un ni l'autre — et la colonne du
+            // modèle d'étape, côté support-service, le refuse.
+            assertThat(entree.responsableRole())
+                    .withFailMessage("L'étape « %s » ne dit pas qui en décide.", entree.code())
+                    .isNotBlank();
         });
 
         List<String> codesLivres = etapesLivrees().stream().map(WorkflowStep::getCode).toList();
@@ -94,5 +102,41 @@ class WorkflowDataInitializerCatalogueTest {
                 .withFailMessage("Le catalogue décrit une étape qu'aucun circuit par défaut "
                         + "n'emploie ; codes livrés : %s", codesLivres)
                 .allMatch(codesLivres::contains);
+    }
+
+    private static List<WorkflowTransition> transitionsLivrees() {
+        return etapesLivrees().stream()
+                .map(WorkflowStep::getTransitions)
+                .flatMap(List::stream)
+                .toList();
+    }
+
+    @Test
+    @DisplayName("Toute action livrée porte son libellé, son icône et sa couleur de bouton")
+    void transitionsLivrees_apparenceRenseignee() {
+        assertThat(transitionsLivrees()).isNotEmpty();
+
+        // Le repli sur la décision existe pour les circuits antérieurs ; les circuits livrés,
+        // eux, n'ont pas de raison de s'en remettre à lui.
+        assertThat(transitionsLivrees()).allSatisfy(transition -> {
+            assertThat(transition.getLabel()).isNotBlank();
+            assertThat(transition.getIcon())
+                    .withFailMessage("L'action « %s » n'a pas d'icône.", transition.getLabel())
+                    .isNotBlank().startsWith("pi pi-");
+            assertThat(transition.getSeverity())
+                    .withFailMessage("L'action « %s » n'a pas de couleur de bouton.", transition.getLabel())
+                    .isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("Un renvoi en correction ne s'affiche pas comme un refus ferme")
+    void transitionsLivrees_renvoiDistinctDuRefus() {
+        // Les deux décisions valent REJETE : sans couleur explicite, elles se présenteraient
+        // à l'identique alors que l'une invite à corriger et l'autre arrête le dossier.
+        assertThat(transitionsLivrees())
+                .filteredOn(t -> t.getDecision() == StepDecision.REJETE)
+                .extracting(WorkflowTransition::getSeverity)
+                .contains(SeveriteAction.WARN, SeveriteAction.DANGER);
     }
 }

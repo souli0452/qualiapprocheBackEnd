@@ -30,4 +30,14 @@ public interface UserRoleClient {
      */
     @GetMapping("/api/v1/roles/{role}/users")
     Map<String, Object> getUsersByRole(@org.springframework.web.bind.annotation.PathVariable("role") String role);
+
+    /**
+     * Un utilisateur désigné nommément.
+     *
+     * <p>Sert les étapes réservées au titulaire du dossier : elles ne portent pas de rôle, et il
+     * n'y a donc personne à chercher par rôle. Sans cette lecture, l'agent à qui une
+     * non-conformité vient d'être imputée n'était prévenu par rien.</p>
+     */
+    @GetMapping("/api/v1/user-by-id")
+    Map<String, Object> getUserById(@org.springframework.web.bind.annotation.RequestParam("userId") String userId);
 }

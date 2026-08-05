@@ -43,7 +43,7 @@ public class FournisseurServiceImpl implements FournisseurService {
 
     @Override
     public List<FournisseurDto> allFournisseurs() {
-        return  founisseurMapper.toDtos(fournisseurRepository.findAll()) ;
+        return founisseurMapper.toDtos(fournisseurRepository.findAll());
     }
 
     @Override
@@ -60,13 +60,13 @@ public class FournisseurServiceImpl implements FournisseurService {
     public List<CrictereEvaluationDto> assignCriteresToFournisseur(UUID fournisseurId, List<UUID> critereEvaluationIds) {
         Fournisseur fournisseur = fournisseurRepository.findById(fournisseurId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Fournisseur n'existe pas."));
-        
+
         List<CrictereEvaluation> criteresEvaluation = critereEvaluationIds.stream()
                 .map(id -> crictereEvaluationRepository.findById(id)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Critère d'évaluation n'existe pas.")))
                 .peek(critere -> critere.setFournisseur(fournisseur))
                 .collect(Collectors.toList());
-        
+
         List<CrictereEvaluation> savedCriteres = crictereEvaluationRepository.saveAll(criteresEvaluation);
         return critereEvaluationMapper.toDtos(savedCriteres);
     }
@@ -84,7 +84,7 @@ public class FournisseurServiceImpl implements FournisseurService {
 
     @Override
     public void delete(UUID id) {
-        Fournisseur fournisseur=fournisseurRepository.getReferenceById(id);
+        Fournisseur fournisseur = fournisseurRepository.getReferenceById(id);
         fournisseurRepository.delete(fournisseur);
     }
 }

@@ -10,7 +10,12 @@ import com.qualiapproche.userservice.service.AppRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.InputStream;
 import java.util.List;
@@ -32,7 +37,7 @@ public class AppRoleController {
     public ResponseEntity<List<Map<String, String>>> getPermissionsDictionary() {
         try {
             InputStream is = new ClassPathResource("permissions.json").getInputStream();
-            List<Map<String, String>> permissions = objectMapper.readValue(is, new TypeReference<>() {});
+            List<Map<String, String>> permissions = objectMapper.readValue(is, new TypeReference<>() { });
             return ResponseEntity.ok(permissions);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
@@ -59,12 +64,12 @@ public class AppRoleController {
     public UserRoleAssignment assignRoleToUser(@RequestParam String userId, @RequestParam UUID roleId) {
         AppRole role = appRoleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
-        
+
         UserRoleAssignment assignment = UserRoleAssignment.builder()
                 .userId(userId)
                 .role(role)
                 .build();
-        
+
         return userRoleAssignmentRepository.save(assignment);
     }
 }

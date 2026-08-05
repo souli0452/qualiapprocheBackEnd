@@ -2,7 +2,6 @@ package com.qualiapproche.referentiel.service;
 
 import com.qualiapproche.common.dto.CrictereEvaluationDto;
 import com.qualiapproche.common.dto.FournisseurDto;
-import com.qualiapproche.referentiel.entities.CrictereEvaluation;
 import com.qualiapproche.referentiel.entities.Fournisseur;
 
 import java.util.List;

@@ -33,11 +33,63 @@ public interface WorkflowClient {
                                          @RequestParam("resourceType") String resourceType,
                                          @RequestParam("workflowId") UUID workflowId);
 
+    /**
+     * Ouvre un circuit en désignant d'emblée son titulaire.
+     *
+     * <p>Un plan d'action a un responsable dès sa rédaction : c'est lui qui doit le traiter, et non
+     * quiconque porterait un rôle. La non-conformité, elle, n'a de titulaire qu'à l'imputation.</p>
+     */
+    @PostMapping("/api/v1/workflows/initiate")
+    WorkflowInstanceDto initiateWorkflow(@RequestParam("resourceId") UUID resourceId,
+                                         @RequestParam("resourceType") String resourceType,
+                                         @RequestParam("workflowId") UUID workflowId,
+                                         @RequestParam("titulaireId") String titulaireId);
+
     @GetMapping("/api/v1/workflows/instances/{resourceId}")
     WorkflowInstanceDto getLastValidationInstance(@PathVariable("resourceId") UUID resourceId);
 
     @GetMapping("/api/v1/workflows/instances/{resourceId}/state")
     WorkflowStateDto getWorkflowState(@PathVariable("resourceId") UUID resourceId);
+
+    /**
+     * Ressources sur lesquelles l'appelant a une décision ouverte.
+     *
+     * <p>C'est le circuit qui sait qui peut agir : le déduire ici de l'état de traitement du
+     * dossier revenait à tenir une seconde table de règles, et faisait apparaître dans les listes
+     * des dossiers que le moteur refusait ensuite de faire avancer.</p>
+     */
+    @GetMapping("/api/v1/workflows/instances/mine")
+    java.util.List<UUID> ressourcesADecider(@RequestParam("resourceType") String resourceType);
+
+    /**
+     * États de plusieurs ressources en un appel : une page de N dossiers déclencherait sinon N
+     * requêtes.
+     */
+    @PostMapping("/api/v1/workflows/instances/states")
+    Map<UUID, WorkflowStateDto> getWorkflowStates(@RequestBody java.util.List<UUID> resourceIds);
+
+    /**
+     * Déclare ou retire un fait établi sur un dossier.
+     *
+     * <p>C'est ainsi qu'une règle métier devient une condition de circuit : le module sait quand
+     * « tous les plans d'action sont soldés » devient vrai, le circuit l'exige pour clore. Aucun
+     * des deux n'a besoin de connaître l'autre.</p>
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/api/v1/workflows/instances/{resourceId}/faits/{fait}")
+    void declarerFait(@PathVariable("resourceId") UUID resourceId,
+                      @PathVariable("fait") String fait,
+                      @RequestParam("etabli") boolean etabli);
+
+    /**
+     * Redésigne la personne à qui les étapes réservées au titulaire sont ouvertes.
+     *
+     * <p>Sans cet appel, changer le responsable côté module laissait le moteur réserver l'étape à
+     * l'ancien : l'un croyait avoir transféré la responsabilité, l'autre l'ouvrait toujours à celui
+     * qui ne l'avait plus.</p>
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/api/v1/workflows/instances/{resourceId}/titulaire")
+    void designerTitulaire(@PathVariable("resourceId") UUID resourceId,
+                           @RequestParam("titulaireId") String titulaireId);
 
     @PostMapping("/api/v1/workflows/validate/{resourceId}")
     void validateStep(@PathVariable("resourceId") UUID resourceId,

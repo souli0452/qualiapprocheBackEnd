@@ -23,16 +23,13 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        log.info("Checking for default Email Templates...");
-        long count = emailTemplateRepository.count();
-
-        if (count == 0) {
-            log.info("No default Email Templates found. Initializing from common/resources...");
-            initializeTemplates();
-            log.info("Default Email Templates created successfully.");
-        } else {
-            log.info("Default Email Templates already exist (count: {}).", count);
-        }
+        // Rapprochement par code, insertion seule.
+        //
+        // La condition portait sur le nombre total de modèles : dès qu'un seul existait, aucun
+        // des modèles livrés ensuite n'atteignait plus la base — une notification restait alors
+        // sans gabarit, et partait telle quelle. Un modèle retouché depuis l'écran n'est pas
+        // davantage réécrit : le corps de l'e-mail appartient à qui l'a rédigé.
+        initializeTemplates();
     }
 
     private void initializeTemplates() {
@@ -54,21 +51,26 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
             new TemplateDef("rejectPlanAction", "Rejet d'un plan d'action", "Rejet d'un plan d'action")
         );
 
+        int crees = 0;
         for (TemplateDef def : definitions) {
+            if (emailTemplateRepository.findByCode(def.code).isPresent()) {
+                continue;
+            }
             try {
                 ClassPathResource resource = new ClassPathResource("templates/" + def.code + ".html");
                 if (resource.exists()) {
                     String body = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-                    
+
                     EmailTemplate template = EmailTemplate.builder()
                             .code(def.code)
                             .subject(def.subject)
                             .body(body)
                             .description(def.description)
                             .build();
-                    
+
                     emailTemplateRepository.save(template);
-                    log.info("Saved email template: {}", def.code);
+                    crees++;
+                    log.info("Modèle d'e-mail « {} » ajouté.", def.code);
                 } else {
                     log.warn("Template file not found in classpath: templates/{}.html", def.code);
                 }
@@ -76,12 +78,18 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
                 log.error("Failed to load template {}", def.code, e);
             }
         }
+
+        if (crees > 0) {
+            log.info("Modèles d'e-mail : {} ajouté(s) sur {} livré(s).", crees, definitions.size());
+        } else {
+            log.info("Modèles d'e-mail : les {} modèles livrés sont déjà présents.", definitions.size());
+        }
     }
 
     private static class TemplateDef {
-        String code;
-        String subject;
-        String description;
+        private final String code;
+        private final String subject;
+        private final String description;
 
         TemplateDef(String code, String subject, String description) {
             this.code = code;

@@ -18,13 +18,13 @@ public class PlanActionDto {
     private String dateEcheance;
     private String responsable;
     private String critereEfficacite;
-   ;
-    public PlanActionDto(PlanAction planAction){
-        this.responsable=planAction.getResponsableNomComplet();
-        this.dateEcheance= AppUtils.formateLocalDateToString(planAction.getDateEcheance());
-        this.numeroOdre=planAction.getNumeroOdre();
-        this.causeIdentifiees=planAction.getCauseIdentifiees();
-        this.solutionRetenues=planAction.getSolutionRetenues();
-        this.critereEfficacite=planAction.getCritereEfficacite();
+
+    public PlanActionDto(PlanAction planAction) {
+        this.responsable = planAction.getResponsableNomComplet();
+        this.dateEcheance = AppUtils.formateLocalDateToString(planAction.getDateEcheance());
+        this.numeroOdre = planAction.getNumeroOdre();
+        this.causeIdentifiees = planAction.getCauseIdentifiees();
+        this.solutionRetenues = planAction.getSolutionRetenues();
+        this.critereEfficacite = planAction.getCritereEfficacite();
     }
 }

@@ -40,7 +40,7 @@ public class ReclamationServiceImpl implements ReclamationService {
 
     @Override
     public List<ReclamationDto> allReclamations() {
-        return  reclamationMapper.toDtos(reclamationRepository.findAll()) ;
+        return reclamationMapper.toDtos(reclamationRepository.findAll());
     }
 
     @Override

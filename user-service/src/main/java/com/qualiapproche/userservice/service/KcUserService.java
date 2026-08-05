@@ -3,11 +3,12 @@ package com.qualiapproche.userservice.service;
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.userservice.config.auth.CookieUtils;
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
-import com.qualiapproche.userservice.config.auth.KcConstants;
 
-import com.qualiapproche.common.dto.UserStatusDto;
-import com.qualiapproche.common.dto.auth.*;
+import com.qualiapproche.common.dto.auth.KcLoginRequestDto;
+import com.qualiapproche.common.dto.auth.KcTokenDto;
+import com.qualiapproche.common.dto.auth.KcUserDto;
 
+import com.qualiapproche.userservice.entities.UserRoleAssignment;
 import com.qualiapproche.userservice.entities.mappers.KcUserMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -168,8 +169,9 @@ public class KcUserService {
         credential.setTemporary(!kcUserDto.isEmailVerified());
         user.setCredentials(Collections.singletonList(credential));
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
-        if (response.getStatus() != 201)
+        if (response.getStatus() != 201) {
             throw new RuntimeException("Erreur création utilisateur");
+        }
         String userId = response.getLocation().getPath().replaceAll(".*/([^/]+)$", "$1");
         kcUserDto.setId(userId);
         syncAppRoles(userId, kcUserDto.getRoles());
@@ -200,8 +202,9 @@ public class KcUserService {
         user.setEmail(kcUserDto.getEmail());
         user.setEnabled(kcUserDto.isEnabled());
         Map<String, List<String>> attributes = user.getAttributes();
-        if (attributes == null)
+        if (attributes == null) {
             attributes = new HashMap<>();
+        }
         attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
         attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
         user.setAttributes(attributes);
@@ -214,7 +217,7 @@ public class KcUserService {
         if (roles != null) {
             roles.forEach(roleName -> {
                 appRoleRepository.findByName(roleName).ifPresent(role -> {
-                    com.qualiapproche.userservice.entities.UserRoleAssignment assignment = new com.qualiapproche.userservice.entities.UserRoleAssignment();
+                    UserRoleAssignment assignment = new UserRoleAssignment();
                     assignment.setUserId(userId);
                     assignment.setRole(role);
                     userRoleAssignmentRepository.save(assignment);
@@ -240,7 +243,7 @@ public class KcUserService {
     public void emailVerification(String userId, String token) {
         UserResource userResource = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId);
         UserRepresentation user = userResource.toRepresentation();
-        
+
         user.setEmailVerified(true);
         user.setRequiredActions(Collections.emptyList());
         userResource.update(user);
@@ -249,7 +252,7 @@ public class KcUserService {
         userResource.credentials().forEach(credential -> {
             if (CredentialRepresentation.PASSWORD.equals(credential.getType())) {
                 credential.setTemporary(false);
-                // On pourrait techniquement modifier l'entité, mais le plus sûr est de s'assurer 
+                // On pourrait techniquement modifier l'entité, mais le plus sûr est de s'assurer
                 // qu'aucune action UPDATE_PASSWORD ne reste dans Keycloak.
             }
         });
@@ -303,8 +306,9 @@ public class KcUserService {
     private String getAttributeValue(Map<String, List<String>> attributes, String key) {
         if (attributes != null && attributes.containsKey(key)) {
             List<String> values = attributes.get(key);
-            if (!values.isEmpty())
+            if (!values.isEmpty()) {
                 return values.get(0);
+            }
         }
         return null;
     }
@@ -443,12 +447,6 @@ public class KcUserService {
     }
 
     /**
-     * Permissions applicatives (AppRole) de l'utilisateur actuellement authentifié.
-     * Appelé par la gateway (une fois par requête entrante vers un service protégé par
-     * {@code @RequirePermissions}) pour les injecter dans l'en-tête interne
-     * {@code X-User-Permissions} transmis aux services en aval.
-     */
-    /**
      * Rôles applicatifs de l'utilisateur connecté, identifiant et nom.
      *
      * <p>Les permissions seules ne suffisent pas à tous les appelants : le contrôle d'habilitation
@@ -556,6 +554,12 @@ public class KcUserService {
         }
     }
 
+    /**
+     * Permissions applicatives (AppRole) de l'utilisateur actuellement authentifié.
+     * Appelé par la gateway (une fois par requête entrante vers un service protégé par
+     * {@code @RequirePermissions}) pour les injecter dans l'en-tête interne
+     * {@code X-User-Permissions} transmis aux services en aval.
+     */
     public List<String> getMyPermissions() {
         String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
         if (userId == null) {

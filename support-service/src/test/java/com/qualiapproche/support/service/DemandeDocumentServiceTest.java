@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.support.client.WorkflowClient;
@@ -45,7 +46,7 @@ class DemandeDocumentServiceTest {
     private DocumentQmsRepository documentRepository;
     private QmsDocumentService documentService;
     private ProfilUtilisateurService profilService;
-    private MinioService minioService;
+    private StorageService storageService;
     private QmsAuditLogService auditLogService;
     private WorkflowClient workflowClient;
     private DemandeDocumentService service;
@@ -56,12 +57,12 @@ class DemandeDocumentServiceTest {
         documentRepository = mock(DocumentQmsRepository.class);
         documentService = mock(QmsDocumentService.class);
         profilService = mock(ProfilUtilisateurService.class);
-        minioService = mock(MinioService.class);
+        storageService = mock(StorageService.class);
         auditLogService = mock(QmsAuditLogService.class);
         workflowClient = mock(WorkflowClient.class);
 
         service = new DemandeDocumentService(demandeRepository, documentRepository, documentService,
-                profilService, minioService, auditLogService, workflowClient);
+                profilService, storageService, auditLogService, workflowClient);
 
         when(demandeRepository.save(any(DemandeDocument.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

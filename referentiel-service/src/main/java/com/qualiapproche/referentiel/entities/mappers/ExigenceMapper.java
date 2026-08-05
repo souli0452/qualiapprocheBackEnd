@@ -19,7 +19,7 @@ public interface ExigenceMapper {
     List<ExigenceDto> toDtos(List<Exigence> exigenceList);
 
     List<Exigence> toEntities(List<ExigenceDto> exigenceDtos);
-    
+
     void updateEntityFromDto(ExigenceDto enqueteDto, @MappingTarget Exigence exigence);
 
     default Exigence map(UUID id) {

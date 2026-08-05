@@ -1,13 +1,9 @@
 package com.qualiapproche.common.dto;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
-import lombok.*;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.qualiapproche.common.utils.StatutEnum;
@@ -48,6 +44,11 @@ public class PlanActionDto extends AuditEntityDto {
 
     private LocalDate dateRejet;
     private String critereEfficacite;
+    /**
+     * Ce que le responsable qualité a observé, confronté au critère d'efficacité fixé à la
+     * définition de l'action. Recueilli par l'étape « Efficacité à mesurer » du circuit.
+     */
+    private String constatEfficacite;
     private UUID workflowId;
     private String workflowStatus;
 
