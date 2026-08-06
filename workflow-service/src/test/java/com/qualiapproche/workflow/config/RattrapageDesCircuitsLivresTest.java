@@ -4,6 +4,7 @@ import com.qualiapproche.workflow.model.SeveriteAction;
 import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
 import com.qualiapproche.workflow.model.WorkflowStep;
+import com.qualiapproche.workflow.model.WorkflowStepField;
 import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,6 +90,47 @@ class RattrapageDesCircuitsLivresTest {
                 .filter(t -> t.getDecision() == StepDecision.APPROUVE)
                 .findFirst().orElseThrow();
         assertThat(approbation.getToStep().getCode()).isEqualTo("VALIDATION_RQ");
+    }
+
+    @Test
+    @DisplayName("Un champ ajouté au circuit livré atteint les circuits déjà en base")
+    void champManquant_ajoute() {
+        // Une étape complète mais sans point de saisie laisse passer la décision et perd ce qu'elle
+        // devait justifier : le compte rendu du responsable n'irait nulle part.
+        Workflow circuit = WorkflowDataInitializer.circuitPlanActionParDefaut();
+        etape(circuit, "NON_TRAITER").getFields().clear();
+        enBase("PLAN_ACTION", circuit);
+
+        rattrapage.run();
+
+        assertThat(etape(circuit, "NON_TRAITER").getFields())
+                .extracting(WorkflowStepField::getFieldName)
+                .contains("causeIdentifiees", "solutionRetenues");
+        verify(workflowRepository).save(circuit);
+    }
+
+    @Test
+    @DisplayName("Un champ déjà porté par l'étape n'est pas redéfini")
+    void champExistant_preserve() {
+        Workflow circuit = WorkflowDataInitializer.circuitPlanActionParDefaut();
+        WorkflowStep aRealiser = etape(circuit, "NON_TRAITER");
+        aRealiser.getFields().removeIf(f -> f.getFieldName().equals("solutionRetenues"));
+        WorkflowStepField personnalise = aRealiser.getFields().stream()
+                .filter(f -> f.getFieldName().equals("causeIdentifiees"))
+                .findFirst().orElseThrow();
+        personnalise.setFieldLabel("Origine du problème");
+        personnalise.setRequired(false);
+        enBase("PLAN_ACTION", circuit);
+
+        rattrapage.run();
+
+        // L'administrateur a pu changer le libellé ou la portée : ce n'est pas à un rattrapage de
+        // défaire son choix. Seul ce qui manque est ajouté.
+        assertThat(personnalise.getFieldLabel()).isEqualTo("Origine du problème");
+        assertThat(personnalise.isRequired()).isFalse();
+        assertThat(aRealiser.getFields())
+                .extracting(WorkflowStepField::getFieldName)
+                .contains("solutionRetenues");
     }
 
     @Test

@@ -39,6 +39,16 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
             @Param("fin") LocalDateTime fin);
     PlanAction findPlanActionByNumeroNc(String numeroNc);
 
+    /**
+     * Actions qui ne portent ni le numéro de leur dossier, ni son processus émetteur.
+     *
+     * <p>Personne ne les écrivait : ni l'écran, ni le serveur. La recherche par numéro n'en trouvait
+     * aucune et les relances d'échéance annonçaient une action rattachée à « null ».</p>
+     */
+    @Query("SELECT p FROM PlanAction p WHERE p.numeroNc IS NULL OR TRIM(p.numeroNc) = '' "
+            + "OR p.procEmetteur IS NULL OR TRIM(p.procEmetteur) = ''")
+    List<PlanAction> findSansReperesDuDossier();
+
     @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id "
             + "AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
     List<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId);

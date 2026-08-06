@@ -60,6 +60,21 @@ public class WorkflowDataInitializer implements CommandLineRunner {
     static final String CHAMP_CONSTAT_EFFICACITE = "constatEfficacite";
 
     /**
+     * Cause que le responsable a identifiée en menant son action.
+     *
+     * <p>Avec {@link #CHAMP_SOLUTIONS_RETENUES}, c'est le <b>compte rendu</b> de l'action : ce que
+     * le pilote constate ensuite, et ce sur quoi le responsable qualité juge de l'efficacité.
+     * Recueilli par un écran puis enregistré par un appel séparé, il se perdait chaque fois que la
+     * décision partait la première — l'action changeait d'étape, et le compte rendu arrivait sur un
+     * plan qui n'était plus en cours de réalisation. Porté par l'étape, il voyage avec la décision
+     * qu'il justifie, et l'historique du moteur en garde la trace.</p>
+     */
+    static final String CHAMP_CAUSES_IDENTIFIEES = "causeIdentifiees";
+
+    /** Ce que le responsable a mis en œuvre pour remédier à la cause qu'il a identifiée. */
+    static final String CHAMP_SOLUTIONS_RETENUES = "solutionRetenues";
+
+    /**
      * Fait exigé pour valider le traitement : chaque action corrective a un responsable.
      *
      * <p>Le nom doit valoir exactement celui que déclare amelioration-service. L'agent imputé peut
@@ -576,6 +591,22 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .responsableRole(HABILITATION_TITULAIRE)
                 .emailTemplateCode("emailPlanAction")
                 .build();
+        // Déclarer une action réalisée, c'est en rendre compte : la cause qu'on a identifiée et ce
+        // qu'on a mis en œuvre. Sans ces champs, l'étape ne recueillait rien — le compte rendu était
+        // saisi sur un écran et enregistré par un appel séparé, qui n'arrivait qu'après la décision
+        // et retombait sur un plan déjà passé à la vérification, où plus rien ne l'accepte. Les deux
+        // ne sont demandés qu'à l'approbation : décliner une attribution n'oblige à rendre compte de
+        // rien.
+        step1.getFields().add(WorkflowStepField.builder().step(step1).fieldName(CHAMP_CAUSES_IDENTIFIEES)
+                .fieldLabel("Causes identifiées")
+                .type(FieldType.TEXT)
+                .decision(StepDecision.APPROUVE)
+                .isRequired(true).build());
+        step1.getFields().add(WorkflowStepField.builder().step(step1).fieldName(CHAMP_SOLUTIONS_RETENUES)
+                .fieldLabel("Solutions retenues")
+                .type(FieldType.TEXT)
+                .decision(StepDecision.APPROUVE)
+                .isRequired(true).build());
 
         // 2. EN_VERIFICATION — ce que le responsable annonce, un autre le constate.
         WorkflowStep step2 = WorkflowStep.builder()

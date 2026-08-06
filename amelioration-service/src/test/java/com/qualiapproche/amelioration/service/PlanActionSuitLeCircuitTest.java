@@ -72,6 +72,37 @@ class PlanActionSuitLeCircuitTest {
     }
 
     @Test
+    @DisplayName("Le compte rendu de la réalisation est consigné sur l'action")
+    void realisation_consigneLeCompteRendu() {
+        // Il était saisi sur l'écran de traitement puis enregistré par un appel distinct de la
+        // décision. Les deux partaient ensemble, dans un ordre que rien ne garantissait : la
+        // décision passée la première faisait quitter à l'action l'étape de réalisation, seule où le
+        // compte rendu est encore accepté, et ce que le responsable avait écrit était refusé sans
+        // que rien ne le signale.
+        service.updateWorkflowState(plan.getId(), "Réalisation à vérifier", "EN_VERIFICATION",
+                Map.of("causeIdentifiees", "Procédure non diffusée",
+                        "solutionRetenues", "Diffusion et séance d'information"));
+
+        assertThat(plan.getCauseIdentifiees()).isEqualTo("Procédure non diffusée");
+        assertThat(plan.getSolutionRetenues()).isEqualTo("Diffusion et séance d'information");
+    }
+
+    @Test
+    @DisplayName("Un franchissement sans compte rendu n'efface pas celui qui est en place")
+    void transitionOrdinaire_neVidePasLeCompteRendu() {
+        plan.setCauseIdentifiees("Procédure non diffusée");
+        plan.setSolutionRetenues("Diffusion et séance d'information");
+
+        // Le pilote confirme la réalisation : il ne rapporte rien de son côté, et ce que le
+        // responsable a écrit est précisément ce sur quoi il se prononce.
+        service.updateWorkflowState(plan.getId(), "Efficacité à mesurer", "EFFICACITE_A_MESURER",
+                Map.of("causeIdentifiees", "  "));
+
+        assertThat(plan.getCauseIdentifiees()).isEqualTo("Procédure non diffusée");
+        assertThat(plan.getSolutionRetenues()).isEqualTo("Diffusion et séance d'information");
+    }
+
+    @Test
     @DisplayName("Une désignation illisible ne fait pas échouer le franchissement")
     void designationIllisible_neBloquePas() {
         // La valeur vient du réseau. Perdre l'étape franchie parce qu'un identifiant est mal formé

@@ -135,6 +135,31 @@ class CircuitPlanActionTest {
     }
 
     @Test
+    @DisplayName("Déclarer une action réalisée, c'est en rendre compte")
+    void realisation_recueilleLeCompteRendu() {
+        // Le compte rendu était saisi sur un écran et enregistré par un appel distinct de la
+        // décision : celle-ci partant la première, l'action quittait l'étape de réalisation et ce
+        // que le responsable avait écrit n'était plus accepté nulle part. Le pilote constatait alors
+        // une action dont il ne lisait ni cause ni solution.
+        WorkflowStep aRealiser = etape("NON_TRAITER");
+
+        assertThat(aRealiser.getFields())
+                .extracting(WorkflowStepField::getFieldName)
+                .contains("causeIdentifiees", "solutionRetenues");
+
+        assertThat(aRealiser.getFields())
+                .filteredOn(f -> Set.of("causeIdentifiees", "solutionRetenues").contains(f.getFieldName()))
+                .allSatisfy(champ -> {
+                    assertThat(champ.isRequired())
+                            .withFailMessage("Une action déclarée réalisée sans compte rendu ne peut "
+                                    + "être ni vérifiée ni jugée efficace.")
+                            .isTrue();
+                    // Décliner une attribution n'oblige à rendre compte de rien : on n'a rien fait.
+                    assertThat(champ.getDecision()).isEqualTo(StepDecision.APPROUVE);
+                });
+    }
+
+    @Test
     @DisplayName("Le constat d'efficacité est exigé pour solder, et pour cela seulement")
     void constatEfficacite_exigePourSolder() {
         WorkflowStepField constat = etape("EFFICACITE_A_MESURER").getFields().stream()

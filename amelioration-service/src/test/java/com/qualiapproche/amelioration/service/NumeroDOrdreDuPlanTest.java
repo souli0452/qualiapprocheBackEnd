@@ -3,6 +3,7 @@ package com.qualiapproche.amelioration.service;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper;
 import com.qualiapproche.amelioration.entities.mappers.PlanActionMapper;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
@@ -46,6 +47,7 @@ class NumeroDOrdreDuPlanTest {
     @Mock private PlanActionRepository planActionRepository;
     @Mock private NonConformiteRepository nonConformiteRepository;
     @Mock private PlanActionMapper planActionMapper;
+    @Mock private NonConformiteResumeMapper nonConformiteResumeMapper;
     @Mock private PieceJointeStockageService fichierService;
     @Mock private PlansActionDeLaNonConformiteService plansActionService;
     @Mock private WorkflowClient workflowClient;
