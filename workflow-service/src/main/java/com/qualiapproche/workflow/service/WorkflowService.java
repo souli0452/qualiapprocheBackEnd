@@ -502,6 +502,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             // La portée était perdue à chaque enregistrement du circuit : le justificatif de rejet
             // redevenait un champ de toutes les décisions, réclamé à l'approbation comme au rejet.
             field.setDecision(decisionDeChamp(fieldDto.getDecision()));
+            // Portée la plus étroite : le champ ne se présente qu'à l'action nommée. Non écrite,
+            // elle se perdrait au premier enregistrement, comme la portée par décision avant elle.
+            field.setActionCode(WorkflowMapper.normaliserCodeAction(fieldDto.getActionCode()));
             field.setStep(step);
             merged.add(field);
         }
@@ -546,16 +549,24 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .filter(t -> t.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getId, t -> t));
 
-        Map<StepDecision, WorkflowTransition> existingByDecision = step.getTransitions().stream()
-                .filter(t -> t.getDecision() != null)
-                .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getDecision, t -> t, (t1, t2) -> t1));
+        Map<String, WorkflowTransition> existingByCode = step.getTransitions().stream()
+                .filter(t -> t.getCode() != null)
+                .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getCode, t -> t, (t1, t2) -> t1));
 
         List<WorkflowTransition> merged = new java.util.ArrayList<>();
-        java.util.Set<StepDecision> seenDecisions = new java.util.HashSet<>();
+        // Les codes déjà attribués dans cette étape : c'est le code, et non plus la décision, qui
+        // identifie une action. Une étape peut donc en offrir plusieurs de même nature — valider,
+        // ou valider en demandant un complément — là où la seconde était auparavant écartée.
+        java.util.Set<String> codesRetenus = new java.util.HashSet<>();
 
         for (WorkflowTransitionDto transitionDto : incoming) {
             StepDecision decision = transitionDto.getDecision() != null ? StepDecision.valueOf(transitionDto.getDecision()) : null;
-            if (decision != null && !seenDecisions.add(decision)) {
+            String code = codeUnique(WorkflowMapper.normaliserCodeAction(transitionDto.getCode()),
+                    decision, codesRetenus);
+            if (code == null) {
+                // Ni code ni décision : rien ne permet de désigner cette action, ni de la
+                // distinguer d'une autre. La retenir créerait une transition anonyme, que
+                // l'unicité en base ne protégerait pas et que l'éditeur ne saurait plus apparier.
                 continue;
             }
 
@@ -563,13 +574,14 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             if (transitionDto.getId() != null) {
                 transition = existingById.get(transitionDto.getId());
             }
-            if (transition == null && decision != null) {
-                transition = existingByDecision.get(decision);
+            if (transition == null) {
+                transition = existingByCode.get(code);
             }
 
             if (transition == null) {
                 transition = new WorkflowTransition();
             }
+            transition.setCode(code);
             transition.setDecision(decision);
             transition.setRequiredRole(transitionDto.getRequiredRole());
             transition.setLabel(transitionDto.getLabel());
@@ -583,6 +595,35 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         step.getTransitions().clear();
         step.getTransitions().addAll(merged);
+    }
+
+    /**
+     * Code sous lequel une action sera retenue dans son étape, garanti unique.
+     *
+     * <p>À défaut de code saisi, celui de la décision — c'est ce que portaient de fait les
+     * transitions tant qu'une étape n'en offrait que deux. Si ce code est déjà pris, un rang est
+     * ajouté : deux actions homonymes se recouvriraient l'une l'autre à l'enregistrement suivant,
+     * et l'auteur du circuit verrait disparaître celle qu'il vient d'ajouter.</p>
+     *
+     * <p>{@code null} quand ni code ni décision ne sont donnés : il n'y a alors rien à retenir.</p>
+     */
+    private String codeUnique(String codeSaisi, StepDecision decision, java.util.Set<String> dejaPris) {
+        String base = codeSaisi != null ? codeSaisi : (decision != null ? decision.name() : null);
+        if (base == null) {
+            return null;
+        }
+        if (dejaPris.add(base)) {
+            return base;
+        }
+        for (int rang = 2; rang < 100; rang++) {
+            String candidat = base + "_" + rang;
+            if (dejaPris.add(candidat)) {
+                return candidat;
+            }
+        }
+        throw new com.qualiapproche.common.exception.BusinessException(
+                "L'étape porte trop d'actions nommées « " + base + " ».",
+                org.springframework.http.HttpStatus.BAD_REQUEST);
     }
 
     /**
@@ -703,22 +744,38 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /**
-     * Sélection déterministe du workflow actif pour un type de ressource, au lieu de laisser
-     * chaque service métier prendre arbitrairement le premier élément d'une liste dont l'ordre
-     * n'est pas garanti.
+     * Circuit de <b>repli</b> d'une famille de ressource : celui qu'ouvre un module métier quand le
+     * dossier n'en désigne aucun.
+     *
+     * <p>Plusieurs circuits ouvrables par famille sont désormais la règle et non l'exception : un
+     * type de document peut désigner le sien ({@code QmsDocumentType.workflowId}), et il doit être
+     * ouvrable — donc actif — pour que le dépôt aboutisse. Dès lors, « le circuit actif » ne
+     * suffisait plus à désigner quoi que ce soit : la liste était rendue dans l'ordre de la base,
+     * sans tri, et le repli des types qui ne désignent rien pouvait changer d'un appel à l'autre.
+     * Une même installation aurait ouvert deux circuits différents sur deux documents du même
+     * type.</p>
+     *
+     * <p>Le repli est donc le <b>plus ancien</b> circuit ouvrable de la famille — celui livré au
+     * premier démarrage. Un circuit ajouté pour un type précis sert ce type, il ne déplace pas le
+     * repli de tous les autres.</p>
      */
     public WorkflowDto getActiveWorkflowByType(String documentType) {
-        List<Workflow> actifs = workflowRepository.findByResourceTypeAndActifTrue(documentType);
-        if (actifs.isEmpty()) {
+        List<Workflow> ouvrables = workflowRepository
+                .findByResourceTypeAndActifTrueOrderByCreatedAtAsc(documentType);
+        if (ouvrables.isEmpty()) {
             throw new com.qualiapproche.common.exception.BusinessException(
                     "Aucun workflow actif n'est configuré pour le type '" + documentType + "'.",
                     org.springframework.http.HttpStatus.NOT_FOUND);
         }
-        if (actifs.size() > 1) {
-            log.warn("Plusieurs workflows actifs trouvés pour le type '{}' ({}). Le premier est utilisé, "
-                    + "mais un seul devrait être marqué actif.", documentType, actifs.size());
+        Workflow repli = ouvrables.get(0);
+        if (ouvrables.size() > 1) {
+            // Ce n'est plus une anomalie : c'est ce que produit un circuit par type de document.
+            // La trace dit lequel fait office de repli, seule question que pose cette situation.
+            log.debug("{} circuits ouvrables pour la famille '{}' : « {} », le plus ancien, sert de "
+                            + "repli aux dossiers qui n'en désignent aucun.",
+                    ouvrables.size(), documentType, repli.getNom());
         }
-        return new WorkflowMapper().toDto(actifs.get(0));
+        return new WorkflowMapper().toDto(repli);
     }
 
     /**
@@ -789,8 +846,65 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         java.util.Set<TransitionPersistante> transitions = transitionsPossiblesDe(instance);
 
         return construireEtat(instance, transitions,
-                decisionsDesTransitions(List.of(transitions)),
-                etapesCourantes(List.of(instance)));
+                transitionsCitees(List.of(transitions)),
+                etapesCourantes(List.of(instance)),
+                saisiesDesDossiers(List.of(instance)));
+    }
+
+    /**
+     * Ce qui a été saisi sur chacun des dossiers cités, en une requête, la valeur la plus récente
+     * d'un champ faisant foi.
+     *
+     * <p>Les valeurs sont recueillies décision par décision et n'étaient relues que par l'onglet
+     * d'historique : une donnée demandée à la troisième étape n'apparaissait plus nulle part à la
+     * sixième, sauf si un module métier avait pris soin de la recopier dans une colonne à lui. Le
+     * moteur les publie donc avec l'état du circuit, qui accompagne déjà la ressource partout.</p>
+     *
+     * <p>Une correction ultérieure du même champ remplace la valeur sans la déplacer : l'ordre
+     * reste celui dans lequel le dossier a recueilli ses informations, ce qui en fait un compte
+     * rendu lisible plutôt qu'un journal à rebours. L'historique, lui, garde les deux valeurs.</p>
+     */
+    private Map<UUID, List<com.qualiapproche.workflow.dto.SaisieDto>> saisiesDesDossiers(
+            java.util.Collection<WorkflowValidationInstance> instances) {
+
+        java.util.Set<UUID> identifiants = instances.stream()
+                .filter(Objects::nonNull)
+                .map(WorkflowValidationInstance::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (identifiants.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, Map<String, com.qualiapproche.workflow.dto.SaisieDto>> parDossier =
+                new java.util.LinkedHashMap<>();
+
+        for (WorkflowFieldValue valeur : fieldValueRepository.saisiesDesInstances(identifiants)) {
+            ValidationHistory decision = valeur.getHistory();
+            if (decision == null || decision.getValidationInstance() == null
+                    || valeur.getFieldName() == null || valeur.getValue() == null) {
+                continue;
+            }
+            parDossier
+                    .computeIfAbsent(decision.getValidationInstance().getId(),
+                            id -> new java.util.LinkedHashMap<>())
+                    .put(valeur.getFieldName(), com.qualiapproche.workflow.dto.SaisieDto.builder()
+                            .fieldName(valeur.getFieldName())
+                            // Le libellé n'est conservé que depuis peu : à défaut, le nom technique
+                            // reste le seul repère, et vaut mieux qu'une colonne vide.
+                            .fieldLabel(valeur.getFieldLabel() != null && !valeur.getFieldLabel().isBlank()
+                                    ? valeur.getFieldLabel() : valeur.getFieldName())
+                            .value(valeur.getValue())
+                            .stepCode(decision.getStepCode())
+                            .stepName(decision.getStepName())
+                            .decisionDate(decision.getDecisionDate())
+                            .auteur(decision.getValidatorFullName() != null
+                                    ? decision.getValidatorFullName() : decision.getValidatorUserId())
+                            .build());
+        }
+
+        return parDossier.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                Map.Entry::getKey, entree -> List.copyOf(entree.getValue().values())));
     }
 
     /**
@@ -799,8 +913,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     private com.qualiapproche.workflow.dto.WorkflowStateDto construireEtat(
             WorkflowValidationInstance instance,
             java.util.Set<TransitionPersistante> transitions,
-            Map<Long, String> decisions,
-            Map<Long, WorkflowStep> etapes) {
+            Map<Long, WorkflowTransition> transitionsParId,
+            Map<Long, WorkflowStep> etapes,
+            Map<UUID, List<com.qualiapproche.workflow.dto.SaisieDto>> saisies) {
 
         List<com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto> actions = transitions.stream()
                 .map(t -> com.qualiapproche.workflow.dto.WorkflowStateDto.WorkflowActionDto.builder()
@@ -809,7 +924,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         .icon(t.getIcon())
                         .severity(t.getSeverite() != null ? t.getSeverite().getCode() : null)
                         .permission(t.getPermission())
-                        .decision(decisions.get(identifiantNumerique(t.getCode())))
+                        .decision(natureDe(transitionsParId.get(identifiantNumerique(t.getCode()))))
+                        // Le code métier de l'action, sur lequel l'écran apparie les champs qui ne
+                        // valent que pour elle. L'identifiant de transition ne le dirait pas : il
+                        // change d'une installation à l'autre.
+                        .actionCode(codeDe(transitionsParId.get(identifiantNumerique(t.getCode()))))
                         .build())
                 .toList();
 
@@ -830,16 +949,29 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .currentStepFields(etape == null ? List.of()
                         : etape.getFields().stream().map(mapper::toDto).toList())
                 .pendingDecisions(decisionsEnAttente(instance, etapeCourante))
+                // Ce que le dossier a recueilli depuis l'ouverture de son circuit. Il suit ainsi la
+                // ressource partout où son état l'accompagne, sans qu'aucun module ne le recopie.
+                .saisies(saisies.getOrDefault(instance.getId(), List.of()))
                 .build();
     }
 
     /**
-     * Décision portée par chacune des transitions citées, en une seule requête.
+     * Les transitions citées par les actions offertes, en une seule requête.
      *
      * <p>Elles étaient résolues une par une : afficher une liste de dossiers offrant chacun
-     * plusieurs actions multipliait d'autant les allers-retours.</p>
+     * plusieurs actions multipliait d'autant les allers-retours. La transition entière est
+     * rapportée — le moteur ne connaît d'elle que son identifiant, mais l'écran a besoin de sa
+     * nature et de son code métier.</p>
      */
-    private Map<Long, String> decisionsDesTransitions(
+    private String natureDe(WorkflowTransition transition) {
+        return transition == null || transition.getDecision() == null ? null : transition.getDecision().name();
+    }
+
+    private String codeDe(WorkflowTransition transition) {
+        return transition == null ? null : transition.getCode();
+    }
+
+    private Map<Long, WorkflowTransition> transitionsCitees(
             java.util.Collection<java.util.Set<TransitionPersistante>> lots) {
         java.util.Set<Long> identifiants = lots.stream()
                 .flatMap(java.util.Set::stream)
@@ -851,9 +983,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             return Map.of();
         }
         return transitionRepository.findAllById(identifiants).stream()
-                .filter(t -> t.getDecision() != null)
-                .collect(java.util.stream.Collectors.toMap(
-                        WorkflowTransition::getId, t -> t.getDecision().name()));
+                .collect(java.util.stream.Collectors.toMap(WorkflowTransition::getId, t -> t));
     }
 
     /**
@@ -1014,12 +1144,14 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             }
         }
 
-        Map<Long, String> decisions = decisionsDesTransitions(actionsParRessource.values());
+        Map<Long, WorkflowTransition> actions = transitionsCitees(actionsParRessource.values());
         Map<Long, WorkflowStep> etapes = etapesCourantes(instances.values());
+        Map<UUID, List<com.qualiapproche.workflow.dto.SaisieDto>> saisies =
+                saisiesDesDossiers(instances.values());
 
         for (Map.Entry<UUID, java.util.Set<TransitionPersistante>> entree : actionsParRessource.entrySet()) {
-            etats.put(entree.getKey(),
-                    construireEtat(instances.get(entree.getKey()), entree.getValue(), decisions, etapes));
+            etats.put(entree.getKey(), construireEtat(
+                    instances.get(entree.getKey()), entree.getValue(), actions, etapes, saisies));
         }
         return etats;
     }
@@ -1068,6 +1200,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                                 .map(v -> com.qualiapproche.workflow.dto.ValidationHistoryDto.FieldValueDto.builder()
                                         .fieldCode(v.getFieldCode())
                                         .fieldName(v.getFieldName())
+                                        .fieldLabel(v.getFieldLabel() != null && !v.getFieldLabel().isBlank()
+                                                ? v.getFieldLabel() : v.getFieldName())
                                         .value(v.getValue())
                                         .build())
                                 .toList();
@@ -1336,7 +1470,10 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
         verifierEtapeAttendue(instance, request);
-        verifierChampsRequis(instance, request, decisionDeLaTransition(transitionCode));
+        WorkflowTransition action = transitionDeCode(transitionCode);
+        verifierChampsRequis(instance, request,
+                action != null ? action.getDecision() : null,
+                action != null ? action.getCode() : null);
 
         String comments = request != null ? request.getComments() : null;
 
@@ -1361,12 +1498,16 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         org.springframework.http.HttpStatus.NOT_FOUND));
 
         verifierEtapeAttendue(instance, request);
-        verifierChampsRequis(instance, request, decision);
+
+        // L'action est résolue avant toute vérification : c'est elle, et non la seule nature de la
+        // décision, qui dit quels champs sont attendus dès lors qu'une étape en offre plusieurs.
+        WorkflowTransition action = resoudreLAction(instance, decision);
+        verifierChampsRequis(instance, request, decision, action.getCode());
 
         String comments = request != null ? request.getComments() : null;
 
         WorkflowValidationInstance updatedInstance =
-                this.executerTransition(instance.getId(), resoudreCodeTransition(instance, decision), comments, lotId);
+                this.executerTransition(instance.getId(), action.getId().toString(), comments, lotId);
 
         attachHistoryFields(updatedInstance, request);
     }
@@ -1403,14 +1544,14 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * saurait bloquer une approbation.</p>
      */
     private void verifierChampsRequis(WorkflowValidationInstance instance, WorkflowValidationRequestDto request,
-                                      StepDecision decisionPrise) {
+                                      StepDecision decisionPrise, String actionPrise) {
         Long stepId = identifiantNumerique(instance.getEtatCode());
         if (stepId == null) {
             return; // état terminal : aucune saisie attendue
         }
 
         List<WorkflowStepField> requis = stepFieldRepository.findByStepIdAndIsRequiredTrue(stepId).stream()
-                .filter(field -> concerneLaDecision(field, decisionPrise))
+                .filter(field -> concerneLaDecision(field, decisionPrise, actionPrise))
                 .toList();
         if (requis.isEmpty()) {
             return;
@@ -1434,13 +1575,13 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         }
     }
 
-    /** Décision que porte une transition désignée par son code, ou {@code null} si elle est inconnue. */
-    private StepDecision decisionDeLaTransition(String transitionCode) {
+    /** Transition désignée par son code d'exécution, ou {@code null} si elle est inconnue. */
+    private WorkflowTransition transitionDeCode(String transitionCode) {
         Long id = identifiantNumerique(transitionCode);
         if (id == null) {
             return null;
         }
-        return transitionRepository.findById(id).map(WorkflowTransition::getDecision).orElse(null);
+        return transitionRepository.findById(id).orElse(null);
     }
 
     /**
@@ -1450,7 +1591,13 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * — franchissement par code de transition, où la décision n'est pas donnée — ne restreint
      * rien : mieux vaut demander un champ de trop que d'en laisser passer un requis.</p>
      */
-    private boolean concerneLaDecision(WorkflowStepField field, StepDecision decisionPrise) {
+    private boolean concerneLaDecision(WorkflowStepField field, StepDecision decisionPrise, String actionPrise) {
+        // Portée la plus étroite d'abord : un champ qui nomme une action ne regarde qu'elle, quelle
+        // que soit la nature de la décision — deux actions d'une même étape peuvent l'une et l'autre
+        // approuver sans rien attendre de la même saisie.
+        if (field.getActionCode() != null && !field.getActionCode().isBlank()) {
+            return actionPrise == null || field.getActionCode().equalsIgnoreCase(actionPrise);
+        }
         return field.getDecision() == null || decisionPrise == null || field.getDecision() == decisionPrise;
     }
 
@@ -1464,7 +1611,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * « La transition APPROUVE est inconnue ». La décision est donc résolue ici en transition
      * réelle, à partir de l'étape courante de l'instance.</p>
      */
-    private String resoudreCodeTransition(WorkflowValidationInstance instance, StepDecision decision) {
+    private WorkflowTransition resoudreLAction(WorkflowValidationInstance instance, StepDecision decision) {
         // Les états terminaux synthétiques (TERMINATED_*) ne portent pas d'étape : plus rien à décider.
         Long stepId = identifiantNumerique(instance.getEtatCode());
         if (stepId == null) {
@@ -1473,11 +1620,25 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                     org.springframework.http.HttpStatus.CONFLICT);
         }
 
-        return transitionRepository.findByFromStepIdAndDecision(stepId, decision)
-                .map(transition -> transition.getId().toString())
-                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
-                        "L'action « " + decision.name() + " » n'est pas prévue à l'étape courante de ce circuit.",
-                        org.springframework.http.HttpStatus.CONFLICT));
+        List<WorkflowTransition> candidates = transitionRepository.findByFromStepIdAndDecision(stepId, decision);
+        if (candidates.isEmpty()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "L'action « " + decision.name() + " » n'est pas prévue à l'étape courante de ce circuit.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        if (candidates.size() > 1) {
+            // Une étape peut offrir plusieurs actions de même nature — valider, ou valider en
+            // demandant un complément. Elles ne mènent pas au même endroit : en choisir une au nom
+            // de l'utilisateur ferait prendre au dossier une route que personne n'a décidée.
+            String noms = candidates.stream()
+                    .map(t -> t.getLabel() != null ? t.getLabel() : t.getCode())
+                    .collect(java.util.stream.Collectors.joining(", "));
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    "Cette étape offre plusieurs actions de cette nature (" + noms + ") : nommez "
+                            + "celle que vous prenez plutôt que sa seule nature.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+        return candidates.get(0);
     }
 
     private void attachHistoryFields(WorkflowValidationInstance updatedInstance, WorkflowValidationRequestDto request) {
@@ -1506,6 +1667,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                             .history(lastHistory)
                             .fieldCode(field.getId().toString())
                             .fieldName(field.getFieldName())
+                            // Recopié, non relu : un champ retiré du circuit laisserait sinon ses
+                            // valeurs sans intitulé lisible.
+                            .fieldLabel(field.getFieldLabel())
                             .value(entry.getValue())
                             .build();
                     fieldValueRepository.save(fieldValue);

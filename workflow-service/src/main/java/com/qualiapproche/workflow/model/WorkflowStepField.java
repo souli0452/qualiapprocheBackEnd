@@ -62,4 +62,19 @@ public class WorkflowStepField {
     @Enumerated(EnumType.STRING)
     @Column(name = "decision")
     private StepDecision decision;
+
+    /**
+     * Action précise à laquelle ce champ se rapporte, désignée par son code, ou {@code null} s'il
+     * vaut pour toutes celles que sa {@link #decision} laisse passer.
+     *
+     * <p>La portée par décision ne suffit plus dès qu'une étape offre plusieurs actions de même
+     * nature : le motif que réclame « Demander un complément » serait exigé de qui valide
+     * simplement, les deux approuvant. Le code de l'action est le seul repère qui les
+     * distingue.</p>
+     *
+     * <p>Les deux portées se cumulent, la plus étroite l'emportant : un champ qui nomme une action
+     * n'est demandé que par elle.</p>
+     */
+    @Column(name = "action_code", length = 60)
+    private String actionCode;
 }

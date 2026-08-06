@@ -71,6 +71,7 @@ public class QmsDocumentService {
     private final QmsDocumentTypeService typeService;
     private final MailService mailService;
     private final WorkflowClient workflowClient;
+    private final EtatsDuCircuitService etatsDuCircuit;
 
     /**
      * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
@@ -113,37 +114,7 @@ public class QmsDocumentService {
         QmsDocumentType docType = typeService.getTypeByCode(documentType);
 
         // 2. Verify and resolve workflow for the document type
-        UUID finalWorkflowId = workflowId;
-        if (finalWorkflowId == null) {
-            finalWorkflowId = docType.getWorkflowId();
-
-            // Repli si le type de document ne désigne pas encore de circuit : on demande celui qui
-            // est actif pour les documents.
-            //
-            // Le repli interrogeait le circuit actif du type de *document* ('PRO', 'ENR'…), alors
-            // que le circuit est ensuite ouvert en tant que 'DOCUMENT'. Les deux désignations ne
-            // recouvrent pas la même notion : `resourceType` est la famille de ressource, la seule
-            // que sache router la remise des notifications ({@code WorkflowNotificationService} ne
-            // connaît que DOCUMENT, NON_CONFORMITE et PLAN_ACTION). Un circuit enregistré sous un
-            // code de type documentaire n'aurait donc jamais pu notifier personne.
-            //
-            // Le circuit propre à un type de document se choisit par {@code docType.workflowId},
-            // ci-dessus : c'est le mécanisme prévu pour cela.
-            if (finalWorkflowId == null) {
-                WorkflowSummaryDto activeWorkflow = workflowClient.getActiveWorkflowByType("DOCUMENT");
-                if (activeWorkflow != null && activeWorkflow.getId() != null) {
-                    finalWorkflowId = activeWorkflow.getId();
-                }
-            }
-        }
-
-        if (finalWorkflowId == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '" + docType.getLibelle()
-                            + "'. Veuillez d'abord configurer le type de document avec un workflow valide."
-            );
-        }
+        UUID finalWorkflowId = circuitDuDepot(docType, workflowId);
 
         Map<String, Object> workflow = null;
         try {
@@ -242,6 +213,60 @@ public class QmsDocumentService {
         document = documentRepository.save(document);
 
         return document;
+    }
+
+    /**
+     * Circuit sur lequel ouvrir le dépôt, dans l'ordre où les configurations font autorité.
+     *
+     * <ol>
+     *   <li>le circuit imposé par l'appelant, s'il y en a un ;</li>
+     *   <li><b>le circuit désigné par le type de document</b> — c'est ainsi qu'un type suit son
+     *       propre circuit, le type étant retrouvé par son code ;</li>
+     *   <li>à défaut, le circuit de repli de la famille {@code DOCUMENT} : le plus ancien circuit
+     *       ouvrable, c'est-à-dire celui livré au premier démarrage.</li>
+     * </ol>
+     *
+     * <p>Le repli n'interroge pas le circuit actif du <i>type</i> documentaire ('PRO', 'ENR'…) mais
+     * celui de la <b>famille</b> : {@code resourceType} désigne la famille de ressource, seule que
+     * sache router la remise des notifications — {@code WorkflowNotificationService} ne connaît que
+     * DOCUMENT, NON_CONFORMITE et PLAN_ACTION. Un circuit enregistré sous un code de type
+     * documentaire n'aurait jamais pu notifier personne.</p>
+     *
+     * <p>Extrait de {@code createDocument} pour être vérifiable seul : c'est la règle que
+     * l'administrateur configure, et elle se lisait au milieu de cent trente lignes de dépôt.</p>
+     *
+     * @throws ResponseStatusException en 400 si aucun circuit ne peut être déterminé
+     */
+    UUID circuitDuDepot(QmsDocumentType docType, UUID circuitImpose) {
+        if (circuitImpose != null) {
+            return circuitImpose;
+        }
+
+        if (docType.getWorkflowId() != null) {
+            return docType.getWorkflowId();
+        }
+
+        UUID repli = null;
+        try {
+            WorkflowSummaryDto actif = workflowClient.getActiveWorkflowByType("DOCUMENT");
+            if (actif != null) {
+                repli = actif.getId();
+            }
+        } catch (Exception e) {
+            // Aucun circuit ouvrable pour la famille, ou service de circuits injoignable : le refus
+            // qui suit le dit en clair, plutôt que de laisser remonter une erreur technique.
+            log.warn("Circuit de repli des documents indisponible : {}", e.getMessage());
+        }
+
+        if (repli == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Aucun circuit de validation (workflow) n'est configuré pour le type de document '"
+                            + docType.getLibelle() + "'. Veuillez d'abord configurer le type de document "
+                            + "avec un workflow valide."
+            );
+        }
+        return repli;
     }
 
     @Transactional
@@ -1076,6 +1101,32 @@ public class QmsDocumentService {
     /** L'utilisateur peut-il consulter l'historique et le suivi interne de ce document ? */
     public boolean peutVoirLeSuiviInterne(DocumentQms document) {
         return porteeSur(document) == Portee.INTERNE;
+    }
+
+    /**
+     * Documents sur lesquels l'appelant a une décision ouverte — et eux seuls.
+     *
+     * <p>C'est le circuit qui les désigne, puisque c'est lui qui porte l'habilitation de chaque
+     * étape. Les déduire du statut du document aurait rejoué une seconde règle de visibilité, qui
+     * aurait divergé de la première : la vue d'ensemble aurait alors proposé des dossiers que le
+     * moteur refuse ensuite de faire avancer.</p>
+     *
+     * <p>Le classement reste opposable : un document que l'appelant ne peut pas voir n'apparaît pas,
+     * même si le circuit le nomme parmi ses décideurs. Le cas n'est pas silencieux pour autant — le
+     * dépôt d'un document dont le niveau exclut les rôles du circuit est averti à ce moment-là
+     * (voir {@link #avertissementSurLeClassement}).</p>
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<DocumentQms> aTraiterParLAppelant() {
+        List<UUID> aDecider = etatsDuCircuit.ressourcesADecider("DOCUMENT");
+        if (aDecider.isEmpty()) {
+            return List.of();
+        }
+        return documentRepository.findAllById(aDecider).stream()
+                .filter(document -> porteeSur(document) != Portee.AUCUNE)
+                .sorted(java.util.Comparator.comparing(DocumentQms::getCreatedAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                .toList();
     }
 
     /**

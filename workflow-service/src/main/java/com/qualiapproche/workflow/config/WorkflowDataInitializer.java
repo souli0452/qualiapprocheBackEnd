@@ -385,12 +385,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .responsableRole(HABILITATION_TITULAIRE)
                 .emailTemplateCode("emailPlanAction")
                 .build();
-        traitement.getFields().add(WorkflowStepField.builder().step(traitement).fieldName("actionPreventive")
-                .fieldLabel("Action préventive proposée").type(FieldType.TEXT).isRequired(true).build());
-        traitement.getFields().add(WorkflowStepField.builder().step(traitement).fieldName("delaisMiseOeuvre")
-                .fieldLabel("Délai de mise en œuvre").type(FieldType.TEXT).isRequired(true).build());
-        traitement.getFields().add(WorkflowStepField.builder().step(traitement).fieldName("actionDsc")
-                .fieldLabel("Action de DSC").type(FieldType.TEXT).isRequired(false).build());
+        // Le traitement ne demande rien en saisie libre : ce qui est décidé à cette étape s'écrit
+        // dans les plans d'action (action corrective, échéance, critère d'efficacité), où le circuit
+        // du plan le suit ensuite. Le redemander en texte sur l'étape faisait saisir deux fois la
+        // même chose, sans que personne ne relise la seconde.
         traitement.getFields().add(champDocumentRejet(traitement));
 
         // 6. VALIDATION — le pilote juge la pertinence des actions proposées.
@@ -403,10 +401,9 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .responsableRole("PILOTE")
                 .emailTemplateCode("validationNonConformite")
                 .build();
-        validation.getFields().add(WorkflowStepField.builder().step(validation).fieldName("pertinancePilote")
-                .fieldLabel("Pertinence de l'action").type(FieldType.TEXT).isRequired(true).build());
-        validation.getFields().add(WorkflowStepField.builder().step(validation).fieldName("justificationPilote")
-                .fieldLabel("Justification du Pilote").type(FieldType.TEXT).isRequired(true).build());
+        // La pertinence et sa justification étaient demandées en texte alors que le pilote se
+        // prononce déjà par sa décision : approuver, c'est juger l'action pertinente, et tout
+        // franchissement exige un commentaire que l'historique conserve.
         validation.getFields().add(champDocumentRejet(validation));
 
         // 7. VALIDATION_RS — contre-validation de la qualité.

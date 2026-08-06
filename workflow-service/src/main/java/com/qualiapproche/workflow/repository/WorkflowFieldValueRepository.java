@@ -15,4 +15,21 @@ public interface WorkflowFieldValueRepository extends JpaRepository<WorkflowFiel
      * sans être ajoutées à la collection en mémoire de l'historique déjà chargé.</p>
      */
     java.util.List<WorkflowFieldValue> findByHistory_Id(Long historyId);
+
+    /**
+     * Toutes les valeurs saisies sur les dossiers cités, la plus ancienne d'abord.
+     *
+     * <p>En une requête pour tout un lot : l'état du circuit est joint à chaque ligne des listes de
+     * dossiers, et une lecture par ligne — voire par décision — aurait rendu ruineux l'affichage
+     * d'une page.</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select v from WorkflowFieldValue v
+            join fetch v.history h
+            where h.validationInstance.id in :instances
+            order by h.decisionDate asc, v.id asc
+            """)
+    java.util.List<WorkflowFieldValue> saisiesDesInstances(
+            @org.springframework.data.repository.query.Param("instances")
+            java.util.Collection<java.util.UUID> instances);
 }

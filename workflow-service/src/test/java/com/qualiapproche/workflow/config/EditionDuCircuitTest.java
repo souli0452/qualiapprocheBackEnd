@@ -92,7 +92,55 @@ class EditionDuCircuitTest {
                 assertThat(champRelu.getOptions()).isEqualTo(champ.getOptions());
                 assertThat(champRelu.getDecision())
                         .isEqualTo(champ.getDecision() == null ? null : champ.getDecision().name());
+                assertThat(champRelu.getActionCode()).isEqualTo(champ.getActionCode());
             }
         }
+    }
+
+    @Test
+    @DisplayName("Le code d'une action survit à un enregistrement")
+    void codeDeLAction_conserve() {
+        com.qualiapproche.workflow.model.WorkflowTransition transition =
+                com.qualiapproche.workflow.model.WorkflowTransition.builder()
+                        .code("DEMANDER_COMPLEMENT")
+                        .decision(StepDecision.APPROUVE)
+                        .label("Demander un complément")
+                        .build();
+
+        com.qualiapproche.workflow.dto.WorkflowTransitionDto relu = mapper.toDto(transition);
+
+        // C'est le code qui identifie l'action dans son étape : perdu, deux actions de même nature
+        // se confondent, et l'enregistrement suivant en efface une.
+        assertThat(relu.getCode()).isEqualTo("DEMANDER_COMPLEMENT");
+    }
+
+    @Test
+    @DisplayName("Le champ propre à une action survit à un enregistrement")
+    void actionDuChamp_conservee() {
+        WorkflowStepField champ = WorkflowStepField.builder()
+                .id(9L).fieldName("precisionsAttendues").fieldLabel("Précisions attendues")
+                .type(FieldType.TEXT)
+                .decision(StepDecision.APPROUVE)
+                .actionCode("DEMANDER_COMPLEMENT")
+                .build();
+
+        WorkflowStepFieldDto relu = mapper.toDto(champ);
+
+        // Perdue, la question posée par « Demander un complément » serait posée à qui valide
+        // simplement : les deux actions approuvent.
+        assertThat(relu.getActionCode()).isEqualTo("DEMANDER_COMPLEMENT");
+    }
+
+    @Test
+    @DisplayName("Une action sans code se nomme d'après sa décision")
+    void actionSansCode_prendCelleDeSaDecision() {
+        com.qualiapproche.workflow.model.WorkflowTransition transition =
+                com.qualiapproche.workflow.model.WorkflowTransition.builder()
+                        .decision(StepDecision.REJETE)
+                        .build();
+
+        // Les circuits antérieurs n'ont pas de code : ils portaient de fait celui de leur décision.
+        // Sans ce repli, rien ne les apparierait plus au circuit livré.
+        assertThat(transition.codeEffectif()).isEqualTo("REJETE");
     }
 }

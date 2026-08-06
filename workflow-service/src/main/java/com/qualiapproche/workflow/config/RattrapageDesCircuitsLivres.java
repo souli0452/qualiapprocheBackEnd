@@ -1,6 +1,5 @@
 package com.qualiapproche.workflow.config;
 
-import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowStepField;
@@ -52,6 +51,17 @@ import java.util.function.Supplier;
 @Order(120) // après ChampDocumentRejetInitializer, qui complète les champs
 public class RattrapageDesCircuitsLivres implements CommandLineRunner {
 
+    /**
+     * Champs qu'une étape du circuit livré a demandés puis abandonnés, par code d'étape.
+     *
+     * <p>Le traitement décrivait en texte libre ce que portent les plans d'action ; la validation
+     * demandait au pilote d'écrire que l'action est pertinente, ce que sa décision dit déjà et que
+     * son commentaire justifie.</p>
+     */
+    private static final Map<String, List<String>> CHAMPS_ABANDONNES = Map.of(
+            "TRAITEMENT", List.of("actionPreventive", "delaisMiseOeuvre", "actionDsc"),
+            "VALIDATION", List.of("pertinancePilote", "justificationPilote"));
+
     private final WorkflowRepository workflowRepository;
 
     @Override
@@ -80,6 +90,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             int ajouts = ajouterLesEtapesManquantes(circuit, reference, etapesDeReference)
                     + ajouterLesTransitionsManquantes(circuit, etapesDeReference)
                     + ajouterLesChampsManquants(circuit, etapesDeReference)
+                    + retirerLesChampsAbandonnes(circuit)
                     + reserverAuTitulaire(circuit, etapesDeReference);
             if (ajouts > 0) {
                 workflowRepository.save(circuit);
@@ -151,8 +162,10 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             }
 
             for (WorkflowTransition transition : step.getTransitions()) {
+                // Appariées par code d'action, et non par décision : une étape peut offrir
+                // plusieurs suites qui approuvent, et la décision ne suffit plus à les distinguer.
                 WorkflowTransition transitionDeReference = modele.getTransitions().stream()
-                        .filter(t -> t.getDecision() == transition.getDecision())
+                        .filter(t -> Objects.equals(t.codeEffectif(), transition.codeEffectif()))
                         .findFirst().orElse(null);
                 if (transitionDeReference == null) {
                     continue;
@@ -183,7 +196,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             }
 
             for (WorkflowTransition transitionDeReference : modele.getTransitions()) {
-                if (emetDeja(step, transitionDeReference.getDecision())) {
+                if (emetDeja(step, transitionDeReference.codeEffectif())) {
                     continue;
                 }
                 WorkflowStep destination = destination(transitionDeReference, presentes);
@@ -244,6 +257,38 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
     }
 
     /**
+     * Retire des étapes les champs que le circuit livré ne demande plus.
+     *
+     * <p>Le rattrapage ne complète que ce qui manque : un champ retiré du circuit livré restait
+     * donc en place sur toutes les bases en service, et, la plupart étant obligatoires, continuait
+     * d'être <b>exigé</b> à chaque décision. Un champ abandonné ne se laisse pas mourir de sa
+     * belle mort.</p>
+     *
+     * <p>C'est un retrait nommé, non une remise à l'identique : seuls les champs de cette liste
+     * disparaissent, et un champ ajouté par un administrateur depuis l'éditeur n'est jamais touché.
+     * Les valeurs déjà saisies restent dans l'historique des décisions, qui ne dépend pas du
+     * circuit.</p>
+     */
+    private int retirerLesChampsAbandonnes(Workflow circuit) {
+        int retires = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            List<String> abandonnes = CHAMPS_ABANDONNES.getOrDefault(step.getCode(), List.of());
+            if (abandonnes.isEmpty()) {
+                continue;
+            }
+            for (String nomDeChamp : abandonnes) {
+                if (step.getFields().removeIf(champ -> nomDeChamp.equals(champ.getFieldName()))) {
+                    retires++;
+                    log.info("Circuit « {} » : champ « {} » retiré de l'étape « {} ».",
+                            circuit.getNom(), nomDeChamp, step.getCode());
+                }
+            }
+        }
+        return retires;
+    }
+
+    /**
      * Rend au titulaire du dossier les étapes que le circuit livré lui réserve.
      *
      * <p>C'est la seule correction que ce rattrapage s'autorise sur une étape existante, et elle se
@@ -274,7 +319,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
 
             for (WorkflowTransition transition : step.getTransitions()) {
                 WorkflowTransition transitionDeReference = modele.getTransitions().stream()
-                        .filter(t -> t.getDecision() == transition.getDecision())
+                        .filter(t -> Objects.equals(t.codeEffectif(), transition.codeEffectif()))
                         .findFirst().orElse(null);
                 if (transitionDeReference != null
                         && WorkflowDataInitializer.HABILITATION_TITULAIRE.equals(transitionDeReference.getRequiredRole())
@@ -321,8 +366,8 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
         return presentes.get(transition.getToStep().getCode());
     }
 
-    private boolean emetDeja(WorkflowStep step, StepDecision decision) {
-        return step.getTransitions().stream().anyMatch(t -> t.getDecision() == decision);
+    private boolean emetDeja(WorkflowStep step, String codeAction) {
+        return step.getTransitions().stream().anyMatch(t -> Objects.equals(t.codeEffectif(), codeAction));
     }
 
     private WorkflowStep copierEtape(WorkflowStep modele) {
@@ -354,6 +399,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
         return WorkflowTransition.builder()
                 .fromStep(depuis)
                 .toStep(vers)
+                .code(modele.codeEffectif())
                 .decision(modele.getDecision())
                 .label(modele.getLabel())
                 .icon(modele.getIcon())

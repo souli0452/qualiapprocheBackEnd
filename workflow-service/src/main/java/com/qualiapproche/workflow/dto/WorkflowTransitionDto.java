@@ -11,6 +11,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class WorkflowTransitionDto {
     private Long id;
+    /**
+     * Code de l'action au sein de son étape ({@code APPROUVE}, {@code DEMANDER_COMPLEMENT}…).
+     *
+     * <p>C'est lui qui identifie l'action, et non sa décision : une étape peut en offrir plusieurs
+     * de même nature. Vide, le nom de la décision est repris — et rendu unique si l'étape le porte
+     * déjà.</p>
+     */
+    private String code;
     /** Libellé du bouton d'action. Vide, le nom de la décision est repris. */
     private String label;
     /**

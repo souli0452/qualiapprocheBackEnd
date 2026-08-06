@@ -57,6 +57,7 @@ public class QmsDocumentController {
     private final QmsAuditLogService auditLogService;
     private final DocumentMapper documentMapper;
     private final com.qualiapproche.support.client.WorkflowClient workflowClient;
+    private final com.qualiapproche.support.service.EtatsDuCircuitService etatsDuCircuit;
     private final com.qualiapproche.support.service.NiveauxConfidentialiteService niveauxConfidentialiteService;
     private final com.qualiapproche.support.service.ProfilUtilisateurService profilUtilisateurService;
 
@@ -295,6 +296,45 @@ public class QmsDocumentController {
 
         return ResponseEntity.ok(documentService.searchDocuments(criteria, pageable)
                 .map(this::versDtoSitue));
+    }
+
+    /**
+     * Documents que l'appelant a à traiter, avec les décisions que le circuit lui ouvre.
+     *
+     * <p>Distinct de la recherche : celle-ci répond à « qu'ai-je à faire », non à « que puis-je
+     * consulter ». Les écrans de traitement se fondaient sur le statut du document et montraient
+     * donc à chacun les dossiers de tous — ouverts, puis refusés par le moteur au moment de
+     * décider. C'est le circuit qui désigne les dossiers, puisque c'est lui qui porte
+     * l'habilitation de chaque étape.</p>
+     *
+     * <p>L'état du circuit accompagne chaque ligne, demandé en un seul lot : sans lui la liste
+     * annoncerait des décisions à prendre sans en offrir aucune, et un appel par ligne aurait
+     * multiplié les allers-retours autant que de dossiers.</p>
+     *
+     * <p>Rendue en {@code ApiResponse} explicite : {@code GlobalResponseHandler} pagine d'office
+     * toute réponse de type {@code List}, et l'écran recevrait un objet de pagination là où il
+     * attend un tableau.</p>
+     */
+    @GetMapping("/a-traiter")
+    @PreAuthorize("@perm.canRead(this)")
+    @Operation(summary = "Documents sur lesquels l'appelant peut décider")
+    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DocumentQmsDto>>> aTraiter() {
+        List<DocumentQms> documents = documentService.aTraiterParLAppelant();
+        if (documents.isEmpty()) {
+            return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(List.of()));
+        }
+
+        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
+                documents.stream().map(DocumentQms::getId).toList());
+
+        List<DocumentQmsDto> lignes = documents.stream()
+                .map(doc -> {
+                    DocumentQmsDto dto = versDtoSitue(doc);
+                    dto.setWorkflowState(etats.get(doc.getId()));
+                    return dto;
+                })
+                .toList();
+        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(lignes));
     }
 
     /**

@@ -23,4 +23,13 @@ public class WorkflowStepFieldDto {
      * choisie réclame.
      */
     private String decision;
+
+    /**
+     * Code de l'action qui, seule, réclame ce champ — ou {@code null} s'il vaut pour toutes celles
+     * que sa décision laisse passer.
+     *
+     * <p>Nécessaire dès qu'une étape offre plusieurs actions de même nature : sans lui, le motif
+     * demandé par « Demander un complément » se présenterait aussi à qui valide simplement.</p>
+     */
+    private String actionCode;
 }

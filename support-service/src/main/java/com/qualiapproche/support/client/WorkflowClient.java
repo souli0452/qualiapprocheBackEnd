@@ -45,6 +45,16 @@ public interface WorkflowClient {
     @PostMapping("/api/v1/workflows/instances/states")
     Map<UUID, WorkflowStateDto> getWorkflowStates(@RequestBody java.util.List<UUID> resourceIds);
 
+    /**
+     * Ressources sur lesquelles l'appelant a une décision ouverte.
+     *
+     * <p>C'est le circuit qui sait qui peut agir : le déduire du statut du document reviendrait à
+     * tenir une seconde table de règles, qui ferait apparaître dans la liste de travail des
+     * dossiers que le moteur refuse ensuite de faire avancer.</p>
+     */
+    @GetMapping("/api/v1/workflows/instances/mine")
+    java.util.List<UUID> ressourcesADecider(@RequestParam("resourceType") String resourceType);
+
     @PostMapping("/api/v1/workflows/validate/{resourceId}")
     void validateStep(@PathVariable("resourceId") UUID resourceId,
                       @RequestHeader(value = "X-User-Id", required = false) String userId,

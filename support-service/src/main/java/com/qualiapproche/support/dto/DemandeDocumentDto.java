@@ -39,4 +39,14 @@ public class DemandeDocumentDto {
      * pour une modification, confirmation du retrait pour une suppression.
      */
     private boolean enAttenteExecution;
+
+    /**
+     * État du circuit : étape courante, décisions ouvertes à l'appelant, champs à renseigner.
+     *
+     * <p>Renseigné par les listes qui proposent d'agir — la vue d'ensemble — et nul ailleurs. Une
+     * liste qui annonce des décisions à prendre sans porter les actions du moteur oblige à ouvrir
+     * chaque fiche pour découvrir ce qu'on peut y faire ; et les demander une par une multipliait
+     * les allers-retours autant que de lignes.</p>
+     */
+    private com.qualiapproche.common.dto.WorkflowStateDto workflowState;
 }

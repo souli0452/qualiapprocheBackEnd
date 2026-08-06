@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.config;
 
+import com.qualiapproche.workflow.model.FieldType;
 import com.qualiapproche.workflow.model.SeveriteAction;
 import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
@@ -198,6 +199,50 @@ class RattrapageDesCircuitsLivresTest {
                 .allSatisfy(t -> assertThat(t.getRequiredRole())
                         .isEqualTo(WorkflowDataInitializer.HABILITATION_TITULAIRE));
         verify(workflowRepository).save(circuit);
+    }
+
+    @Test
+    @DisplayName("Un champ que le circuit livré ne demande plus est retiré des bases en service")
+    void champAbandonne_retire() {
+        Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
+        WorkflowStep traitement = etape(circuit, "TRAITEMENT");
+        traitement.getFields().add(WorkflowStepField.builder().step(traitement)
+                .fieldName("actionPreventive").fieldLabel("Action préventive proposée")
+                .type(FieldType.TEXT).isRequired(true).build());
+        WorkflowStep validation = etape(circuit, "VALIDATION");
+        validation.getFields().add(WorkflowStepField.builder().step(validation)
+                .fieldName("pertinancePilote").fieldLabel("Pertinence de l'action")
+                .type(FieldType.TEXT).isRequired(true).build());
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        // Le rattrapage ne complétant que ce qui manque, un champ retiré du circuit livré restait
+        // en place sur toutes les bases en service — et, obligatoire, continuait d'être exigé à
+        // chaque décision.
+        assertThat(traitement.getFields()).extracting(WorkflowStepField::getFieldName)
+                .doesNotContain("actionPreventive");
+        assertThat(validation.getFields()).extracting(WorkflowStepField::getFieldName)
+                .doesNotContain("pertinancePilote");
+        verify(workflowRepository).save(circuit);
+    }
+
+    @Test
+    @DisplayName("Le retrait est nommé : un champ ajouté depuis l'éditeur n'est pas emporté")
+    void champPersonnalise_conserve() {
+        Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
+        WorkflowStep traitement = etape(circuit, "TRAITEMENT");
+        traitement.getFields().add(WorkflowStepField.builder().step(traitement)
+                .fieldName("impactBudgetaire").fieldLabel("Impact budgétaire")
+                .type(FieldType.TEXT).isRequired(false).build());
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        // Seuls les champs abandonnés par le circuit livré disparaissent : le reste appartient à
+        // l'administrateur qui l'a posé.
+        assertThat(traitement.getFields()).extracting(WorkflowStepField::getFieldName)
+                .contains("impactBudgetaire");
     }
 
     @Test

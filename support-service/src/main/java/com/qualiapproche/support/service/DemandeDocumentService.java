@@ -52,6 +52,7 @@ public class DemandeDocumentService {
     private final StorageService storageService;
     private final QmsAuditLogService auditLogService;
     private final WorkflowClient workflowClient;
+    private final EtatsDuCircuitService etatsDuCircuit;
 
     /**
      * Dépose une demande et ouvre son circuit.
@@ -262,6 +263,47 @@ public class DemandeDocumentService {
     }
 
     /**
+     * Demandes sur lesquelles l'appelant a une décision ouverte, l'état de leur circuit joint.
+     *
+     * <p>C'est le circuit qui les désigne : lui seul sait quel rôle décide de l'étape courante.
+     * {@link #mesDemandes()} montre ce que l'appelant a le droit de <b>voir</b> — sa structure, ou
+     * tout pour le responsable qualité ; cette liste-ci montre ce qu'il a à <b>faire</b>, ce qui
+     * n'est pas la même chose et ne se déduit pas de l'état de la demande.</p>
+     *
+     * <p>La portée de visibilité reste appliquée par-dessus : une demande hors de portée n'apparaît
+     * pas, même si le moteur la nomme. Les deux règles se cumulent, aucune ne remplace l'autre.</p>
+     *
+     * <p>L'état du circuit accompagne chaque ligne — sans lui, l'écran annoncerait des décisions à
+     * prendre sans pouvoir en offrir aucune — et il est demandé en un seul lot.</p>
+     */
+    public List<DemandeDocumentDto> aTraiterParLAppelant() {
+        List<UUID> aDecider = etatsDuCircuit.ressourcesADecider(FAMILLE);
+        if (aDecider.isEmpty()) {
+            return List.of();
+        }
+
+        List<DemandeDocument> demandes = demandeRepository.findAllById(aDecider).stream()
+                .filter(this::estAPortee)
+                .sorted(java.util.Comparator.comparing(DemandeDocument::getCreatedAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                .toList();
+        if (demandes.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
+                demandes.stream().map(DemandeDocument::getId).toList());
+
+        return demandes.stream()
+                .map(demande -> {
+                    DemandeDocumentDto dto = versDto(demande);
+                    dto.setWorkflowState(etats.get(demande.getId()));
+                    return dto;
+                })
+                .toList();
+    }
+
+    /**
      * Applique à une demande prise isolément la règle qui gouverne la liste.
      *
      * <p>Le filtre de la liste ne protégeait qu'elle : il suffisait de connaître un identifiant
@@ -273,17 +315,25 @@ public class DemandeDocumentService {
      * identifiant.</p>
      */
     private void exigerAccesDemande(DemandeDocument demande) {
+        if (!estAPortee(demande)) {
+            throw new IllegalArgumentException("Demande introuvable : " + demande.getId());
+        }
+    }
+
+    /**
+     * La demande est-elle à portée de l'appelant ?
+     *
+     * <p>Même règle que {@link #exigerAccesDemande}, posée en question plutôt qu'en refus : une
+     * liste écarte en silence ce qui n'est pas à portée, là où un accès direct doit répondre.</p>
+     */
+    private boolean estAPortee(DemandeDocument demande) {
         String utilisateur = SecurityUtils.getCurrentUserId();
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
 
-        boolean autorise = profil.voitToutesLesStructures()
+        return profil.voitToutesLesStructures()
                 || (utilisateur != null && utilisateur.equals(demande.getDemandeurId()))
                 || (profil.structureId() != null
                         && profil.structureId().equals(demande.getStructureId()));
-
-        if (!autorise) {
-            throw new IllegalArgumentException("Demande introuvable : " + demande.getId());
-        }
     }
 
     /** Demandes portées sur un document — son historique de demandes. */
