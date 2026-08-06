@@ -79,6 +79,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
 
             int ajouts = ajouterLesEtapesManquantes(circuit, reference, etapesDeReference)
                     + ajouterLesTransitionsManquantes(circuit, etapesDeReference)
+                    + ajouterLesChampsManquants(circuit, etapesDeReference)
                     + reserverAuTitulaire(circuit, etapesDeReference);
             if (ajouts > 0) {
                 workflowRepository.save(circuit);
@@ -198,6 +199,48 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             }
         }
         return ajoutees;
+    }
+
+    /**
+     * Pose sur les étapes existantes les champs que le circuit livré leur fait porter.
+     *
+     * <p>Un champ ajouté à une étape déjà en base n'atteignait aucune installation en service : le
+     * compte rendu que le circuit livré demande au responsable de l'action n'aurait été recueilli
+     * que sur une base vierge, et partout ailleurs l'étape serait restée sans point de saisie — la
+     * décision serait passée, et ce qu'elle devait justifier ne serait allé nulle part.</p>
+     *
+     * <p>Un champ déjà porté par l'étape, sous quelque forme que ce soit, est laissé tel quel :
+     * l'administrateur a pu en changer le libellé, le type ou la portée, et ce n'est pas à un
+     * rattrapage de défaire son choix.</p>
+     */
+    private int ajouterLesChampsManquants(Workflow circuit, Map<String, WorkflowStep> etapesDeReference) {
+        int ajoutes = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            WorkflowStep modele = etapesDeReference.get(step.getCode());
+            if (modele == null) {
+                continue;
+            }
+
+            for (WorkflowStepField champ : modele.getFields()) {
+                if (porteLeChamp(step, champ.getFieldName())) {
+                    continue;
+                }
+                step.getFields().add(WorkflowStepField.builder()
+                        .step(step)
+                        .fieldName(champ.getFieldName())
+                        .fieldLabel(champ.getFieldLabel())
+                        .type(champ.getType())
+                        .options(champ.getOptions())
+                        .decision(champ.getDecision())
+                        .isRequired(champ.isRequired())
+                        .build());
+                ajoutes++;
+                log.info("Circuit « {} » : champ « {} » ajouté à l'étape « {} ».",
+                        circuit.getNom(), champ.getFieldName(), step.getCode());
+            }
+        }
+        return ajoutes;
     }
 
     /**

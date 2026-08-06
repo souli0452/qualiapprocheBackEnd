@@ -42,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 public class PlanActionServiceImpl implements PlanActionService {
 
     private final PlanActionMapper planActionMapper;
+    private final com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper nonConformiteResumeMapper;
     private final PlanActionRepository planActionRepository;
     private final NonConformiteRepository nonConformiteRepository;
     private final SendMailService sendMailService;
@@ -89,6 +90,13 @@ public class PlanActionServiceImpl implements PlanActionService {
                 .orElseThrow(() -> new RuntimeException("Ce plan d'action n'est associé à aucune non-conformité!"));
 
         planAction.setNonConformeId(nonConformite.getId());
+        // Le numéro du dossier et son processus émetteur étaient laissés à l'écran, qui ne les
+        // envoyait pas : les colonnes « N° NC » et « Processus » restaient vides sur toutes les
+        // actions, la recherche par numéro n'en trouvait aucune, et les relances d'échéance
+        // annonçaient une action rattachée à « null ». Ils sont recopiés depuis le dossier, seul à
+        // en faire foi.
+        planAction.setNumeroNc(nonConformite.getNumeroReference());
+        planAction.setProcEmetteur(nonConformite.getNomProcessus());
 
         // Le numéro d'ordre n'était renseigné par personne — ni le formulaire, ni le serveur : la
         // colonne « N° Ordre » restait vide sur tous les plans, et l'on ne pouvait désigner une
@@ -115,6 +123,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
         PlanActionDto result = planActionMapper.toDto(planAction);
         result.setFichiers(fichierService.getPjByEntityId(result.getId()));
+        rattacherLeDossier(result, nonConformite);
         return result;
     }
 
@@ -236,12 +245,12 @@ public class PlanActionServiceImpl implements PlanActionService {
         if (aDecider == null || aDecider.isEmpty()) {
             return Page.empty(pageable);
         }
-        return planActionRepository.findByIdIn(aDecider, pageable)
+        return avecLeurDossier(planActionRepository.findByIdIn(aDecider, pageable)
                 .map(plan -> {
                     PlanActionDto dto = planActionMapper.toDto(plan);
                     dto.setFichiers(fichierService.getPjByEntityId(plan.getId()));
                     return dto;
-                });
+                }));
     }
 
     @Override
@@ -294,7 +303,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         // transition en dépend, et rien d'autre ne le lui dirait.
         plansActionService.actualiserLesFaits(plan.getNonConformeId());
         corrige.setFichiers(fichierService.getPjByEntityId(plan.getId()));
-        return corrige;
+        return avecSonDossier(corrige);
     }
 
     /**
@@ -317,24 +326,86 @@ public class PlanActionServiceImpl implements PlanActionService {
         }
     }
 
+    /**
+     * Joint à une action le dossier qui l'a motivée.
+     *
+     * <p>Une action corrective ne se comprend pas seule : on ne peut ni la mener ni juger de son
+     * effet sans savoir ce qui a été constaté, sur quel processus, et par qui. L'action ne portait
+     * que l'identifiant de son dossier — une valeur qu'aucun écran ne peut afficher — si bien que le
+     * responsable devait rouvrir la non-conformité dans une autre liste pour lire ce qu'on lui
+     * demandait de corriger.</p>
+     */
+    private PlanActionDto avecSonDossier(PlanActionDto dto) {
+        if (dto == null || dto.getNonConformeId() == null) {
+            return dto;
+        }
+        nonConformiteRepository.findById(dto.getNonConformeId())
+                .ifPresent(dossier -> rattacherLeDossier(dto, dossier));
+        return dto;
+    }
+
+    /**
+     * Le même rattachement, pour une page entière : les dossiers sont lus en une fois.
+     *
+     * <p>Une lecture par ligne aurait coûté autant d'allers-retours que la page a d'actions, et
+     * plusieurs y renvoient au même dossier.</p>
+     */
+    private Page<PlanActionDto> avecLeurDossier(Page<PlanActionDto> page) {
+        List<UUID> dossiers = page.getContent().stream()
+                .map(PlanActionDto::getNonConformeId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (dossiers.isEmpty()) {
+            return page;
+        }
+
+        Map<UUID, NonConformite> parIdentifiant = new HashMap<>();
+        nonConformiteRepository.findAllById(dossiers)
+                .forEach(dossier -> parIdentifiant.put(dossier.getId(), dossier));
+
+        page.getContent().forEach(dto -> {
+            NonConformite dossier = parIdentifiant.get(dto.getNonConformeId());
+            if (dossier != null) {
+                rattacherLeDossier(dto, dossier);
+            }
+        });
+        return page;
+    }
+
+    /**
+     * Le numéro et le processus restent relus du dossier quand l'action ne les porte pas : les
+     * actions créées avant que la création ne les recopie ont ces colonnes vides, et il n'y a pas de
+     * raison de les afficher amputées en attendant une reprise de données.
+     */
+    private void rattacherLeDossier(PlanActionDto dto, NonConformite dossier) {
+        dto.setNonConformite(nonConformiteResumeMapper.versResume(dossier));
+        if (dto.getNumeroNc() == null || dto.getNumeroNc().isBlank()) {
+            dto.setNumeroNc(dossier.getNumeroReference());
+        }
+        if (dto.getProcEmetteur() == null || dto.getProcEmetteur().isBlank()) {
+            dto.setProcEmetteur(dossier.getNomProcessus());
+        }
+    }
+
     @Override
     public Page<PlanActionDto> allPlanActions(Pageable pageable) {
-        return planActionRepository.findAll(pageable)
+        return avecLeurDossier(planActionRepository.findAll(pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
-                });
+                }));
     }
 
     @Override
     public Page<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut, Pageable pageable) {
-        return planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable, statut, pageable)
+        return avecLeurDossier(planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable, statut, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
-                });
+                }));
     }
 
     @Override
@@ -343,17 +414,17 @@ public class PlanActionServiceImpl implements PlanActionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ce plan d'action n'existe pas."));
         PlanActionDto dto = planActionMapper.toDto(planAction);
         dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
-        return dto;
+        return avecSonDossier(dto);
     }
 
     @Override
     public Page<PlanActionDto> planActionByResponsableAll(String responsable, Pageable pageable) {
-        return planActionRepository.findPlanActionsByResponsableEmail(responsable, pageable)
+        return avecLeurDossier(planActionRepository.findPlanActionsByResponsableEmail(responsable, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
-                });
+                }));
     }
 
     @Override
@@ -450,12 +521,12 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public Page<PlanActionDto> getPlanActionsByStructure(String structureId, Pageable pageable) {
-        return planActionRepository.findPlanActionsByStructureId(structureId, pageable)
+        return avecLeurDossier(planActionRepository.findPlanActionsByStructureId(structureId, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
-                });
+                }));
     }
 
     @Override
@@ -485,6 +556,34 @@ public class PlanActionServiceImpl implements PlanActionService {
         String constat = champs.get("constatEfficacite");
         if (constat != null && !constat.isBlank()) {
             planAction.setConstatEfficacite(constat.trim());
+        }
+    }
+
+    /**
+     * Consigne sur l'action ce que son responsable a rapporté en la déclarant réalisée.
+     *
+     * <p>Le compte rendu — la cause identifiée, la solution mise en œuvre — était saisi sur l'écran
+     * de traitement puis enregistré par un appel distinct de la décision. Les deux partaient
+     * ensemble, dans un ordre que rien ne garantissait : la décision passée la première faisait
+     * quitter au plan l'étape de réalisation, seule où {@link #corriger} accepte encore le compte
+     * rendu, et ce que le responsable avait écrit était refusé en silence. Le pilote constatait
+     * alors une action dont il ne lisait ni cause ni solution.</p>
+     *
+     * <p>Porté par l'étape, il arrive par la décision elle-même : un seul chemin, une seule
+     * transaction, et l'historique du moteur en garde la trace. Une valeur vide n'efface pas ce qui
+     * est en place — la plupart des franchissements ne rapportent rien.</p>
+     */
+    private void appliquerLeCompteRendu(PlanAction planAction, Map<String, String> champs) {
+        if (champs == null) {
+            return;
+        }
+        String causes = champs.get("causeIdentifiees");
+        if (causes != null && !causes.isBlank()) {
+            planAction.setCauseIdentifiees(causes.trim());
+        }
+        String solutions = champs.get("solutionRetenues");
+        if (solutions != null && !solutions.isBlank()) {
+            planAction.setSolutionRetenues(solutions.trim());
         }
     }
 
@@ -583,6 +682,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         }
 
         appliquerLeResponsableSaisi(planAction, champs);
+        appliquerLeCompteRendu(planAction, champs);
         appliquerLeConstatDEfficacite(planAction, champs);
 
         planActionRepository.save(planAction);
