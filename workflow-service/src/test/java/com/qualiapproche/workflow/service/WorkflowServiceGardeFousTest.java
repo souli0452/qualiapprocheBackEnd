@@ -112,6 +112,39 @@ class WorkflowServiceGardeFousTest {
                 .build();
     }
 
+    // ------------------------------------------------------------------ circuit de repli
+
+    @Test
+    @DisplayName("Plusieurs circuits ouvrables : le repli est le plus ancien, et non celui que la "
+            + "base rend en premier")
+    void plusieursCircuitsOuvrables_lePlusAncienSertDeRepli() {
+        // Un circuit par type de document rend cette situation ordinaire : tous doivent être
+        // ouvrables — un circuit désactivé est refusé à l'ouverture — donc tous sont « actifs ».
+        Workflow aLivreAuDemarrage = circuit(true, "DOCUMENT", 2);
+        aLivreAuDemarrage.setNom("Validation documentaire standard");
+        Workflow aAjouteEnsuite = circuit(true, "DOCUMENT", 3);
+        aAjouteEnsuite.setNom("Validation des procédures");
+
+        // C'est le dépôt trié qui fait foi : la méthode non triée laissait le résultat au hasard de
+        // la base, et le repli changeait d'un appel à l'autre.
+        when(workflowRepository.findByResourceTypeAndActifTrueOrderByCreatedAtAsc("DOCUMENT"))
+                .thenReturn(List.of(aLivreAuDemarrage, aAjouteEnsuite));
+
+        assertThat(service.getActiveWorkflowByType("DOCUMENT").getNom())
+                .isEqualTo("Validation documentaire standard");
+    }
+
+    @Test
+    @DisplayName("Aucun circuit ouvrable pour la famille : le repli est refusé en 404 explicite")
+    void aucunCircuitOuvrable_refuseEn404() {
+        when(workflowRepository.findByResourceTypeAndActifTrueOrderByCreatedAtAsc("DOCUMENT"))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.getActiveWorkflowByType("DOCUMENT"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Aucun workflow actif");
+    }
+
     // ------------------------------------------------------------------ ouverture
 
     @Test

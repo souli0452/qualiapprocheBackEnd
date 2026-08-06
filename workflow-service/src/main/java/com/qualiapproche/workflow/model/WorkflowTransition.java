@@ -22,8 +22,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
 @Table(name = "workflow_transition",
-        uniqueConstraints = @UniqueConstraint(name = "uk_workflow_transition_from_decision",
-                columnNames = {"from_step_id", "decision"}))
+        // Une étape offrait au plus deux actions, l'unicité portant sur sa décision : impossible d'y
+        // ajouter « Demander un complément » à côté de « Valider », l'une et l'autre approuvant.
+        // C'est le code de l'action qui l'identifie désormais au sein de son étape ; la décision
+        // dit seulement de quelle nature elle est.
+        uniqueConstraints = @UniqueConstraint(name = "uk_workflow_transition_from_code",
+                columnNames = {"from_step_id", "code"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,6 +44,31 @@ public class WorkflowTransition {
     @JsonIgnore
     private WorkflowStep fromStep;
 
+    /**
+     * Ce que l'action est, au sein de son étape : {@code APPROUVE}, {@code REJETE},
+     * {@code DEMANDER_COMPLEMENT}, {@code TRANSFERER}…
+     *
+     * <p>Une étape n'offrait que deux issues, parce que l'action se confondait avec sa décision. Or
+     * une même étape peut proposer plusieurs suites de même nature — valider, ou valider en
+     * demandant un complément — qui ne mènent pas au même endroit et n'attendent pas la même
+     * saisie. Le code les distingue ; la {@link #decision} dit seulement si l'action fait avancer
+     * le dossier ou le renvoie en arrière.</p>
+     *
+     * <p>C'est une clé stable, unique dans l'étape, sur laquelle s'appuient l'appariement lors
+     * d'une modification du circuit et le rattachement d'un champ à une action précise. Les
+     * transitions antérieures reçoivent le nom de leur décision, qu'elles portaient de fait.</p>
+     */
+    @Column(name = "code", length = 60)
+    private String code;
+
+    /**
+     * Nature de l'action : elle fait avancer le dossier ({@code APPROUVE}) ou le renvoie en arrière
+     * ({@code REJETE}).
+     *
+     * <p>Ce n'est plus l'identité de l'action — voir {@link #code} — mais elle reste ce qui donne
+     * son sens à un franchissement : la couleur du bouton par défaut, l'issue publiée aux modules
+     * métier quand le circuit se termine, et la portée des champs demandés à la décision.</p>
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private StepDecision decision;
@@ -103,4 +132,33 @@ public class WorkflowTransition {
     @Column(name = "terminal", nullable = false)
     @Builder.Default
     private boolean terminal = false;
+
+    /**
+     * Donne son code à une action qui n'en porte pas : celui de sa décision, qu'elle avait de fait.
+     *
+     * <p>Filet de dernier recours, et non la règle : c'est à l'enregistrement du circuit qu'un code
+     * unique est attribué, seul moment où l'on voit les autres actions de l'étape. Laisser un code
+     * nul serait pire que faux — l'unicité en base ne retient pas deux valeurs nulles, et deux
+     * actions indistinctes se glisseraient sur la même étape.</p>
+     */
+    @jakarta.persistence.PrePersist
+    @jakarta.persistence.PreUpdate
+    void codeParDefaut() {
+        code = codeEffectif();
+    }
+
+    /**
+     * Code sous lequel cette action se désigne, y compris avant tout enregistrement.
+     *
+     * <p>Les circuits construits en mémoire — celui que l'initialiseur livre, celui auquel le
+     * rattrapage compare les circuits en base — n'ont pas encore traversé la persistance : lire
+     * {@code code} directement y rendrait {@code null}, et toute comparaison échouerait en
+     * silence.</p>
+     */
+    public String codeEffectif() {
+        if (code != null && !code.isBlank()) {
+            return code;
+        }
+        return decision != null ? decision.name() : null;
+    }
 }

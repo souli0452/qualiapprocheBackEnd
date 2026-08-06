@@ -50,6 +50,21 @@ public class WorkflowStateDto {
     @Builder.Default
     private List<DecisionEnAttenteDto> pendingDecisions = new ArrayList<>();
 
+    /**
+     * Tout ce qui a été saisi sur ce dossier depuis l'ouverture de son circuit, dans l'ordre où il
+     * l'a recueilli — la valeur la plus récente d'un champ faisant foi.
+     *
+     * <p>C'est ce qui permet à une donnée demandée à une étape de rester attachée au dossier
+     * jusqu'à la fin de son traitement, et d'être lue partout où l'état du circuit accompagne la
+     * ressource : sa fiche comme les lignes de liste. Aucun module métier n'a à prévoir de colonne
+     * pour un champ que l'éditeur de circuits ajoutera demain.</p>
+     *
+     * <p>L'historique conserve les valeurs successives ; cette liste-ci n'en montre que la
+     * dernière, celle qui vaut aujourd'hui pour le dossier.</p>
+     */
+    @Builder.Default
+    private List<SaisieDto> saisies = new ArrayList<>();
+
     /** Une décision prévue par l'étape, et la condition qui lui manque. */
     @lombok.Data
     @lombok.Builder
@@ -72,7 +87,14 @@ public class WorkflowStateDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class WorkflowActionDto {
+        /** Identifiant de la transition à jouer — c'est lui que reprend {@code /execute}. */
         private String code;
+        /**
+         * Code métier de l'action au sein de son étape ({@code APPROUVE},
+         * {@code DEMANDER_COMPLEMENT}…), stable d'une installation à l'autre là où {@link #code}
+         * est un identifiant technique. C'est par lui qu'un champ se rattache à une action précise.
+         */
+        private String actionCode;
         /** Libellé du bouton, tel que le circuit le déclare. */
         private String libelle;
         /** Icône du bouton, en classe PrimeIcons ({@code "pi pi-check"}). */

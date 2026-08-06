@@ -49,6 +49,7 @@ class DemandeDocumentServiceTest {
     private StorageService storageService;
     private QmsAuditLogService auditLogService;
     private WorkflowClient workflowClient;
+    private EtatsDuCircuitService etatsDuCircuit;
     private DemandeDocumentService service;
 
     @BeforeEach
@@ -60,9 +61,10 @@ class DemandeDocumentServiceTest {
         storageService = mock(StorageService.class);
         auditLogService = mock(QmsAuditLogService.class);
         workflowClient = mock(WorkflowClient.class);
+        etatsDuCircuit = mock(EtatsDuCircuitService.class);
 
         service = new DemandeDocumentService(demandeRepository, documentRepository, documentService,
-                profilService, storageService, auditLogService, workflowClient);
+                profilService, storageService, auditLogService, workflowClient, etatsDuCircuit);
 
         when(demandeRepository.save(any(DemandeDocument.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -299,6 +301,56 @@ class DemandeDocumentServiceTest {
         service.traiterAvancement(DEMANDE, Map.of("status", "APPROVED"));
 
         verify(documentService, never()).supprimerSurDecision(any(), any());
+    }
+
+    // ------------------------------------------------------------------ liste de travail
+
+    @Test
+    @DisplayName("« À traiter » liste ce que le circuit désigne, l'état du circuit joint à la ligne")
+    void aTraiter_listeCeQueLeCircuitDesigne() {
+        profil(STRUCTURE);
+        when(etatsDuCircuit.ressourcesADecider("DEMANDE_DOCUMENT"))
+                .thenReturn(java.util.List.of(DEMANDE));
+        when(demandeRepository.findAllById(java.util.List.of(DEMANDE)))
+                .thenReturn(java.util.List.of(demande(TypeDemande.SUPPRESSION, EtatDemande.EN_COURS)));
+
+        com.qualiapproche.common.dto.WorkflowStateDto etat = new com.qualiapproche.common.dto.WorkflowStateDto();
+        etat.setCurrentStateName("Instruction qualité");
+        when(etatsDuCircuit.pourRessources(java.util.List.of(DEMANDE)))
+                .thenReturn(Map.of(DEMANDE, etat));
+
+        var aTraiter = service.aTraiterParLAppelant();
+
+        assertThat(aTraiter).hasSize(1);
+        // Sans l'état, l'écran annoncerait une décision à prendre sans pouvoir en offrir aucune.
+        assertThat(aTraiter.get(0).getWorkflowState()).isNotNull();
+        assertThat(aTraiter.get(0).getWorkflowState().getCurrentStateName()).isEqualTo("Instruction qualité");
+    }
+
+    @Test
+    @DisplayName("Une demande hors de portée n'est pas listée, même si le circuit la désigne")
+    void aTraiter_ecarteCeQuiEstHorsDePortee() {
+        // Ni de la structure de la demande, ni son auteur : la portée de visibilité s'applique
+        // par-dessus la désignation du moteur, elle ne s'y substitue pas.
+        profil(AUTRE_STRUCTURE);
+        authentifier(TIERS);
+        when(etatsDuCircuit.ressourcesADecider("DEMANDE_DOCUMENT"))
+                .thenReturn(java.util.List.of(DEMANDE));
+        when(demandeRepository.findAllById(java.util.List.of(DEMANDE)))
+                .thenReturn(java.util.List.of(demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS)));
+
+        assertThat(service.aTraiterParLAppelant()).isEmpty();
+        // Rien à demander au moteur : aucune ligne n'a survécu au filtre.
+        verify(etatsDuCircuit, never()).pourRessources(any());
+    }
+
+    @Test
+    @DisplayName("Aucune décision ouverte : la liste est vide sans interroger le dépôt")
+    void aTraiter_aucuneDecisionOuverte() {
+        when(etatsDuCircuit.ressourcesADecider("DEMANDE_DOCUMENT")).thenReturn(java.util.List.of());
+
+        assertThat(service.aTraiterParLAppelant()).isEmpty();
+        verify(demandeRepository, never()).findAllById(any());
     }
 
     @Test

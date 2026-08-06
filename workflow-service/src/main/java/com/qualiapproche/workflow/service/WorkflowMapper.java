@@ -58,6 +58,7 @@ public class WorkflowMapper {
         }
         return WorkflowTransitionDto.builder()
                 .id(entity.getId())
+                .code(entity.getCode())
                 .label(entity.getLabel())
                 .icon(entity.getIcon())
                 .severity(entity.getSeverity() != null ? entity.getSeverity().getCode() : null)
@@ -85,6 +86,7 @@ public class WorkflowMapper {
                 .required(entity.isRequired())
                 .options(entity.getOptions())
                 .decision(entity.getDecision() != null ? entity.getDecision().name() : null)
+                .actionCode(entity.getActionCode())
                 .build();
     }
 
@@ -175,12 +177,28 @@ public class WorkflowMapper {
         return fait.trim().toUpperCase(java.util.Locale.ROOT);
     }
 
+    /**
+     * Code d'action ramené à sa forme de référence : sans espaces superflus, en majuscules.
+     *
+     * <p>Même raison que pour les faits : le code sert de clé — appariement d'une transition lors
+     * d'une modification du circuit, rattachement d'un champ à une action — et deux graphies
+     * différentes du même code créeraient silencieusement deux actions là où l'auteur n'en voyait
+     * qu'une.</p>
+     */
+    static String normaliserCodeAction(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        return code.trim().toUpperCase(java.util.Locale.ROOT).replace(' ', '_');
+    }
+
     public WorkflowTransition toEntity(WorkflowTransitionDto dto) {
         if (dto == null) {
             return null;
         }
         return WorkflowTransition.builder()
                 .id(dto.getId())
+                .code(normaliserCodeAction(dto.getCode()))
                 .label(dto.getLabel())
                 .icon(dto.getIcon())
                 .severity(severiteValide(dto.getSeverity()))
@@ -206,6 +224,7 @@ public class WorkflowMapper {
                 .options(dto.getOptions())
                 .decision(dto.getDecision() != null && !dto.getDecision().isBlank()
                         ? StepDecision.valueOf(dto.getDecision().toUpperCase()) : null)
+                .actionCode(normaliserCodeAction(dto.getActionCode()))
                 .build();
     }
 }

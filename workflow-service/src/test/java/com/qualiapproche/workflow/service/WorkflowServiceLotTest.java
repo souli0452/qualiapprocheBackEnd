@@ -140,10 +140,14 @@ class WorkflowServiceLotTest {
 
         assertThat(aEtats).hasSize(50);
 
-        // Trois requêtes, pour cinquante dossiers : les instances, les décisions, les champs.
+        // Quatre requêtes, pour cinquante dossiers : les instances, les actions, les champs de
+        // l'étape, et ce qui a été saisi sur ces dossiers depuis l'ouverture de leur circuit.
         verify(validationInstanceRepository, times(1)).findByResourceIdInOrderByStartedAtDesc(anyCollection());
         verify(transitionRepository, times(1)).findAllById(anyCollection());
         verify(stepRepository, times(1)).findAvecChampsByIdIn(anyCollection());
+        verify(fieldValueRepository, times(1)).saisiesDesInstances(anyCollection());
+        // Et surtout pas une lecture des valeurs par décision, comme le fait l'historique.
+        verify(fieldValueRepository, never()).findByHistory_Id(any());
 
         // Et surtout aucune lecture unitaire : c'est elle qui rendait le coût proportionnel.
         verify(validationInstanceRepository, never()).findTopByResourceIdOrderByStartedAtDesc(any());
@@ -241,6 +245,96 @@ class WorkflowServiceLotTest {
 
         assertThat(aEtats).hasSize(1);
         assertThat(aEtats.get(aRessource).getInstanceId()).isEqualTo(aRecente.getId());
+    }
+
+    // ------------------------------------------------------------------ saisies du dossier
+
+    private com.qualiapproche.workflow.model.WorkflowFieldValue saisie(
+            WorkflowValidationInstance instance, String etape, String champ, String libelle,
+            String valeur, int minute) {
+
+        com.qualiapproche.workflow.model.ValidationHistory decision =
+                com.qualiapproche.workflow.model.ValidationHistory.builder()
+                        .validationInstance(instance)
+                        .stepCode(etape).stepName(etape)
+                        .decision("APPROUVE")
+                        .validatorUserId("u-1").validatorFullName("Sam Diallo")
+                        .decisionDate(LocalDateTime.of(2026, 8, 6, 9, minute))
+                        .build();
+
+        return com.qualiapproche.workflow.model.WorkflowFieldValue.builder()
+                .history(decision).fieldCode("1").fieldName(champ).fieldLabel(libelle).value(valeur)
+                .build();
+    }
+
+    @Test
+    @DisplayName("Ce qui a été saisi sur le dossier accompagne son état")
+    void saisies_accompagnentLeDossier() {
+        UUID aRessource = UUID.randomUUID();
+        WorkflowValidationInstance aInstance = instance(aRessource);
+        when(validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(anyCollection()))
+                .thenReturn(List.of(aInstance));
+        when(fieldValueRepository.saisiesDesInstances(anyCollection())).thenReturn(List.of(
+                saisie(aInstance, "IMPUTATION", "userImputId", "Agent imputé", "sam", 10),
+                saisie(aInstance, "TRAITEMENT", "causeIdentifiees", "Causes identifiées",
+                        "Procédure non appliquée", 20)));
+
+        WorkflowStateDto aEtat = service.getWorkflowStatesForResources(List.of(aRessource)).get(aRessource);
+
+        // Sans cela, une donnée demandée à la deuxième étape n'existait plus nulle part à la
+        // cinquième : il fallait qu'un module métier l'ait recopiée dans une colonne à lui.
+        assertThat(aEtat.getSaisies()).hasSize(2);
+        assertThat(aEtat.getSaisies()).extracting("fieldName")
+                .containsExactly("userImputId", "causeIdentifiees");
+        assertThat(aEtat.getSaisies().get(1)).satisfies(saisie -> {
+            assertThat(saisie.getFieldLabel()).isEqualTo("Causes identifiées");
+            assertThat(saisie.getValue()).isEqualTo("Procédure non appliquée");
+            assertThat(saisie.getStepName()).isEqualTo("TRAITEMENT");
+            assertThat(saisie.getAuteur()).isEqualTo("Sam Diallo");
+        });
+    }
+
+    @Test
+    @DisplayName("Une valeur corrigée remplace la précédente sans quitter sa place")
+    void saisies_derniereValeurRetenue() {
+        UUID aRessource = UUID.randomUUID();
+        WorkflowValidationInstance aInstance = instance(aRessource);
+        when(validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(anyCollection()))
+                .thenReturn(List.of(aInstance));
+        when(fieldValueRepository.saisiesDesInstances(anyCollection())).thenReturn(List.of(
+                saisie(aInstance, "TRAITEMENT", "cause", "Cause", "Erreur de saisie", 10),
+                saisie(aInstance, "TRAITEMENT", "delai", "Délai", "15 jours", 20),
+                saisie(aInstance, "VALIDATION", "cause", "Cause", "Procédure non appliquée", 30)));
+
+        WorkflowStateDto aEtat = service.getWorkflowStatesForResources(List.of(aRessource)).get(aRessource);
+
+        // C'est un compte rendu de ce que le dossier porte aujourd'hui, non un journal : l'ordre
+        // reste celui dans lequel les informations ont été recueillies, et l'historique garde les
+        // valeurs successives pour qui veut relire le détail.
+        assertThat(aEtat.getSaisies()).extracting("fieldName").containsExactly("cause", "delai");
+        assertThat(aEtat.getSaisies().get(0).getValue()).isEqualTo("Procédure non appliquée");
+    }
+
+    @Test
+    @DisplayName("Une saisie dont le champ n'existe plus reste lisible")
+    void saisies_champDisparu_resteLisible() {
+        UUID aRessource = UUID.randomUUID();
+        WorkflowValidationInstance aInstance = instance(aRessource);
+        when(validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(anyCollection()))
+                .thenReturn(List.of(aInstance));
+        com.qualiapproche.workflow.model.WorkflowFieldValue aAncienne =
+                saisie(aInstance, "TRAITEMENT", "actionDsc", null, "Rappel de la procédure", 10);
+        when(fieldValueRepository.saisiesDesInstances(anyCollection())).thenReturn(List.of(aAncienne));
+
+        WorkflowStateDto aEtat = service.getWorkflowStatesForResources(List.of(aRessource)).get(aRessource);
+
+        // Le libellé n'était pas conservé avec la valeur : un champ retiré du circuit laissait ses
+        // saisies sans intitulé. À défaut, le nom technique — jamais une colonne vide.
+        assertThat(aEtat.getSaisies()).singleElement()
+                .satisfies(saisie -> {
+                    assertThat(saisie.getFieldLabel()).isEqualTo("actionDsc");
+                    assertThat(saisie.getValue()).isEqualTo("Rappel de la procédure");
+                });
     }
 
     // ------------------------------------------------------------------ robustesse

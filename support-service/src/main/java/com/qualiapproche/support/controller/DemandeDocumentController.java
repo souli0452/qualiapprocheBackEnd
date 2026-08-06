@@ -63,6 +63,26 @@ public class DemandeDocumentController {
                 com.qualiapproche.common.response.ApiResponse.success(demandeService.mesDemandes()));
     }
 
+    /**
+     * Demandes que l'appelant a à instruire, avec les décisions que le circuit lui ouvre.
+     *
+     * <p>Distinct de la liste des demandes visibles : celle-ci répond à « qu'ai-je à faire », non à
+     * « que puis-je consulter ». C'est ce qui permet à la vue d'ensemble de proposer la prise en
+     * charge sur place, plutôt que de renvoyer vers une liste où il faut retrouver soi-même les
+     * dossiers en attente.</p>
+     *
+     * <p>Rendue en {@code ApiResponse} explicite, comme les autres listes du module :
+     * {@code GlobalResponseHandler} pagine d'office toute réponse de type {@code List}, et l'écran
+     * recevrait un objet de pagination là où il attend un tableau — arrêté aux dix premières lignes
+     * de surcroît.</p>
+     */
+    @GetMapping("/a-traiter")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DemandeDocumentDto>>> aTraiter() {
+        return ResponseEntity.ok(
+                com.qualiapproche.common.response.ApiResponse.success(demandeService.aTraiterParLAppelant()));
+    }
+
     /** Historique des demandes portées sur un document. */
     @GetMapping("/document/{documentId}")
     @PreAuthorize("@perm.canRead(this)")

@@ -38,6 +38,19 @@ public class WorkflowFieldValue {
     @Column(name = "field_name")
     private String fieldName;
 
+    /**
+     * Libellé du champ tel qu'il était présenté à celui qui a saisi.
+     *
+     * <p>Recopié plutôt que relu sur le circuit, pour la même raison que le nom de l'auteur d'une
+     * décision : un champ retiré du circuit — ou renommé — laisserait sinon ses valeurs sans
+     * intitulé, et la seule chose à afficher serait le nom technique. Une saisie doit rester
+     * lisible plus longtemps que le formulaire qui l'a recueillie.</p>
+     *
+     * <p>Nul sur les valeurs antérieures à ce champ : le nom technique reste alors le seul repère.</p>
+     */
+    @Column(name = "field_label")
+    private String fieldLabel;
+
     @Column(columnDefinition = "TEXT")
     private String value; // The string representation of the filled value
 }

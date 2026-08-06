@@ -125,7 +125,7 @@ class NonConformiteTransfertStructureTest {
     void aucuneDesignation_dossierImmobile() {
         NonConformite nc = nonConformiteConfieeA("structure-en-place", "Direction en place");
 
-        decision(Map.of("pertinancePilote", "Oui"));
+        decision(Map.of("pertinanceRs", "Oui"));
 
         assertThat(nc.getOrigineId()).isEqualTo("structure-en-place");
         assertThat(nc.getOrigineService()).isEqualTo("Direction en place");

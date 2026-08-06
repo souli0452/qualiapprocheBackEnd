@@ -49,4 +49,24 @@ class ContratDesChampsPartagesTest {
 
         assertThat(coteCommun).containsAll(cotesMoteur);
     }
+
+    @Test
+    @DisplayName("Toute propriété d'une saisie publiée par le moteur existe côté common")
+    void saisie_contratsAlignes() throws IntrospectionException {
+        Set<String> cotesMoteur = proprietesDe(SaisieDto.class);
+        Set<String> coteCommun = proprietesDe(com.qualiapproche.common.dto.SaisieDto.class);
+
+        // Les saisies voyagent à l'intérieur de l'état de circuit : une propriété manquante ici se
+        // perdrait tout aussi silencieusement, et la donnée saisie arriverait amputée sur la fiche.
+        assertThat(coteCommun).containsAll(cotesMoteur);
+    }
+
+    @Test
+    @DisplayName("Toute propriété d'une action offerte existe côté common")
+    void actionOfferte_contratsAlignes() throws IntrospectionException {
+        Set<String> cotesMoteur = proprietesDe(WorkflowStateDto.WorkflowActionDto.class);
+        Set<String> coteCommun = proprietesDe(com.qualiapproche.common.dto.WorkflowActionDto.class);
+
+        assertThat(coteCommun).containsAll(cotesMoteur);
+    }
 }

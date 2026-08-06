@@ -41,6 +41,11 @@ public class ValidationHistoryDto {
     public static class FieldValueDto {
         private String fieldCode;
         private String fieldName;
+        /**
+         * Intitulé du champ tel qu'il était présenté à qui a saisi. À défaut — valeurs antérieures
+         * à sa conservation — le nom technique, seul repère disponible.
+         */
+        private String fieldLabel;
         private String value;
     }
 }
