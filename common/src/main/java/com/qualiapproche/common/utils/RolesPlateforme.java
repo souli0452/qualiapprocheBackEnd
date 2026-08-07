@@ -56,6 +56,25 @@ public final class RolesPlateforme {
      */
     public static final String HABILITATION_TITULAIRE = "@TITULAIRE";
 
+    /**
+     * Habilitation qui désigne la personne ayant <b>ouvert</b> le dossier — celle qui a déclaré la
+     * non-conformité, déposé le document, formé la demande.
+     *
+     * <p>Distincte du titulaire, et c'est tout l'intérêt : le titulaire se déplace au fil du
+     * circuit — l'imputation le réinscrit — tandis que le créateur ne change jamais. Une étape que
+     * le dossier peut <b>retraverser</b> ne peut se fonder que sur lui : réservée au titulaire, elle
+     * n'ouvrirait plus à personne dès que l'imputation a désigné quelqu'un d'autre, et un dossier
+     * renvoyé à son auteur resterait immobile.</p>
+     *
+     * <p>Elle exprime ce qu'un rôle ne sait pas dire : soumettre est un acte personnel, alors que
+     * {@code AGENT} est un groupe. Réservée à un rôle, l'étape de soumission ouvrait le brouillon de
+     * chacun à tous les autres.</p>
+     *
+     * <p>Le circuit livré s'en sert, mais rien dans le code ne nomme d'étape : c'est l'habilitation
+     * écrite sur l'étape ou sur la transition qui décide, et l'éditeur la propose comme un rôle.</p>
+     */
+    public static final String HABILITATION_CREATEUR = "@CREATEUR";
+
     private RolesPlateforme() {
     }
 }

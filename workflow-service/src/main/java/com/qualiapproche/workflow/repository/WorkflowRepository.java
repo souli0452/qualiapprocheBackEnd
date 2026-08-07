@@ -11,20 +11,6 @@ public interface WorkflowRepository extends JpaRepository<Workflow, UUID> {
     List<Workflow> findByResourceType(String resourceType);
     List<Workflow> findByResourceTypeAndActifTrue(String resourceType);
 
-    /**
-     * Circuits ouvrables d'une famille, du plus ancien au plus récent.
-     *
-     * <p>L'ordre décide du circuit de <b>repli</b> — celui qu'applique un module métier quand le
-     * dossier ne désigne pas de circuit précis. Sans ordre, la requête rendait les lignes telles que
-     * la base les servait : dès qu'une famille comptait deux circuits ouvrables, le repli pouvait
-     * changer d'un appel à l'autre sans que rien n'ait été modifié.</p>
-     *
-     * <p>Le plus ancien l'emporte, et ce n'est pas arbitraire : c'est le circuit livré au premier
-     * démarrage, celui sur lequel reposent les installations qui n'ont rien configuré. Les circuits
-     * ajoutés ensuite servent les types qui les désignent nommément, ils ne déplacent pas le repli
-     * de tous les autres.</p>
-     */
-    List<Workflow> findByResourceTypeAndActifTrueOrderByCreatedAtAsc(String resourceType);
 
     /**
      * Tous les circuits avec leurs étapes, pour le chargement du catalogue du moteur.

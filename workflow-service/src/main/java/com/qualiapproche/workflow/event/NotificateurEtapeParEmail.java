@@ -4,6 +4,7 @@ import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowStep;
+import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
 import lombok.RequiredArgsConstructor;
@@ -106,17 +107,27 @@ public class NotificateurEtapeParEmail {
      * courriel qu'il a un dossier à traiter.</p>
      */
     private List<DestinataireDto> destinatairesDe(WorkflowStep step, TransitionFranchieEvent event) {
-        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(
-                step.getResponsableRole() == null ? "" : step.getResponsableRole().trim())) {
-            return destinatairesEtapeService.destinataire(titulaireDe(event));
+        String habilitation = step.getResponsableRole() == null ? "" : step.getResponsableRole().trim();
+
+        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(habilitation)) {
+            return destinatairesEtapeService.destinataire(
+                    surLInstance(event, WorkflowValidationInstance::getTitulaireId));
+        }
+        // Une étape rendue à son auteur — un dossier renvoyé au déclarant — ne porte pas de rôle non
+        // plus : sans cela, celui qu'on attend n'apprend par aucun courriel que son dossier revient.
+        if (RolesPlateforme.HABILITATION_CREATEUR.equalsIgnoreCase(habilitation)) {
+            return destinatairesEtapeService.destinataire(
+                    surLInstance(event, WorkflowValidationInstance::getCreateurId));
         }
         return destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole());
     }
 
-    private String titulaireDe(TransitionFranchieEvent event) {
+    /** Une désignation portée par l'instance du circuit — son titulaire, son créateur. */
+    private String surLInstance(TransitionFranchieEvent event,
+                                java.util.function.Function<WorkflowValidationInstance, String> designation) {
         try {
             return validationInstanceRepository.findById(java.util.UUID.fromString(event.getEntityId()))
-                    .map(com.qualiapproche.workflow.model.WorkflowValidationInstance::getTitulaireId)
+                    .map(designation)
                     .orElse(null);
         } catch (IllegalArgumentException e) {
             return null;

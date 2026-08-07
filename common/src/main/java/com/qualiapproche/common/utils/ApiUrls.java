@@ -77,6 +77,9 @@ public class ApiUrls {
     public static final String PRIORITE_DOCUMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/priorites-document";
     public static final String NIVEAU_CONFIDENTIALITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-confidentialite";
 
+    /** Réglages de l'organisation — contact, téléphone, logo — désignés par une clé immuable. */
+    public static final String PARAMETRE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/parametres";
+
     public static final String TYPE_PROCESSUS_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/type-processus";
     public static final String CREATE_TYPE_PROCESSUS = "/create";
     public static final String GET_ALL_TYPE_PROCESSUS = "/all";
@@ -94,11 +97,7 @@ public class ApiUrls {
     /* Niveau Non Conformités urls */
 
 
-    public static final String CG_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/config-global";
-    public static final String CREATE_CG = "/create";
-    public static final String GET_ALL_CG = "/all";
-    public static final String GET_CG_BY_ID = "/get/{id}";
-    public static final String UPDATE_CG = "/update/{id}";
+    /* La configuration globale a été reversée dans les réglages clé/valeur : PARAMETRE_ROOT_URL. */
 
     public static final String NIVEAU_NON_CONFORMITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveau/non-conformite";
     public static final String CREATE_NIVEAU_NON_CONFORMITE = "/create";

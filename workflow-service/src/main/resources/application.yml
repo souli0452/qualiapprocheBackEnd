@@ -32,17 +32,30 @@ spring:
           keycloak:
             token-uri: ${KC_TOKEN_URI:http://localhost:8080/realms/quali/protocol/openid-connect/token}
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:tachquali@gmail.com}
+    # Serveur de l'organisation. Les valeurs par défaut décrivent l'installation réelle ; seul le
+    # mot de passe n'en a pas — une variable manquante fait échouer le démarrage avec un message
+    # explicite, plutôt que de laisser le service tourner en n'envoyant rien.
+    host: ${MAIL_HOST:mail.qualisira.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:noreply@qualisira.com}
     password: ${MAIL_PASSWORD}
     protocol: smtp
     properties:
       mail:
         smtp:
           auth: true
+          # Port 465 : SSL implicite — la connexion est chiffrée d'emblée.
+          # Port 587 : mettre MAIL_SSL=false et MAIL_STARTTLS=true, la connexion démarre en clair
+          # puis se chiffre. Les deux à la fois ne fonctionnent sur aucun des deux ports.
+          ssl:
+            enable: ${MAIL_SSL:true}
           starttls:
-            enable: true
+            enable: ${MAIL_STARTTLS:false}
+          # Sans délais, un serveur injoignable retient le fil d'envoi jusqu'à celui du système :
+          # les courriels ne partaient pas, et rien ne le disait avant plusieurs minutes.
+          connectiontimeout: ${MAIL_TIMEOUT_MS:10000}
+          timeout: ${MAIL_TIMEOUT_MS:10000}
+          writetimeout: ${MAIL_TIMEOUT_MS:10000}
 
 workflow:
   notifications:

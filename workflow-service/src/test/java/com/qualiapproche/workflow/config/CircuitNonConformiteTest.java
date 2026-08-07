@@ -26,11 +26,13 @@ class CircuitNonConformiteTest {
     private static final Set<String> ROLES_ADMIS = Set.of("AGENT", "PILOTE", "RESPONSABLE_QUALITE");
 
     /**
-     * Valeurs admises dans la colonne « rôle responsable » : les trois rôles, ou l'habilitation
-     * qui réserve l'étape au titulaire du dossier.
+     * Valeurs admises dans la colonne « rôle responsable » : les trois rôles, ou l'une des deux
+     * habilitations qui désignent une personne — le titulaire du dossier, son créateur.
      */
     private static final Set<String> HABILITATIONS_ADMISES =
-            Set.of("AGENT", "PILOTE", "RESPONSABLE_QUALITE", WorkflowDataInitializer.HABILITATION_TITULAIRE);
+            Set.of("AGENT", "PILOTE", "RESPONSABLE_QUALITE",
+                    WorkflowDataInitializer.HABILITATION_TITULAIRE,
+                    WorkflowDataInitializer.HABILITATION_CREATEUR);
 
     private final Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
 

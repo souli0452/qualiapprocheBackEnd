@@ -55,10 +55,12 @@ public class DestinatairesEtapeService {
         if (role == null || role.isBlank()) {
             return List.of();
         }
-        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(role.trim())) {
-            // Ce n'est pas un rôle : personne ne le porte, et l'interroger comme tel ne
-            // renverrait jamais personne. Le destinataire est le titulaire du dossier, que seul
-            // l'appelant connaît — voir destinataire(String utilisateurId).
+        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(role.trim())
+                || RolesPlateforme.HABILITATION_CREATEUR.equalsIgnoreCase(role.trim())) {
+            // Ni l'un ni l'autre n'est un rôle : personne ne les porte, et les interroger comme tels
+            // ne renverrait jamais personne. Le destinataire est une personne désignée sur le dossier
+            // — son titulaire, son créateur — que seul l'appelant connaît : voir
+            // destinataire(String utilisateurId).
             return List.of();
         }
         String aCle = role.trim().toUpperCase();

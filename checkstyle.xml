@@ -73,7 +73,6 @@
     <!-- Espacement                                         -->
     <!-- Voir https://checkstyle.org/config_whitespace.html -->
     <module name="FileTabCharacter"/>
-
     <!-- Divers                                       -->
     <!-- Voir https://checkstyle.org/config_misc.html -->
     <module name="RegexpSingleline">

@@ -103,6 +103,9 @@ public class WorkflowDataInitializer implements CommandLineRunner {
      */
     static final String HABILITATION_TITULAIRE = RolesPlateforme.HABILITATION_TITULAIRE;
 
+    /** Habilitation réservant une étape à celui qui a ouvert le dossier. */
+    static final String HABILITATION_CREATEUR = RolesPlateforme.HABILITATION_CREATEUR;
+
     /**
      * Champs désignant la structure à qui la non-conformité est confiée.
      *
@@ -317,7 +320,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(1)
                 .etatTraitement("SOUMISSION")
                 .description("Création et soumission de la NC")
-                .responsableRole("AGENT")
+                // Qui est concerné : les agents. Qui peut agir : l'auteur seul — l'habilitation de
+                // la transition « Soumettre la NC » le dit. Un rôle est collectif, soumettre sa
+                // déclaration ne l'est pas, et le dossier revient ici quand on le renvoie.
+                .responsableRole(HABILITATION_CREATEUR)
                 .emailTemplateCode("emailTemplate")
                 .build();
 
@@ -738,7 +744,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .stepOrder(1)
                 .etatTraitement("SOUMISSION")
                 .description("Rédaction et dépôt de la demande")
-                .responsableRole("AGENT")
+                // Le demandeur, et lui seul : c'est son objectif qui sera instruit.
+                .responsableRole(HABILITATION_CREATEUR)
                 .emailTemplateCode("emailTemplate")
                 .build();
 

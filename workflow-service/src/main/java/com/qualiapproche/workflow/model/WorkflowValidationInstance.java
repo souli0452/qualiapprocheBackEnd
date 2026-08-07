@@ -67,6 +67,21 @@ public class WorkflowValidationInstance implements IWorkflowData {
     private String titulaireId;
 
     /**
+     * Personne qui a ouvert le dossier : le déclarant, le déposant, le demandeur.
+     *
+     * <p>Inscrite à l'ouverture du circuit et <b>jamais réécrite</b> — c'est ce qui la distingue du
+     * titulaire, que l'imputation déplace. Les deux notions tenaient dans un seul champ, si bien
+     * qu'une étape que le dossier retraverse — « Renvoyer au déclarant » ramène à la soumission —
+     * n'ouvrait plus à personne dès qu'un titulaire avait été désigné ailleurs.</p>
+     *
+     * <p>Exigée par les transitions dont l'habilitation vaut {@code @CREATEUR}. Aucune étape n'est
+     * nommée dans le code : c'est la configuration du circuit qui décide où cette habilitation
+     * s'applique.</p>
+     */
+    @Column(name = "createur_id", updatable = false)
+    private String createurId;
+
+    /**
      * Faits établis sur ce dossier, séparés par des virgules.
      *
      * <p>Le module métier les déclare — « les plans d'action sont tous soldés », « l'efficacité est

@@ -17,6 +17,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,14 +29,13 @@ import static org.mockito.Mockito.when;
  * Un circuit par type de document, et un repli pour les types qui n'en désignent aucun.
  *
  * <p>C'est la configuration que l'on attend d'un système documentaire : une procédure ne se valide
- * pas comme un enregistrement. Elle repose sur deux mécanismes distincts qu'il est facile de
- * confondre — le circuit <b>désigné par le type</b> ({@code QmsDocumentType.workflowId}), et le
- * circuit de <b>repli</b> de la famille DOCUMENT, celui que le serveur livre au premier
- * démarrage.</p>
+ * pas comme un enregistrement. Le lien vit sur le <b>circuit</b>, qui se réserve à un type
+ * ({@code Workflow.cibleId}) ; le type, lui, ne désigne plus rien. Un seul dépositaire, donc aucune
+ * contradiction possible.</p>
  *
- * <p>Ces tests fixent lequel s'applique, et surtout qu'un circuit ajouté pour un type ne déplace pas
- * le repli des autres : plusieurs circuits documentaires actifs coexistent nécessairement, puisqu'un
- * circuit désactivé n'est pas ouvrable.</p>
+ * <p>Ces tests fixent ce que support-service demande au moteur — la famille et l'identifiant du type
+ * — et ce qu'il fait de sa réponse. La règle elle-même est éprouvée chez le moteur, qui la
+ * détient.</p>
  */
 class UnCircuitParTypeDeDocumentTest {
 
@@ -41,7 +43,9 @@ class UnCircuitParTypeDeDocumentTest {
     private static final UUID CIRCUIT_LIVRE = UUID.fromString("aaaaaaaa-0000-4000-8000-000000000001");
     /** Circuits ajoutés ensuite, chacun attribué à un type. */
     private static final UUID CIRCUIT_PROCEDURES = UUID.fromString("bbbbbbbb-0000-4000-8000-000000000002");
-    private static final UUID CIRCUIT_ENREGISTREMENTS = UUID.fromString("cccccccc-0000-4000-8000-000000000003");
+    /** Identifiants de types de documents : c'est par eux qu'un circuit se réserve. */
+    private static final UUID TYPE_PRO = UUID.fromString("11111111-0000-4000-8000-000000000011");
+    private static final UUID TYPE_ENR = UUID.fromString("22222222-0000-4000-8000-000000000022");
 
     private WorkflowClient workflowClient;
     private QmsDocumentService service;
@@ -67,92 +71,83 @@ class UnCircuitParTypeDeDocumentTest {
                 mock(EtatsDuCircuitService.class));
     }
 
-    private QmsDocumentType type(String code, String libelle, UUID circuit) {
-        return QmsDocumentType.builder()
+    private QmsDocumentType type(String code, String libelle, UUID id) {
+        QmsDocumentType type = QmsDocumentType.builder()
                 .code(code)
                 .libelle(libelle)
                 .folderName(libelle)
-                .workflowId(circuit)
                 .build();
+        type.setId(id);
+        return type;
     }
 
-    /** Le circuit de repli tel que le rend workflow-service : le plus ancien circuit ouvrable. */
-    private void circuitDeRepli(UUID id) {
-        WorkflowSummaryDto repli = new WorkflowSummaryDto();
-        repli.setId(id);
-        when(workflowClient.getActiveWorkflowByType("DOCUMENT")).thenReturn(repli);
-    }
-
-    @Test
-    @DisplayName("Chaque type suit le circuit qu'il désigne, et deux types ne suivent pas le même")
-    void chaqueTypeSuitSonCircuit() {
-        circuitDeRepli(CIRCUIT_LIVRE);
-
-        UUID pourUneProcedure = service.circuitDuDepot(
-                type("PRO", "Procédure", CIRCUIT_PROCEDURES), null);
-        UUID pourUnEnregistrement = service.circuitDuDepot(
-                type("ENR", "Enregistrement", CIRCUIT_ENREGISTREMENTS), null);
-
-        assertThat(pourUneProcedure).isEqualTo(CIRCUIT_PROCEDURES);
-        assertThat(pourUnEnregistrement).isEqualTo(CIRCUIT_ENREGISTREMENTS);
-        // Ni l'un ni l'autre ne retombe sur le circuit livré, alors qu'il reste le repli de la famille.
-        assertThat(pourUneProcedure).isNotEqualTo(CIRCUIT_LIVRE);
-        assertThat(pourUnEnregistrement).isNotEqualTo(CIRCUIT_LIVRE);
+    /**
+     * Ce que rend le moteur pour un type donné : le circuit qui lui est réservé, ou celui par défaut.
+     *
+     * <p>La règle est appliquée là-bas, pas ici — c'est tout l'intérêt du point d'entrée unique. Le
+     * test se borne donc à dire ce que le moteur répond.</p>
+     */
+    private void circuitRenduParLeMoteur(UUID id) {
+        WorkflowSummaryDto circuit = new WorkflowSummaryDto();
+        circuit.setId(id);
+        when(workflowClient.circuitAOuvrir(eq("DOCUMENT"), any())).thenReturn(circuit);
     }
 
     @Test
-    @DisplayName("Un type qui ne désigne aucun circuit prend celui livré au démarrage")
-    void typeSansCircuit_prendLeCircuitLivre() {
-        circuitDeRepli(CIRCUIT_LIVRE);
+    @DisplayName("Le type est demandé au moteur par son identifiant : c'est la cible du circuit réservé")
+    void typeDemandeAuMoteurParSonIdentifiant() {
+        UUID idDuType = UUID.fromString("dddddddd-0000-4000-8000-000000000004");
+        circuitRenduParLeMoteur(CIRCUIT_PROCEDURES);
 
-        assertThat(service.circuitDuDepot(type("INS", "Instruction de travail", null), null))
-                .isEqualTo(CIRCUIT_LIVRE);
+        service.circuitDuDepot(type("PRO", "Procédure", idDuType), null);
+
+        // C'est par cet identifiant qu'un circuit se réserve à ce type. Passer le code ('PRO') ferait
+        // retomber tous les types sur le circuit par défaut.
+        verify(workflowClient).circuitAOuvrir("DOCUMENT", idDuType.toString());
     }
 
     @Test
-    @DisplayName("Attribuer un circuit à un type ne déplace pas le repli des autres types")
-    void circuitAjoutePourUnType_neDeplacePasLeRepli() {
-        // Trois circuits documentaires actifs coexistent : c'est la situation normale dès qu'on en
-        // attribue par type, un circuit désactivé n'étant pas ouvrable. Le repli reste le plus
-        // ancien, et workflow-service le désigne sans ambiguïté depuis qu'il trie par ancienneté.
-        circuitDeRepli(CIRCUIT_LIVRE);
+    @DisplayName("Le circuit rendu par le moteur est celui qu'on ouvre, sans second choix ici")
+    void circuitRenduParLeMoteur_estCeluiQuOnOuvre() {
+        circuitRenduParLeMoteur(CIRCUIT_PROCEDURES);
 
-        assertThat(service.circuitDuDepot(type("PRO", "Procédure", CIRCUIT_PROCEDURES), null))
+        // La règle — circuit réservé, puis circuit par défaut — est appliquée chez le moteur. La
+        // rejouer ici l'aurait dédoublée, et les deux auraient fini par ne plus dire la même chose.
+        assertThat(service.circuitDuDepot(type("PRO", "Procédure", TYPE_PRO), null))
                 .isEqualTo(CIRCUIT_PROCEDURES);
-        assertThat(service.circuitDuDepot(type("FOR", "Formulaire", null), null))
-                .isEqualTo(CIRCUIT_LIVRE);
-        assertThat(service.circuitDuDepot(type("NOR", "Norme", null), null))
-                .isEqualTo(CIRCUIT_LIVRE);
     }
 
     @Test
-    @DisplayName("Le circuit du type est pris sans interroger le repli : une seule règle s'applique")
-    void circuitDuType_nInterrogePasLeRepli() {
-        service.circuitDuDepot(type("PRO", "Procédure", CIRCUIT_PROCEDURES), null);
+    @DisplayName("Deux types distincts posent deux questions distinctes au moteur")
+    void deuxTypes_deuxQuestionsDistinctes() {
+        circuitRenduParLeMoteur(CIRCUIT_LIVRE);
 
-        // Un aller-retour inutile, mais surtout : si le repli était consulté puis préféré, un
-        // circuit attribué à un type deviendrait sans effet le jour où l'on activerait un autre
-        // circuit documentaire.
-        verify(workflowClient, never()).getActiveWorkflowByType("DOCUMENT");
+        service.circuitDuDepot(type("PRO", "Procédure", TYPE_PRO), null);
+        service.circuitDuDepot(type("ENR", "Enregistrement", TYPE_ENR), null);
+
+        verify(workflowClient).circuitAOuvrir("DOCUMENT", TYPE_PRO.toString());
+        verify(workflowClient).circuitAOuvrir("DOCUMENT", TYPE_ENR.toString());
     }
 
     @Test
-    @DisplayName("Un circuit imposé par l'appelant prime sur celui du type")
-    void circuitImpose_primeSurLeType() {
+    @DisplayName("Un circuit imposé par l'appelant prime, et le moteur n'est pas interrogé")
+    void circuitImpose_prime() {
         UUID impose = UUID.randomUUID();
 
-        assertThat(service.circuitDuDepot(type("PRO", "Procédure", CIRCUIT_PROCEDURES), impose))
+        assertThat(service.circuitDuDepot(type("PRO", "Procédure", TYPE_PRO), impose))
                 .isEqualTo(impose);
+        verify(workflowClient, never()).circuitAOuvrir(anyString(), any());
     }
 
     @Test
-    @DisplayName("Ni circuit sur le type ni repli dans la famille : le dépôt est refusé et expliqué")
+    @DisplayName("Ni circuit réservé ni circuit par défaut : le dépôt est refusé et expliqué")
     void aucunCircuit_depotRefuse() {
         // Ce que rend workflow-service quand aucun circuit DOCUMENT n'est actif : un 404 métier.
-        when(workflowClient.getActiveWorkflowByType("DOCUMENT"))
-                .thenThrow(new RuntimeException("Aucun workflow actif n'est configuré pour le type 'DOCUMENT'."));
+        when(workflowClient.circuitAOuvrir(eq("DOCUMENT"), any()))
+                .thenThrow(new RuntimeException("Aucun circuit n'est réservé à cette catégorie, et la "
+                        + "famille « DOCUMENT » n'a pas de circuit par défaut actif."));
 
-        assertThatThrownBy(() -> service.circuitDuDepot(type("PRO", "Procédure", null), null))
+        assertThatThrownBy(() -> service.circuitDuDepot(type("PRO", "Procédure", TYPE_PRO), null))
                 .isInstanceOf(ResponseStatusException.class)
                 // Le message nomme le type fautif : c'est par lui que l'administrateur corrige.
                 .hasMessageContaining("Procédure");
@@ -161,10 +156,10 @@ class UnCircuitParTypeDeDocumentTest {
     @Test
     @DisplayName("Le service de circuits injoignable ne remonte pas une erreur technique")
     void serviceDeCircuitsInjoignable_refusExplicite() {
-        when(workflowClient.getActiveWorkflowByType("DOCUMENT"))
+        when(workflowClient.circuitAOuvrir(eq("DOCUMENT"), any()))
                 .thenThrow(new IllegalStateException("connection refused"));
 
-        assertThatThrownBy(() -> service.circuitDuDepot(type("ENR", "Enregistrement", null), null))
+        assertThatThrownBy(() -> service.circuitDuDepot(type("ENR", "Enregistrement", TYPE_ENR), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Aucun circuit de validation");
     }

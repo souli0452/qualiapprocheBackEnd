@@ -10,8 +10,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-import java.util.UUID;
-
 @Entity
 @Table(name = "qms_document_types")
 @Getter
@@ -30,6 +28,7 @@ public class QmsDocumentType extends AuditEntity {
     @Column(nullable = false)
     private String folderName;
 
-    @Column(name = "workflow_id")
-    private UUID workflowId;
+    // Le circuit n'est plus désigné ici : c'est le circuit qui se réserve à un type
+    // (Workflow.cibleId), là où il se configure et où l'unicité du couple (famille, cible) peut
+    // être tenue par la base. Deux faces d'un même fait finissaient par se contredire.
 }

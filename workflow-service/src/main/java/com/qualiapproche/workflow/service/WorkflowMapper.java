@@ -28,8 +28,14 @@ public class WorkflowMapper {
                 .description(entity.getDescription())
                 .resourceType(entity.getResourceType())
                 .actif(entity.isActif())
+                .cibleId(entity.getCibleId())
                 .steps(entity.getSteps() != null ? entity.getSteps().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .build();
+    }
+
+    /** Cible ramenée à sa forme canonique : {@code null} dès qu'elle est vide ou blanche. */
+    static String cibleNormalisee(String cible) {
+        return cible == null || cible.isBlank() ? null : cible.trim();
     }
 
     public WorkflowStepDto toDto(WorkflowStep entity) {
@@ -100,6 +106,9 @@ public class WorkflowMapper {
                 .description(dto.getDescription())
                 .resourceType(dto.getResourceType())
                 .actif(dto.isActif())
+                // Un champ effacé dans l'éditeur arrive en chaîne vide : elle vaut « aucune cible »,
+                // faute de quoi le circuit serait réservé à une entité dont l'identifiant est « ».
+                .cibleId(cibleNormalisee(dto.getCibleId()))
                 .build();
 
         if (dto.getSteps() != null) {

@@ -105,6 +105,24 @@ public class WorkflowController {
         return ResponseEntity.ok(workflowService.getActiveWorkflowByType(documentType));
     }
 
+    /**
+     * Circuit à ouvrir pour un dossier, d'après sa famille et sa catégorie.
+     *
+     * <p>Un seul point d'entrée pour toute la règle : le circuit réservé à cette catégorie — le
+     * circuit propre à un type de document, par exemple — et à défaut le circuit par défaut de la
+     * famille. Les modules métier posent ainsi une seule question et ne rejouent pas la règle : deux
+     * implémentations auraient fini par ne plus dire la même chose.</p>
+     *
+     * <p>{@code cible} omise revient à demander le circuit par défaut, ce que fait
+     * {@code /type/{famille}/active}. Répond 404 quand ni l'un ni l'autre n'existe.</p>
+     */
+    @GetMapping("/actif")
+    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> circuitAOuvrir(
+            @RequestParam("famille") String famille,
+            @RequestParam(value = "cible", required = false) String cible) {
+        return ResponseEntity.ok(workflowService.circuitPourFamilleEtCible(famille, cible));
+    }
+
     @GetMapping("/{workflowId}")
     public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> getWorkflowById(@PathVariable UUID workflowId) {
         return ResponseEntity.ok(workflowService.getWorkflowById(workflowId));

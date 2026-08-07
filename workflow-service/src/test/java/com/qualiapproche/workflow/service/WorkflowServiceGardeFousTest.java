@@ -112,37 +112,87 @@ class WorkflowServiceGardeFousTest {
                 .build();
     }
 
-    // ------------------------------------------------------------------ circuit de repli
+    // ------------------------------------------------------------------ circuit à ouvrir
+
+    /** Circuit d'une famille, réservé ou non à une catégorie, avec son ancienneté. */
+    private Workflow circuitCible(String nom, String cible, boolean actif, int joursDAge) {
+        Workflow aWorkflow = circuit(actif, "DOCUMENT", 2);
+        aWorkflow.setId(UUID.randomUUID());
+        aWorkflow.setNom(nom);
+        aWorkflow.setCibleId(cible);
+        aWorkflow.setCreatedAt(java.time.LocalDateTime.of(2026, 1, 1, 0, 0).plusDays(joursDAge));
+        return aWorkflow;
+    }
 
     @Test
-    @DisplayName("Plusieurs circuits ouvrables : le repli est le plus ancien, et non celui que la "
-            + "base rend en premier")
-    void plusieursCircuitsOuvrables_lePlusAncienSertDeRepli() {
-        // Un circuit par type de document rend cette situation ordinaire : tous doivent être
-        // ouvrables — un circuit désactivé est refusé à l'ouverture — donc tous sont « actifs ».
-        Workflow aLivreAuDemarrage = circuit(true, "DOCUMENT", 2);
-        aLivreAuDemarrage.setNom("Validation documentaire standard");
-        Workflow aAjouteEnsuite = circuit(true, "DOCUMENT", 3);
-        aAjouteEnsuite.setNom("Validation des procédures");
+    @DisplayName("Le circuit réservé à la catégorie l'emporte sur le circuit par défaut")
+    void circuitReserve_lEmporteSurLeDefaut() {
+        Workflow aDefaut = circuitCible("Validation documentaire standard", null, true, 0);
+        Workflow aDesProcedures = circuitCible("Validation des procédures", "type-pro", true, 30);
+        when(workflowRepository.findByResourceType("DOCUMENT"))
+                .thenReturn(List.of(aDefaut, aDesProcedures));
 
-        // C'est le dépôt trié qui fait foi : la méthode non triée laissait le résultat au hasard de
-        // la base, et le repli changeait d'un appel à l'autre.
-        when(workflowRepository.findByResourceTypeAndActifTrueOrderByCreatedAtAsc("DOCUMENT"))
-                .thenReturn(List.of(aLivreAuDemarrage, aAjouteEnsuite));
+        assertThat(service.circuitPourFamilleEtCible("DOCUMENT", "type-pro").getNom())
+                .isEqualTo("Validation des procédures");
+    }
 
-        assertThat(service.getActiveWorkflowByType("DOCUMENT").getNom())
+    @Test
+    @DisplayName("Une catégorie sans circuit réservé prend le circuit par défaut de la famille")
+    void categorieSansCircuit_prendLeDefaut() {
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(
+                circuitCible("Validation documentaire standard", null, true, 0),
+                circuitCible("Validation des procédures", "type-pro", true, 30)));
+
+        // Le circuit des procédures ne doit pas servir un enregistrement : il est réservé.
+        assertThat(service.circuitPourFamilleEtCible("DOCUMENT", "type-enr").getNom())
                 .isEqualTo("Validation documentaire standard");
     }
 
     @Test
-    @DisplayName("Aucun circuit ouvrable pour la famille : le repli est refusé en 404 explicite")
-    void aucunCircuitOuvrable_refuseEn404() {
-        when(workflowRepository.findByResourceTypeAndActifTrueOrderByCreatedAtAsc("DOCUMENT"))
-                .thenReturn(List.of());
+    @DisplayName("Un circuit réservé mais désactivé ne sert pas : la catégorie retombe sur le défaut")
+    void circuitReserveDesactive_retombeSurLeDefaut() {
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(
+                circuitCible("Validation documentaire standard", null, true, 0),
+                circuitCible("Validation des procédures", "type-pro", false, 30)));
 
-        assertThatThrownBy(() -> service.getActiveWorkflowByType("DOCUMENT"))
+        // Le moteur refuse d'ouvrir un circuit désactivé : le proposer ici n'aurait produit qu'un
+        // refus plus tard, au dépôt.
+        assertThat(service.circuitPourFamilleEtCible("DOCUMENT", "type-pro").getNom())
+                .isEqualTo("Validation documentaire standard");
+    }
+
+    @Test
+    @DisplayName("Deux circuits par défaut concurrents : le plus ancien tranche, de façon reproductible")
+    void deuxDefautsConcurrents_lePlusAncienTranche() {
+        // Situation que la contrainte de base interdira ; d'ici là, le choix ne doit pas dépendre de
+        // l'ordre dans lequel la base rend les lignes.
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(
+                circuitCible("Ajouté ensuite", null, true, 30),
+                circuitCible("Livré au démarrage", null, true, 0)));
+
+        assertThat(service.circuitPourFamilleEtCible("DOCUMENT", "type-pro").getNom())
+                .isEqualTo("Livré au démarrage");
+    }
+
+    @Test
+    @DisplayName("Ni circuit réservé ni circuit par défaut : refus en 404 explicite")
+    void aucunCircuit_refuseEn404() {
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(
+                circuitCible("Validation des procédures", "type-pro", true, 0)));
+
+        assertThatThrownBy(() -> service.circuitPourFamilleEtCible("DOCUMENT", "type-enr"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Aucun workflow actif");
+                .hasMessageContaining("pas de circuit par défaut");
+    }
+
+    @Test
+    @DisplayName("Le circuit par défaut d'une famille se demande sans cible")
+    void circuitParDefaut_seDemandeSansCible() {
+        when(workflowRepository.findByResourceType("NON_CONFORMITE")).thenReturn(List.of(
+                circuitCible("Traitement des non-conformités", null, true, 0)));
+
+        assertThat(service.getActiveWorkflowByType("NON_CONFORMITE").getNom())
+                .isEqualTo("Traitement des non-conformités");
     }
 
     // ------------------------------------------------------------------ ouverture
@@ -299,6 +349,100 @@ class WorkflowServiceGardeFousTest {
                 .steps(new ArrayList<>(List.of(
                         WorkflowStepDto.builder().nomEtape("Rédaction").stepOrder(1).build())))
                 .build();
+    }
+
+    /** Circuit proposé à l'enregistrement, avec sa famille et sa cible. */
+    private WorkflowDto dtoCircuit(String resourceType, String cible) {
+        WorkflowDto dto = dtoCircuit(resourceType);
+        dto.setCibleId(cible);
+        return dto;
+    }
+
+    @Test
+    @DisplayName("Un second circuit par défaut pour une même famille est refusé, en nommant le premier")
+    void creation_secondCircuitParDefaut_refusee() {
+        Workflow aDejaLa = circuit(true, "DOCUMENT", 1);
+        aDejaLa.setNom("Validation documentaire standard");
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(aDejaLa));
+
+        // Sans ce refus, deux circuits sans cible se disputeraient les dossiers qui n'en désignent
+        // aucun, et le choix se jouerait sur l'ordre de la base.
+        assertThatThrownBy(() -> service.createWorkflow(dtoCircuit("DOCUMENT", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Validation documentaire standard")
+                .extracting(e -> ((BusinessException) e).getStatus())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(workflowRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Deux circuits réservés à la même catégorie sont refusés")
+    void creation_deuxCircuitsMemeCible_refusee() {
+        Workflow aDejaLa = circuit(true, "DOCUMENT", 1);
+        aDejaLa.setNom("Validation des procédures");
+        aDejaLa.setCibleId("type-pro");
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(aDejaLa));
+
+        assertThatThrownBy(() -> service.createWorkflow(dtoCircuit("DOCUMENT", "type-pro")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("déjà réservé")
+                .extracting(e -> ((BusinessException) e).getStatus())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    @DisplayName("Un circuit réservé à une autre catégorie est accepté à côté du circuit par défaut")
+    void creation_cibleDistincte_acceptee() {
+        Workflow aDefaut = circuit(true, "DOCUMENT", 1);
+        aDefaut.setNom("Validation documentaire standard");
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(aDefaut));
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service.createWorkflow(dtoCircuit("DOCUMENT", "type-enr")).getCibleId())
+                .isEqualTo("type-enr");
+    }
+
+    @Test
+    @DisplayName("Une cible vide vaut « aucune cible » : elle n'est pas persistée comme catégorie")
+    void creation_cibleVide_vautAucuneCible() {
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Le champ effacé dans l'éditeur arrive en chaîne vide ; le circuit doit redevenir celui de
+        // toute la famille, et non être réservé à une catégorie nommée « ».
+        assertThat(service.createWorkflow(dtoCircuit("DOCUMENT", "   ")).getCibleId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Un circuit désactivé ne dispute pas sa place : il n'entre dans aucune résolution")
+    void creation_circuitDesactive_nEntrePasEnConflit() {
+        Workflow aDefaut = circuit(true, "DOCUMENT", 1);
+        aDefaut.setNom("Validation documentaire standard");
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(aDefaut));
+        when(workflowRepository.save(any(Workflow.class))).thenAnswer(i -> i.getArgument(0));
+
+        WorkflowDto aPropose = dtoCircuit("DOCUMENT", null);
+        aPropose.setActif(false);
+
+        // Garder l'ancien circuit d'une catégorie à côté du nouveau doit rester possible : il porte
+        // encore des dossiers en cours, et l'exiger supprimé les rendrait inexploitables.
+        assertThat(service.createWorkflow(aPropose)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("L'activation est reprise à la modification : l'interrupteur avait perdu tout effet")
+    void modification_activationReprise() {
+        Workflow existant = circuit(true, "DOCUMENT", 1);
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(existant));
+        when(workflowRepository.findByResourceType("DOCUMENT")).thenReturn(List.of(existant));
+
+        WorkflowDto aPropose = dtoCircuit("DOCUMENT", null);
+        aPropose.setActif(false);
+        service.updateWorkflow(workflowId, aPropose);
+
+        // `updateWorkflow` ne reportait ni l'activation ni la cible : un circuit ne pouvait plus être
+        // retiré du service une fois créé, et l'éditeur donnait le change.
+        assertThat(existant.isActif()).isFalse();
     }
 
     @Test

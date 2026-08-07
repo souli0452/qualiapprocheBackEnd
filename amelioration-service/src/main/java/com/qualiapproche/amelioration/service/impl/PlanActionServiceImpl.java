@@ -33,6 +33,8 @@ import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.service.PlanActionService;
 
+import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
+import com.qualiapproche.common.utils.ClesReglages;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -41,6 +43,10 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class PlanActionServiceImpl implements PlanActionService {
 
+    /** Délai d'origine, retenu quand l'organisation n'en a pas fixé d'autre. */
+    private static final long SEUIL_DE_RAPPEL_PAR_DEFAUT = 2;
+
+    private final ReglagesOrganisation reglagesOrganisation;
     private final PlanActionMapper planActionMapper;
     private final com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper nonConformiteResumeMapper;
     private final PlanActionRepository planActionRepository;
@@ -468,10 +474,20 @@ public class PlanActionServiceImpl implements PlanActionService {
         return Collections.singletonMap(String.valueOf(annee), frequences);
     }
 
+    /**
+     * Tournée de nuit des relances : prévient les responsables dont l'échéance approche.
+     *
+     * <p>Le seuil vient des réglages de l'organisation ({@code RAPPEL_ECHEANCE_JOURS}). Il était
+     * jusqu'ici figé à deux jours dans le code, alors même que l'écran de configuration proposait de
+     * le saisir : la valeur saisie n'avait aucun effet. Réglage vide ou référentiel injoignable, les
+     * deux jours d'origine s'appliquent.</p>
+     */
     @Scheduled(cron = "0 0 0 * * *")
     public void rappelEcheance() {
         List<PlanAction> planActions = planActionRepository.findPlanActionsByStatus(StatutEnum.NON_TRAITER);
         LocalDate today = LocalDate.now();
+        long seuilDeRappel = reglagesOrganisation.entier(ClesReglages.RAPPEL_ECHEANCE_JOURS,
+                SEUIL_DE_RAPPEL_PAR_DEFAUT);
 
         for (PlanAction action : planActions) {
             String subject = "Traitement du plan d'action N° ordre " + action.getNumeroOdre();
@@ -480,8 +496,8 @@ public class PlanActionServiceImpl implements PlanActionService {
             LocalDate echeance = action.getDateEcheance();
             long joursRestants = ChronoUnit.DAYS.between(today, echeance);
 
-            if (joursRestants >= 2) {
-                // Pas encore urgent, tu peux ignorer ou loguer si tu veux
+            if (joursRestants > seuilDeRappel) {
+                // Trop tôt pour relancer : le responsable a encore le temps.
                 continue;
             }
 

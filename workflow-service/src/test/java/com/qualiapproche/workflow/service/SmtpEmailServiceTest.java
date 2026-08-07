@@ -41,7 +41,14 @@ class SmtpEmailServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SmtpEmailService(mailSender, new EmailTemplateEngineConfig().moteurGabaritEmail());
+        // Pied de page neutre : le référentiel est injoignable dans un test unitaire, et le pied
+        // s'abstient alors — ce qui laisse ces vérifications porter sur le seul gabarit.
+        ReglagesOrganisation reglagesInjoignables = new ReglagesOrganisation(() -> {
+            throw new IllegalStateException("référentiel indisponible");
+        });
+        ReflectionTestUtils.setField(reglagesInjoignables, "retentionSecondes", 600L);
+        PiedDeCourriel aPied = new PiedDeCourriel(reglagesInjoignables);
+        service = new SmtpEmailService(mailSender, new EmailTemplateEngineConfig().moteurGabaritEmail(), aPied);
         ReflectionTestUtils.setField(service, "fromEmail", "qualite@exemple.fr");
         when(mailSender.createMimeMessage()).thenAnswer(i ->
                 new jakarta.mail.internet.MimeMessage((jakarta.mail.Session) null));
@@ -182,5 +189,55 @@ class SmtpEmailServiceTest {
         assertThat(aMessage.getValue().getAllRecipients()[0].toString()).isEqualTo("claire@exemple.fr");
         assertThat(aMessage.getValue().getFrom()[0].toString()).isEqualTo("qualite@exemple.fr");
         assertThat(aMessage.getValue().getSubject()).isEqualTo("Un dossier vous attend");
+    }
+
+    // ------------------------------------------------------------------ échecs d'envoi
+
+    @Test
+    @DisplayName("Un refus du serveur SMTP remonte, au lieu d'être avalé en une ligne de journal")
+    void refusDuServeur_remonte() {
+        // L'envoi attrapait l'échec et rendait la main normalement : le registre des notifications
+        // marquait alors la notification « remise » alors qu'aucun courriel n'était parti, et ne la
+        // rejouait jamais. Un mot de passe expiré se traduisait par un silence complet.
+        org.mockito.Mockito.doThrow(new org.springframework.mail.MailAuthenticationException("535 auth failed"))
+                .when(mailSender).send(org.mockito.ArgumentMatchers.any(jakarta.mail.internet.MimeMessage.class));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        service.sendEmail("sam@exemple.fr", "Objet", "<p>Corps</p>", java.util.Map.of()))
+                .isInstanceOf(org.springframework.mail.MailException.class);
+    }
+
+    @Test
+    @DisplayName("Une adresse de destinataire inexploitable remonte aussi, sans être rejouée en boucle")
+    void adresseInexploitable_remonte() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        service.sendEmail("pas une adresse", "Objet", "<p>Corps</p>", java.util.Map.of()))
+                .isInstanceOf(org.springframework.mail.MailException.class);
+    }
+
+    // ------------------------------------------------------------------ copie
+
+    @Test
+    @DisplayName("La copie demandée figure bien en Cc du message expédié")
+    void copie_posEeEnCc() throws Exception {
+        service.sendEmail("claire@exemple.fr", "Non-conformité", "<p>Corps</p>", Map.of(),
+                "rq@exemple.fr");
+
+        ArgumentCaptor<MimeMessage> aMessage = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(aMessage.capture());
+        assertThat(aMessage.getValue().getRecipients(jakarta.mail.Message.RecipientType.CC))
+                .as("sans en-tête Cc, le responsable qualité ne recevrait rien")
+                .isNotNull()
+                .anyMatch(adresse -> adresse.toString().contains("rq@exemple.fr"));
+    }
+
+    @Test
+    @DisplayName("Aucune copie demandée : pas d'en-tête Cc vide, que certains relais rejettent")
+    void aucuneCopie_pasDEnTeteVide() throws Exception {
+        service.sendEmail("claire@exemple.fr", "Document", "<p>Corps</p>", Map.of(), "   ");
+
+        ArgumentCaptor<MimeMessage> aMessage = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(aMessage.capture());
+        assertThat(aMessage.getValue().getRecipients(jakarta.mail.Message.RecipientType.CC)).isNull();
     }
 }

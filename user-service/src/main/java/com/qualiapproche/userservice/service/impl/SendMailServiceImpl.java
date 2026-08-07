@@ -1,7 +1,8 @@
 package com.qualiapproche.userservice.service.impl;
 
 import com.qualiapproche.common.config.MailConfig;
-import com.qualiapproche.common.utils.MailUtils;
+import com.qualiapproche.common.utils.CourrielParGabarit;
+import com.qualiapproche.common.utils.EmailMessage;
 import com.qualiapproche.common.service.SendMailService;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,12 +23,26 @@ public class SendMailServiceImpl implements SendMailService {
     private final JavaMailSender javaMailSender;
     private final TemplateEngine templateEngine;
     private final MailConfig mailConfig;
+    private final CourrielParGabarit courrielParGabarit;
+
+    /**
+     * Expéditeur des courriels : la boîte authentifiée auprès du relais.
+     *
+     * <p>Aucun de ces envois ne le posait. Un relais SMTP authentifié refuse un message dont
+     * l'expéditeur est absent, ou étranger à la boîte qui s'authentifie : le serveur répondait en
+     * « sender not allowed », l'exception était emballée dans un {@code RuntimeException} générique,
+     * et l'utilisateur ne recevait ni vérification de compte ni code de réinitialisation.</p>
+     */
+    private String expediteur() {
+        return mailConfig.getUsername();
+    }
 
     @Override
     public void sendVerificationEmail(String recipientEmail, String firstName, String lastName, String password, String url) {
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(expediteur());
             helper.setTo(recipientEmail);
             helper.setSubject("Vérification de votre compte");
 
@@ -53,7 +67,8 @@ public class SendMailServiceImpl implements SendMailService {
     public void sendReinitializePasswordEmail(String recipientEmail, String resetUrl) {
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(expediteur());
             helper.setTo(recipientEmail);
             helper.setSubject("Réinitialisation de votre mot de passe");
 
@@ -74,7 +89,8 @@ public class SendMailServiceImpl implements SendMailService {
     public void sendResetPasswordEmail(String recipientEmail, String temporaryPassword, String url) {
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(expediteur());
             helper.setTo(recipientEmail);
             helper.setSubject("Votre nouveau mot de passe temporaire");
 
@@ -96,37 +112,33 @@ public class SendMailServiceImpl implements SendMailService {
     @Override
     public void sendMailToUserAfterDemandImputed(String currentUserEmail, String subject, String link, String templateName, String fullName,
             String numeroNc, String observation) {
-        // Simplified version for user-service as it doesn't have access to referentiel repository
-        try {
-            Map<String, Object> variables = new HashMap<>();
-            variables.put("link", link);
-            variables.put("fullName", fullName);
-            variables.put("numeroNc", numeroNc);
-            variables.put("observation", observation);
+        // user-service n'a pas accès au référentiel : le message part sans copie au responsable
+        // qualité, contrairement à celui d'amelioration-service.
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("link", link);
+        variables.put("fullName", fullName);
+        variables.put("numeroNc", numeroNc);
+        variables.put("observation", observation);
 
-            // Using dummy EmailMessage without CC for now
-            com.qualiapproche.common.utils.EmailMessage emailMessage = com.qualiapproche.common.utils.EmailMessage.builder()
-                    .subject(subject)
-                    .toAddress(currentUserEmail)
-                    .build();
+        EmailMessage emailMessage = EmailMessage.builder()
+                .subject(subject)
+                .toAddress(currentUserEmail)
+                .build();
 
-            MailUtils.sendEmailWithTheamleafEngine(
-                    emailMessage,
-                    mailConfig,
-                    variables,
-                    Collections.emptyList(),
-                    templateName
-            );
-        } catch (MessagingException | IOException e) {
-            throw new RuntimeException(e);
-        }
+        // Même expéditeur, même session, mêmes réglages que les autres envois de ce service :
+        // l'ancien utilitaire ouvrait sa propre session JavaMail, avec son propre chiffrement. Les
+        // MailException remontent — les emballer dans un RuntimeException nu privait l'appelant de
+        // la cause : refus d'authentification, hôte injoignable, adresse rejetée.
+        courrielParGabarit.envoyer(emailMessage, variables, Collections.emptyList(),
+                templateName, templateEngine);
     }
 
     @Override
     public void sendMail(String recipientEmail, String subject, String message, boolean isHtml) {
         try {
             MimeMessage mimeMessage = javaMailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(expediteur());
             helper.setTo(recipientEmail);
             helper.setSubject(subject);
             helper.setText(message, isHtml);
