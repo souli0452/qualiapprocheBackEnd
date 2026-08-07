@@ -27,6 +27,19 @@ public interface WorkflowClient {
     @GetMapping("/api/v1/workflows/type/{resourceType}/active")
     WorkflowSummaryDto getActiveWorkflowByType(@PathVariable("resourceType") String resourceType);
 
+    /**
+     * Circuit à ouvrir pour une famille et une catégorie de dossier.
+     *
+     * <p>Le moteur applique toute la règle : le circuit réservé à cette catégorie — celui d'un type
+     * de document — et à défaut le circuit par défaut de la famille. Un seul appel, et la règle reste
+     * chez celui qui détient les circuits : la rejouer ici l'aurait dédoublée.</p>
+     *
+     * <p>Répond 404 quand ni l'un ni l'autre n'existe.</p>
+     */
+    @GetMapping("/api/v1/workflows/actif")
+    WorkflowSummaryDto circuitAOuvrir(@RequestParam("famille") String famille,
+                                      @RequestParam(value = "cible", required = false) String cible);
+
     @GetMapping("/api/v1/workflows/{workflowId}")
     Map<String, Object> getWorkflowById(@PathVariable("workflowId") UUID workflowId);
 

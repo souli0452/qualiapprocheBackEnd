@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +45,7 @@ class WorkflowNotificationServiceTest {
     @Mock private SupportWebhookClient supportWebhookClient;
     @Mock private AmeliorationWebhookClient ameliorationWebhookClient;
     @Mock private SmtpEmailService emailService;
+    @Mock private ReglagesOrganisation reglages;
 
     private WorkflowNotificationService service;
 
@@ -53,7 +55,8 @@ class WorkflowNotificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new WorkflowNotificationService(notificationRepository, supportWebhookClient,
-                emailService, ameliorationWebhookClient, new ObjectMapper());
+                emailService, new CopieAuResponsableQualite(reglages), ameliorationWebhookClient,
+                new ObjectMapper());
         // Le service s'appelle lui-même à travers son proxy pour séparer les deux transactions ;
         // hors conteneur, il se suffit à lui-même.
         ReflectionTestUtils.setField(service, "self", service);
@@ -237,5 +240,77 @@ class WorkflowNotificationServiceTest {
         verify(notificationRepository).save(aSauvegardee.capture());
         assertThat(aSauvegardee.getValue().getStatut()).isEqualTo(NotificationStatut.A_REMETTRE);
         assertThat(aSauvegardee.getValue().getPayload()).contains("EN_COURS");
+    }
+
+    // ------------------------------------- copie obligatoire au responsable qualité
+
+    private WorkflowNotification courriel(String typeRessource) {
+        return WorkflowNotification.builder()
+                .id(notificationId)
+                .resourceId(resourceId.toString())
+                .resourceType(typeRessource)
+                .canal(WorkflowNotification.CanalRemise.EMAIL)
+                .payload("{\"destinataire\":\"claire@exemple.fr\",\"sujet\":\"Validation attendue\","
+                        + "\"corps\":\"<p>Corps</p>\",\"variables\":{}}")
+                .statut(NotificationStatut.EN_COURS_DE_REMISE)
+                .tentatives(1)
+                .build();
+    }
+
+    @Test
+    @DisplayName("Un courriel de non-conformité part avec le responsable qualité en copie")
+    void courrielDeNonConformite_responsableQualiteEnCopie() {
+        revendicationAcquise();
+        when(reglages.valeur("RESPONSABLE_QUALITE_EMAIL")).thenReturn("rq@exemple.fr");
+        when(notificationRepository.findById(notificationId))
+                .thenReturn(Optional.of(courriel("NON_CONFORMITE")));
+
+        assertThat(service.remettre(notificationId)).isTrue();
+
+        // La règle vit au point de remise, et non dans la configuration des circuits : l'y inscrire
+        // étape par étape se serait perdu au premier circuit créé.
+        verify(emailService).sendEmail("claire@exemple.fr", "Validation attendue", "<p>Corps</p>",
+                Map.of(), "rq@exemple.fr");
+    }
+
+    @Test
+    @DisplayName("Un plan d'action relève de la non-conformité : son courriel est copié aussi")
+    void courrielDePlanAction_responsableQualiteEnCopie() {
+        revendicationAcquise();
+        when(reglages.valeur("RESPONSABLE_QUALITE_EMAIL")).thenReturn("rq@exemple.fr");
+        when(notificationRepository.findById(notificationId))
+                .thenReturn(Optional.of(courriel("PLAN_ACTION")));
+
+        assertThat(service.remettre(notificationId)).isTrue();
+
+        verify(emailService).sendEmail(any(), any(), any(), any(), eq("rq@exemple.fr"));
+    }
+
+    @Test
+    @DisplayName("Un courriel de document ne lui est pas copié")
+    void courrielDeDocument_sansCopie() {
+        revendicationAcquise();
+        when(notificationRepository.findById(notificationId))
+                .thenReturn(Optional.of(courriel("DOCUMENT")));
+
+        assertThat(service.remettre(notificationId)).isTrue();
+
+        // La règle porte sur les non-conformités : copier le responsable qualité de tout document
+        // validé noierait sa boîte.
+        verify(emailService).sendEmail(any(), any(), any(), any(), isNull());
+    }
+
+    @Test
+    @DisplayName("Adresse du responsable qualité non renseignée : le courriel part quand même, sans copie")
+    void adresseNonRenseignee_courrielQuandMeme() {
+        revendicationAcquise();
+        when(reglages.valeur("RESPONSABLE_QUALITE_EMAIL")).thenReturn(null);
+        when(notificationRepository.findById(notificationId))
+                .thenReturn(Optional.of(courriel("NON_CONFORMITE")));
+
+        // Priver le destinataire principal de sa notification parce qu'un réglage manque serait un
+        // remède pire que le mal.
+        assertThat(service.remettre(notificationId)).isTrue();
+        verify(emailService).sendEmail(any(), any(), any(), any(), isNull());
     }
 }

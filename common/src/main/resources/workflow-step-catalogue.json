@@ -20,7 +20,7 @@
   {
     "code": "SOUMISSION",
     "nomEtape": "Soumission",
-    "responsableRole": "AGENT",
+    "responsableRole": "@CREATEUR",
     "description": "Création et soumission de la NC"
   },
   {
@@ -104,7 +104,7 @@
   {
     "code": "DEMANDE_SOUMISSION",
     "nomEtape": "Soumission de la demande",
-    "responsableRole": "AGENT",
+    "responsableRole": "@CREATEUR",
     "description": "Rédaction et dépôt de la demande"
   },
   {

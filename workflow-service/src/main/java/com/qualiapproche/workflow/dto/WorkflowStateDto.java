@@ -15,6 +15,15 @@ import java.util.UUID;
 @AllArgsConstructor
 public class WorkflowStateDto {
     private UUID instanceId;
+    /**
+     * Circuit que suit le dossier.
+     *
+     * <p>Sans lui, un écran qui reçoit l'état d'un dossier ne peut rien dire de ce qui l'attend : il
+     * connaît l'étape courante, mais pas le circuit dont elle fait partie, donc ni les étapes
+     * suivantes ni le chemin restant. Le module documentaire s'en sortait en gardant une colonne à
+     * lui ; les non-conformités et les demandes n'en ont pas.</p>
+     */
+    private UUID workflowId;
     private String status;
     private String currentStateCode;
     private String currentStateName;

@@ -42,6 +42,12 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      */
     private static final String HABILITATION_TITULAIRE = RolesPlateforme.HABILITATION_TITULAIRE;
 
+    /**
+     * Habilitation désignant celui qui a ouvert le dossier, distinguée d'un nom de rôle par son
+     * préfixe. Voir {@link RolesPlateforme#HABILITATION_CREATEUR}.
+     */
+    private static final String HABILITATION_CREATEUR = RolesPlateforme.HABILITATION_CREATEUR;
+
     @Override
     public boolean estAutorise(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
         // La condition métier avant l'habilitation : une action que le dossier n'admet pas encore
@@ -58,6 +64,10 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
 
         if (HABILITATION_TITULAIRE.equalsIgnoreCase(requiredRole.trim())) {
             return estLeTitulaire(pContexte);
+        }
+
+        if (HABILITATION_CREATEUR.equalsIgnoreCase(requiredRole.trim())) {
+            return estLeCreateur(pContexte);
         }
 
         Set<String> rolesUtilisateur = rolesUtilisateurService.rolesDeLUtilisateurCourant();
@@ -102,6 +112,43 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         }
 
         return titulaire.equals(SecurityUtils.getCurrentUserId());
+    }
+
+    /**
+     * L'appelant est-il celui qui a ouvert ce dossier ?
+     *
+     * <p>Soumettre sa propre déclaration est un acte personnel : réservé au rôle {@code AGENT}, il
+     * ouvrait le brouillon de chacun à tous les autres. Et réservé au <i>titulaire</i>, il aurait
+     * cessé d'ouvrir à son auteur dès que l'imputation en désigne un autre — or le circuit ramène le
+     * dossier à son auteur quand on le lui renvoie.</p>
+     *
+     * <p>Le créateur est inscrit à l'ouverture et jamais réécrit : la même étape lui reste donc
+     * ouverte au premier comme au troisième aller-retour.</p>
+     *
+     * <p>L'administration passe outre, comme pour le titulaire : c'est le moyen de débloquer un
+     * dossier dont l'auteur a quitté l'organisation.</p>
+     */
+    private boolean estLeCreateur(ExecutionContext<IWorkflowData> pContexte) {
+        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
+                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+            return true;
+        }
+
+        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
+            return false;
+        }
+
+        String createur = instance.getCreateurId();
+        if (createur == null || createur.isBlank()) {
+            // Circuit ouvert avant que le créateur ne soit inscrit, ou ouvert hors requête
+            // utilisateur : personne ne peut décider, ce qui vaut mieux que d'ouvrir à tous. Le
+            // blocage se lève par l'administration.
+            log.warn("Le dossier {} atteint une étape réservée à son créateur sans qu'aucun ne soit inscrit.",
+                    instance.getResourceId());
+            return false;
+        }
+
+        return createur.equals(SecurityUtils.getCurrentUserId());
     }
 
     /**

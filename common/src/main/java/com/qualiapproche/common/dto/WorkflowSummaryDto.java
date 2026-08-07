@@ -19,4 +19,12 @@ public class WorkflowSummaryDto {
     private String nom;
     private String resourceType;
     private boolean actif;
+    /**
+     * Catégorie à laquelle le circuit est réservé au sein de sa famille — l'identifiant d'un type de
+     * document — ou {@code null} s'il est le circuit par défaut de la famille.
+     *
+     * <p>Rendue aux modules métier pour qu'ils puissent constater ce que le moteur a retenu : le
+     * rattrapage des réservations s'en sert pour être idempotent sans avoir à deviner.</p>
+     */
+    private String cibleId;
 }

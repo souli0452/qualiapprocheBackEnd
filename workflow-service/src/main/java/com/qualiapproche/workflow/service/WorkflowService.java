@@ -113,6 +113,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         WorkflowMapper mapper = new WorkflowMapper();
         Workflow workflow = mapper.toEntity(dto);
         workflow.setResourceType(TypeRessource.normaliser(dto.getResourceType()));
+        verifierUniciteDeLaCible(workflow, null);
 
         attribuerCodesEtapes(workflow);
         resolveTransitions(workflow, dto);
@@ -133,6 +134,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         existing.setNom(dto.getNom());
         existing.setDescription(dto.getDescription());
         existing.setResourceType(TypeRessource.normaliser(dto.getResourceType()));
+        // L'activation n'était pas reprise : elle n'était retenue qu'à la création, et
+        // l'interrupteur de l'éditeur n'avait ensuite plus aucun effet — un circuit ne pouvait
+        // ni être retiré du service, ni y être remis.
+        existing.setActif(dto.isActif());
+        existing.setCibleId(WorkflowMapper.cibleNormalisee(dto.getCibleId()));
+        verifierUniciteDeLaCible(existing, existing.getId());
 
         mergeSteps(existing, dto);
         resolveTransitions(existing, dto);
@@ -744,6 +751,94 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /**
+     * Circuit à ouvrir pour un dossier, à partir de sa famille et de sa catégorie.
+     *
+     * <p>Deux branches, dans cet ordre : le circuit <b>réservé à cette cible</b> — l'identifiant du
+     * type de document, par exemple — puis, à défaut, le circuit <b>sans cible</b> de la famille,
+     * celui livré au premier démarrage. Aucune troisième : si ni l'un ni l'autre n'existe, la
+     * demande est refusée en 404 plutôt que servie par un circuit choisi au hasard.</p>
+     *
+     * <p>La règle vit ici et non chez les modules métier : c'est le moteur qui détient les circuits,
+     * et deux implémentations de la même règle auraient fini par divergerpour de bon.</p>
+     *
+     * @param cible catégorie du dossier, ou {@code null} pour demander le circuit par défaut
+     */
+    @Transactional(readOnly = true)
+    public WorkflowDto circuitPourFamilleEtCible(String famille, String cible) {
+        String familleNormalisee = TypeRessource.normaliser(famille);
+        String cibleNormalisee = WorkflowMapper.cibleNormalisee(cible);
+
+        List<Workflow> ouvrables = workflowRepository.findByResourceType(familleNormalisee).stream()
+                .filter(Workflow::isActif)
+                // Le tri rend le choix reproductible tant que l'unicité du couple (famille, cible)
+                // n'est pas tenue par la base : sans lui, deux circuits par défaut concurrents
+                // feraient varier le résultat d'un appel à l'autre.
+                .sorted(java.util.Comparator.comparing(Workflow::getCreatedAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .toList();
+
+        if (cibleNormalisee != null) {
+            java.util.Optional<Workflow> reserve = ouvrables.stream()
+                    .filter(w -> cibleNormalisee.equals(w.getCibleId()))
+                    .findFirst();
+            if (reserve.isPresent()) {
+                return new WorkflowMapper().toDto(reserve.get());
+            }
+        }
+
+        return ouvrables.stream()
+                .filter(Workflow::estLeCircuitParDefaut)
+                .findFirst()
+                .map(new WorkflowMapper()::toDto)
+                .orElseThrow(() -> new com.qualiapproche.common.exception.BusinessException(
+                        cibleNormalisee != null
+                                ? "Aucun circuit n'est réservé à cette catégorie, et la famille « "
+                                        + familleNormalisee + " » n'a pas de circuit par défaut actif."
+                                : "Aucun workflow actif n'est configuré pour le type '"
+                                        + familleNormalisee + "'.",
+                        org.springframework.http.HttpStatus.NOT_FOUND));
+    }
+
+    /**
+     * Refuse un second circuit portant le même couple (famille, cible).
+     *
+     * <p>C'est ce couple qui rend la résolution non ambiguë : deux circuits réservés au même type de
+     * document, ou deux circuits par défaut d'une même famille, laisseraient le choix à l'ordre de
+     * la base. Le contrôle est ici et non en base, le temps que les configurations existantes soient
+     * démêlées : une contrainte ajoutée d'emblée aurait échoué en silence — Hibernate journalise
+     * l'échec d'un {@code ALTER TABLE} sans interrompre le démarrage — sur les installations
+     * portant déjà deux circuits sans cible, et l'on aurait cru protégé ce qui ne l'était pas.</p>
+     *
+     * <p>Les circuits <b>désactivés</b> sont ignorés : ils ne sont plus ouvrables, donc ils
+     * n'entrent dans aucune résolution. Interdire de garder l'ancien circuit d'un type à côté du
+     * nouveau aurait obligé à le supprimer, avec les dossiers qu'il porte encore.</p>
+     */
+    private void verifierUniciteDeLaCible(Workflow candidat, UUID idExclu) {
+        if (!candidat.isActif()) {
+            return;
+        }
+        String cible = WorkflowMapper.cibleNormalisee(candidat.getCibleId());
+
+        java.util.Optional<Workflow> concurrent = workflowRepository
+                .findByResourceType(candidat.getResourceType()).stream()
+                .filter(Workflow::isActif)
+                .filter(w -> idExclu == null || !idExclu.equals(w.getId()))
+                .filter(w -> java.util.Objects.equals(cible, WorkflowMapper.cibleNormalisee(w.getCibleId())))
+                .findFirst();
+
+        if (concurrent.isPresent()) {
+            throw new com.qualiapproche.common.exception.BusinessException(
+                    cible == null
+                            ? "Le circuit « " + concurrent.get().getNom() + " » est déjà le circuit par "
+                                    + "défaut des ressources de type " + candidat.getResourceType()
+                                    + ". Réservez celui-ci à une catégorie précise, ou désactivez l'autre."
+                            : "Le circuit « " + concurrent.get().getNom() + " » est déjà réservé à cette "
+                                    + "catégorie. Une catégorie ne peut suivre qu'un circuit à la fois.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+    }
+
+    /**
      * Circuit de <b>repli</b> d'une famille de ressource : celui qu'ouvre un module métier quand le
      * dossier n'en désigne aucun.
      *
@@ -760,22 +855,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * repli de tous les autres.</p>
      */
     public WorkflowDto getActiveWorkflowByType(String documentType) {
-        List<Workflow> ouvrables = workflowRepository
-                .findByResourceTypeAndActifTrueOrderByCreatedAtAsc(documentType);
-        if (ouvrables.isEmpty()) {
-            throw new com.qualiapproche.common.exception.BusinessException(
-                    "Aucun workflow actif n'est configuré pour le type '" + documentType + "'.",
-                    org.springframework.http.HttpStatus.NOT_FOUND);
-        }
-        Workflow repli = ouvrables.get(0);
-        if (ouvrables.size() > 1) {
-            // Ce n'est plus une anomalie : c'est ce que produit un circuit par type de document.
-            // La trace dit lequel fait office de repli, seule question que pose cette situation.
-            log.debug("{} circuits ouvrables pour la famille '{}' : « {} », le plus ancien, sert de "
-                            + "repli aux dossiers qui n'en désignent aucun.",
-                    ouvrables.size(), documentType, repli.getNom());
-        }
-        return new WorkflowMapper().toDto(repli);
+        return circuitPourFamilleEtCible(documentType, null);
     }
 
     /**
@@ -807,21 +887,30 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         return instance != null ? toInstanceDto(instance) : null;
     }
 
+    /**
+     * Identifiant du circuit porté par une instance, ou {@code null}.
+     *
+     * <p>Le code de circuit inscrit sur l'instance <b>est</b> l'identifiant du circuit. Une valeur
+     * qui n'en est pas un — instance ancienne, reprise manuelle — rend {@code null} plutôt que de
+     * faire échouer la lecture de l'état : mieux vaut un dossier sans schéma qu'un dossier
+     * illisible.</p>
+     */
+    private UUID identifiantDuCircuit(WorkflowValidationInstance instance) {
+        try {
+            return UUID.fromString(instance.getWorkflowCode());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private WorkflowInstanceDto toInstanceDto(WorkflowValidationInstance instance) {
         // Résolution best-effort du libellé humain : à défaut d'étape trouvée, le code sert de libellé
         // (comportement déjà utilisé par initiateWorkflow avant ce correctif).
         String currentStateName = instance.getEtat() != null ? instance.getEtat().getLibelle() : instance.getEtatCode();
 
-        UUID workflowId = null;
-        try {
-            workflowId = UUID.fromString(instance.getWorkflowCode());
-        } catch (Exception ignored) {
-            // workflowCode n'est pas (ou plus) un UUID exploitable ; on laisse workflowId à null plutôt que d'échouer.
-        }
-
         return new WorkflowInstanceDto(
                 instance.getId(),
-                workflowId,
+                identifiantDuCircuit(instance),
                 instance.getStatus().name(),
                 instance.getEtatCode(),
                 currentStateName
@@ -938,6 +1027,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
 
         return com.qualiapproche.workflow.dto.WorkflowStateDto.builder()
                 .instanceId(instance.getId())
+                // Le circuit suivi, pour que l'écran puisse montrer le chemin restant et non
+                // seulement l'étape courante.
+                .workflowId(identifiantDuCircuit(instance))
                 .status(instance.getStatus().name())
                 .currentStateCode(instance.getEtatCode())
                 .currentStateName(instance.getEtat() != null ? instance.getEtat().getLibelle() : null)
@@ -1248,6 +1340,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * rédaction, et c'est lui — non « un agent » — qui doit le traiter. La non-conformité, elle,
      * n'en a pas à la soumission : le sien est nommé plus tard, à l'imputation, par un champ
      * d'étape. Les deux chemins mènent au même {@code titulaireId}.</p>
+     *
+     * <p>Le <b>créateur</b>, lui, n'est pas un paramètre : c'est l'appelant. Un circuit s'ouvre dans
+     * la requête de celui qui enregistre le dossier, et le laisser transmettre par le module aurait
+     * permis de désigner quelqu'un d'autre — ce que rien ne justifie et que rien n'aurait vérifié.
+     * Il est inscrit une fois, jamais réécrit, et les transitions habilitées {@code @CREATEUR} s'y
+     * réfèrent.</p>
      */
     @Transactional
     public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId,
@@ -1277,6 +1375,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .status(ValidationStatus.EN_COURS)
                 .startedAt(LocalDateTime.now())
                 .titulaireId(titulaireId == null || titulaireId.isBlank() ? null : titulaireId.trim())
+                // Le créateur est celui qui ouvre le dossier, donc l'appelant : c'est dans sa requête
+                // que le module ouvre le circuit, au moment où il enregistre sa déclaration, son
+                // dépôt ou sa demande. Inscrit ici une fois pour toutes — aucune étape ne le
+                // réécrira, à la différence du titulaire.
+                .createurId(SecurityUtils.getCurrentUserId())
                 .build();
 
         WorkflowValidationInstance saved = this.initialiser(instance, workflow.getId().toString());

@@ -62,6 +62,7 @@ public class WorkflowNotificationService {
     private final WorkflowNotificationRepository notificationRepository;
     private final SupportWebhookClient supportWebhookClient;
     private final SmtpEmailService emailService;
+    private final CopieAuResponsableQualite copieAuResponsableQualite;
     private final AmeliorationWebhookClient ameliorationWebhookClient;
     private final ObjectMapper objectMapper;
 
@@ -229,7 +230,7 @@ public class WorkflowNotificationService {
         Map<String, Object> payload = objectMapper.readValue(notification.getPayload(), new TypeReference<>() { });
 
         if (notification.getCanal() == WorkflowNotification.CanalRemise.EMAIL) {
-            remettreCourriel(payload);
+            remettreCourriel(payload, notification.getResourceType());
             return;
         }
 
@@ -258,16 +259,21 @@ public class WorkflowNotificationService {
     /**
      * Remet un courriel. Toute exception laisse la notification reprenable : c'est ce qui distingue
      * cette remise de l'ancien envoi, où l'échec se réduisait à une ligne de journal.
+     *
+     * <p>La copie est décidée ici, à l'unique point de remise : le responsable qualité doit voir
+     * passer tout courriel concernant une non-conformité, et l'inscrire étape par étape dans chaque
+     * circuit se serait perdu au premier circuit créé.</p>
      */
     @SuppressWarnings("unchecked")
-    private void remettreCourriel(Map<String, Object> payload) {
+    private void remettreCourriel(Map<String, Object> payload, String typeRessource) {
         String destinataire = (String) payload.get("destinataire");
         String sujet = (String) payload.get("sujet");
         String corps = (String) payload.get("corps");
         Object variables = payload.get("variables");
 
         emailService.sendEmail(destinataire, sujet, corps,
-                variables instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of());
+                variables instanceof Map<?, ?> map ? (Map<String, String>) map : Map.of(),
+                copieAuResponsableQualite.pour(typeRessource));
     }
 
     private Map<String, Object> auditDepuis(Map<String, Object> payload) {

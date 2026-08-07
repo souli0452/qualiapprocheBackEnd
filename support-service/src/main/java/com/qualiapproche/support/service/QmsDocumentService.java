@@ -220,11 +220,13 @@ public class QmsDocumentService {
      *
      * <ol>
      *   <li>le circuit imposé par l'appelant, s'il y en a un ;</li>
-     *   <li><b>le circuit désigné par le type de document</b> — c'est ainsi qu'un type suit son
-     *       propre circuit, le type étant retrouvé par son code ;</li>
-     *   <li>à défaut, le circuit de repli de la famille {@code DOCUMENT} : le plus ancien circuit
-     *       ouvrable, c'est-à-dire celui livré au premier démarrage.</li>
+     *   <li><b>le circuit réservé à ce type</b>, puis à défaut le circuit par défaut de la famille
+     *       {@code DOCUMENT} : une seule question au moteur, qui détient la règle.</li>
      * </ol>
+     *
+     * <p>Le type ne désigne plus son circuit de son côté : le lien vit sur le circuit, seul endroit
+     * où l'unicité du couple (famille, cible) puisse être tenue. Deux faces d'un même fait auraient
+     * fini par se contredire, et aucune des deux n'aurait fait autorité.</p>
      *
      * <p>Le repli n'interroge pas le circuit actif du <i>type</i> documentaire ('PRO', 'ENR'…) mais
      * celui de la <b>famille</b> : {@code resourceType} désigne la famille de ressource, seule que
@@ -242,20 +244,20 @@ public class QmsDocumentService {
             return circuitImpose;
         }
 
-        if (docType.getWorkflowId() != null) {
-            return docType.getWorkflowId();
-        }
-
         UUID repli = null;
         try {
-            WorkflowSummaryDto actif = workflowClient.getActiveWorkflowByType("DOCUMENT");
-            if (actif != null) {
-                repli = actif.getId();
+            // Une seule question au moteur : le circuit réservé à ce type de document, ou à défaut
+            // celui de la famille. La règle vit chez lui, elle n'est pas rejouée ici.
+            WorkflowSummaryDto circuit = workflowClient.circuitAOuvrir(
+                    "DOCUMENT", docType.getId() != null ? docType.getId().toString() : null);
+            if (circuit != null) {
+                repli = circuit.getId();
             }
         } catch (Exception e) {
-            // Aucun circuit ouvrable pour la famille, ou service de circuits injoignable : le refus
-            // qui suit le dit en clair, plutôt que de laisser remonter une erreur technique.
-            log.warn("Circuit de repli des documents indisponible : {}", e.getMessage());
+            // Ni circuit réservé, ni circuit par défaut, ou service de circuits injoignable : le
+            // refus qui suit le dit en clair, plutôt que de laisser remonter une erreur technique.
+            log.warn("Aucun circuit à ouvrir pour le type de document « {} » : {}",
+                    docType.getLibelle(), e.getMessage());
         }
 
         if (repli == null) {
