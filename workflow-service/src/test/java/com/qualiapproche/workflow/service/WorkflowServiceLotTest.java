@@ -46,6 +46,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.workflow.model.SeveriteAction;
+import com.qualiapproche.workflow.model.ValidationHistory;
+import com.qualiapproche.workflow.model.WorkflowFieldValue;
 
 /**
  * Consultation de l'état de validation, unitaire et par lot.
@@ -78,6 +81,7 @@ class WorkflowServiceLotTest {
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
                 transitionRepository, stepRepository,
+                org.mockito.Mockito.mock(StructureUtilisateurService.class),
                 // Pas de proxy hors contexte Spring : voir WorkflowService#self().
                 null);
 
@@ -91,7 +95,7 @@ class WorkflowServiceLotTest {
         TransitionPersistante aTransition = new TransitionPersistante("100", aEtape, aEtape);
         aTransition.setLibelle("Valider");
         aTransition.setIcon("pi pi-verified");
-        aTransition.setSeverite(com.qualiapproche.workflow.model.SeveriteAction.WARN);
+        aTransition.setSeverite(SeveriteAction.WARN);
         aTransition.setPermission("RESPONSABLE");
         when(moteur.getTransitionsPossibles(any()))
                 .thenReturn(java.util.Collections.unmodifiableSequencedSet(
@@ -249,12 +253,12 @@ class WorkflowServiceLotTest {
 
     // ------------------------------------------------------------------ saisies du dossier
 
-    private com.qualiapproche.workflow.model.WorkflowFieldValue saisie(
+    private WorkflowFieldValue saisie(
             WorkflowValidationInstance instance, String etape, String champ, String libelle,
             String valeur, int minute) {
 
-        com.qualiapproche.workflow.model.ValidationHistory decision =
-                com.qualiapproche.workflow.model.ValidationHistory.builder()
+        ValidationHistory decision =
+                ValidationHistory.builder()
                         .validationInstance(instance)
                         .stepCode(etape).stepName(etape)
                         .decision("APPROUVE")
@@ -262,7 +266,7 @@ class WorkflowServiceLotTest {
                         .decisionDate(LocalDateTime.of(2026, 8, 6, 9, minute))
                         .build();
 
-        return com.qualiapproche.workflow.model.WorkflowFieldValue.builder()
+        return WorkflowFieldValue.builder()
                 .history(decision).fieldCode("1").fieldName(champ).fieldLabel(libelle).value(valeur)
                 .build();
     }
@@ -322,7 +326,7 @@ class WorkflowServiceLotTest {
         WorkflowValidationInstance aInstance = instance(aRessource);
         when(validationInstanceRepository.findByResourceIdInOrderByStartedAtDesc(anyCollection()))
                 .thenReturn(List.of(aInstance));
-        com.qualiapproche.workflow.model.WorkflowFieldValue aAncienne =
+        WorkflowFieldValue aAncienne =
                 saisie(aInstance, "TRAITEMENT", "actionDsc", null, "Rappel de la procédure", 10);
         when(fieldValueRepository.saisiesDesInstances(anyCollection())).thenReturn(List.of(aAncienne));
 

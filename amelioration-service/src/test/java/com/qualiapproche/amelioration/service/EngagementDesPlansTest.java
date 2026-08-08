@@ -70,7 +70,9 @@ class EngagementDesPlansTest {
 
         // Le responsable devient le titulaire : c'est lui, et lui seul, à qui l'étape de réalisation
         // sera ouverte. Un rôle l'aurait ouverte à tout agent, sur toute action.
-        verify(workflowClient).initiateWorkflow(plan.getId(), "PLAN_ACTION", circuit, responsable.toString());
+        // La référence du dossier accompagne l'ouverture : c'est elle que citeront les courriels.
+        verify(workflowClient).initiateWorkflow(plan.getId(), "PLAN_ACTION", circuit,
+                responsable.toString(), plan.getNumeroNc());
         assertThat(plan.getWorkflowId()).isEqualTo(circuit);
         assertThat(plan.getStatus()).isEqualTo(StatutEnum.NON_TRAITER);
     }

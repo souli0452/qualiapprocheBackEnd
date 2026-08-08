@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import java.util.List;
+import org.springframework.core.io.Resource;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.ResourceHttpMessageConverter;
+import org.springframework.http.converter.ResourceRegionHttpMessageConverter;
 
 @RestControllerAdvice
 public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
@@ -28,13 +32,13 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
         Class<?> paramType = returnType.getParameterType();
         if (paramType.equals(ApiResponse.class) ||
             paramType.equals(byte[].class) ||
-            org.springframework.core.io.Resource.class.isAssignableFrom(paramType)) {
+            Resource.class.isAssignableFrom(paramType)) {
             return false;
         }
 
-        if (org.springframework.http.converter.ByteArrayHttpMessageConverter.class.isAssignableFrom(converterType) ||
-            org.springframework.http.converter.ResourceHttpMessageConverter.class.isAssignableFrom(converterType) ||
-            org.springframework.http.converter.ResourceRegionHttpMessageConverter.class.isAssignableFrom(converterType)) {
+        if (ByteArrayHttpMessageConverter.class.isAssignableFrom(converterType) ||
+            ResourceHttpMessageConverter.class.isAssignableFrom(converterType) ||
+            ResourceRegionHttpMessageConverter.class.isAssignableFrom(converterType)) {
             return false;
         }
 

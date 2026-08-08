@@ -23,6 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ContratDesChampsPartagesTest {
 
+    // Les noms pleinement qualifiés sont ici volontaires et nécessaires : ce test compare deux
+    // classes homonymes — celle du moteur (résolue par le paquet du test) et celle de common. Les
+    // importer confondrait précisément ce qu'il s'agit de distinguer.
+
+
     private Set<String> proprietesDe(Class<?> type) throws IntrospectionException {
         return Arrays.stream(Introspector.getBeanInfo(type, Object.class).getPropertyDescriptors())
                 .map(PropertyDescriptor::getName)

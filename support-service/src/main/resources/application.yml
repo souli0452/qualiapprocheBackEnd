@@ -12,10 +12,31 @@ spring:
     url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5432/qualisira_supportdb}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Une base déjà en service n'est pas vide : Flyway la marque « v1 » au lieu de rejouer
+    # le schéma initial, qui échouerait sur des tables existantes. Une base vide, elle,
+    # reçoit V1 puis la suite. Les deux convergent ensuite.
+    baseline-on-migrate: true
+    baseline-version: 1
+    # Sans apostrophe : Flyway interpole cette description dans le SQL qui inscrit la
+    # ligne de référence, et une apostrophe y casse la migration au premier démarrage.
+    baseline-description: Schema initial releve avant la mise en place de Flyway
+    # Un script déjà appliqué et modifié depuis fait échouer le démarrage plutôt que
+    # d'appliquer un schéma qui ne correspond plus à l'historique.
+    validate-on-migrate: true
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      # Le schéma vient des migrations Flyway, plus des entités : « update » corrigeait la base
+      # en silence à chaque démarrage — une colonne renommée en laissait deux, un type élargi
+      # ne revenait jamais en arrière, et aucune trace ne disait qui avait changé quoi.
+      # « validate » signale au démarrage tout écart entre les entités et le schéma migré.
+      ddl-auto: validate
+    # Journalisation des requêtes : coupée par défaut. Chaque requête y passait avec ses
+    # valeurs — donc des données de dossiers dans les journaux, et un volume qui noie les
+    # lignes qui comptent. Pour déboguer en local : SPRING_JPA_SHOW_SQL=true.
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
   security:
     oauth2:
       resourceserver:
@@ -25,7 +46,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET:URd095w8aGdw1wJ53HLDd1cxkvJEJReC}
+            client-secret: ${KC_CLIENT_SECRET}
             authorization-grant-type: client_credentials
         provider:
           keycloak:
@@ -65,6 +86,6 @@ eureka:
 
 minio:
   url: ${MINIO_URL:https://s3.horeb.tech}
-  access-key: ${MINIO_ACCESS_KEY:qualisira_admin_minio}
-  secret-key: ${MINIO_SECRET_KEY:qualisira_admin_password}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
   bucket-name: ${MINIO_BUCKET_NAME:quali-sira}

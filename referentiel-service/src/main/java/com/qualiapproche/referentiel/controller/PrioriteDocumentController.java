@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.PRIORITE_DOCUMENT_ROOT_URL;
+import com.qualiapproche.common.response.ApiResponse;
 
 /**
  * Référentiel des priorités de document.
@@ -69,8 +70,8 @@ public class PrioriteDocumentController {
      */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/all")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<PrioriteDocumentDto>>> all() {
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(service.getAll()));
+    public ResponseEntity<ApiResponse<List<PrioriteDocumentDto>>> all() {
+        return ResponseEntity.ok(ApiResponse.success(service.getAll()));
     }
 
     /**

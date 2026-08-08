@@ -1,6 +1,5 @@
 /*
 package com.qualiapproche.amelioration.entities;
-import com.qualiapproche.amelioration.entities.Fichier;
 import com.qualiapproche.common.base.AuditEntity;
 
 import java.util.UUID;
@@ -10,8 +9,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

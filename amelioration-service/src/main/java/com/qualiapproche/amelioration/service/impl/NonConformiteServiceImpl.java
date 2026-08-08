@@ -55,6 +55,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import com.qualiapproche.amelioration.specification.NonConformiteSpecification;
 import lombok.RequiredArgsConstructor;
+import com.qualiapproche.amelioration.repository.PieceJointeRepository;
+import com.qualiapproche.common.config.PermissionChecker;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -92,7 +95,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private static final String CHAMP_AGENT_IMPUTE = "userImputId";
 
     private final NonConformiteRepository nonConformiteRepository;
-    private final com.qualiapproche.amelioration.repository.PieceJointeRepository pieceJointeRepository;
+    private final PieceJointeRepository pieceJointeRepository;
     private final NonConformiteMapper nonConformiteMapper;
     private final PlanActionMapper planActionMapper;
     private final TypeNonConformiteRepository typeNonConformiteRepository;
@@ -106,9 +109,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
     private final PlansActionDeLaNonConformiteService plansActionService;
-    private final com.qualiapproche.common.config.PermissionChecker permissionChecker;
+    private final PermissionChecker permissionChecker;
 
-    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    @Value("${frontend.url}")
     private String frontendUrl;
 
     /**
@@ -230,7 +233,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
                     savedNonConformite.getId(),
                     "NON_CONFORMITE",
-                    workflowId
+                    workflowId,
+                    // La référence lisible : c'est elle que citeront les courriels d'étape.
+                    savedNonConformite.getNumeroReference()
             );
 
             if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {

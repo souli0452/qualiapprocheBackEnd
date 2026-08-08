@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Catalogue d'étapes réutilisables entre workflows (voir {@link com.qualiapproche.support.model.WorkflowStepTemplate}).
+ * Catalogue d'étapes réutilisables entre workflows (voir {@link WorkflowStepTemplate}).
  * Rattaché à la même famille de permissions que les workflows eux-mêmes.
  */
 @RestController

@@ -54,6 +54,16 @@ import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import com.qualiapproche.support.model.DocumentStructureAccess;
+import com.qualiapproche.support.model.QmsAuditLog;
+import com.qualiapproche.support.repository.DocumentStructureAccessRepository;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.function.Consumer;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @Slf4j
 @Service
@@ -63,7 +73,7 @@ public class QmsDocumentService {
     private final DocumentQmsRepository documentRepository;
     private final QmsDocumentVersionRepository versionRepository;
     private final DocumentUserAccessRepository accessRepository;
-    private final com.qualiapproche.support.repository.DocumentStructureAccessRepository structureAccessRepository;
+    private final DocumentStructureAccessRepository structureAccessRepository;
     private final ProfilUtilisateurService profilUtilisateurService;
     private final NiveauxConfidentialiteService niveauxConfidentialiteService;
     private final QmsAuditLogService auditLogService;
@@ -202,7 +212,8 @@ public class QmsDocumentService {
         auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
 
         // 8. Associate workflow immediately
-        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", finalWorkflowId);
+        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
+                document.getId(), "DOCUMENT", finalWorkflowId, document.getDocumentNumber());
         document.setWorkflowId(finalWorkflowId);
         // Le classement se confronte au circuit une fois celui-ci rattaché : c'est lui qui
         // désigne les rôles décideurs.
@@ -281,7 +292,8 @@ public class QmsDocumentService {
             throw new IllegalStateException("Ce document est déjà soumis à un circuit de validation.");
         }
 
-        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", workflowId);
+        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
+                document.getId(), "DOCUMENT", workflowId, document.getDocumentNumber());
         document.setWorkflowId(workflowId);
         if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
             document.setCurrentEtape(workflowInstance.getCurrentStateName());
@@ -357,7 +369,8 @@ public class QmsDocumentService {
 
             if (previousInstance != null && previousInstance.getWorkflowId() != null) {
                 UUID prevWorkflowId = previousInstance.getWorkflowId();
-                WorkflowInstanceDto newInstance = workflowClient.initiateWorkflow(document.getId(), "DOCUMENT", prevWorkflowId);
+                WorkflowInstanceDto newInstance = workflowClient.initiateWorkflow(
+                        document.getId(), "DOCUMENT", prevWorkflowId, document.getDocumentNumber());
                 document.setWorkflowId(prevWorkflowId);
                 if (newInstance != null && newInstance.getCurrentStateName() != null) {
                     document.setCurrentEtape(newInstance.getCurrentStateName());
@@ -413,7 +426,8 @@ public class QmsDocumentService {
             doc.setCurrentEtape(null);
         } else if ("en_approbation".equalsIgnoreCase(nextStatus) || "en_cours".equalsIgnoreCase(nextStatus)) {
             if (doc.getWorkflowId() != null) {
-                WorkflowInstanceDto wfInstance = workflowClient.initiateWorkflow(doc.getId(), "DOCUMENT", doc.getWorkflowId());
+                WorkflowInstanceDto wfInstance = workflowClient.initiateWorkflow(
+                        doc.getId(), "DOCUMENT", doc.getWorkflowId(), doc.getDocumentNumber());
                 if (wfInstance != null && wfInstance.getCurrentStateName() != null) {
                     doc.setCurrentEtape(wfInstance.getCurrentStateName());
                 } else {
@@ -531,7 +545,7 @@ public class QmsDocumentService {
 
     /** Applique une valeur si elle est fournie et différente, en notant le champ touché. */
     private void appliquer(String nouvelle, String actuelle, String libelle,
-                           List<String> modifications, java.util.function.Consumer<String> setter) {
+                           List<String> modifications, Consumer<String> setter) {
         if (nouvelle != null && !nouvelle.equals(actuelle)) {
             setter.accept(nouvelle);
             modifications.add(libelle);
@@ -747,7 +761,7 @@ public class QmsDocumentService {
 
         String contentType = null;
         try {
-            contentType = java.nio.file.Files.probeContentType(java.nio.file.Paths.get(filename));
+            contentType = Files.probeContentType(Paths.get(filename));
         } catch (Exception e) {
             log.warn("Failed to probe content type for filename '{}'", filename, e);
         }
@@ -811,7 +825,7 @@ public class QmsDocumentService {
     }
 
     /** Piste d'audit, réservée à la structure du document. */
-    public List<com.qualiapproche.support.model.QmsAuditLog> getAuditLogs(UUID id) {
+    public List<QmsAuditLog> getAuditLogs(UUID id) {
         DocumentQms document = chargerSansControle(id);
         exigerAccesInterne(document);
         return auditLogService.getLogsForDocument(document.getDocumentNumber());
@@ -1118,7 +1132,7 @@ public class QmsDocumentService {
      * dépôt d'un document dont le niveau exclut les rôles du circuit est averti à ce moment-là
      * (voir {@link #avertissementSurLeClassement}).</p>
      */
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public List<DocumentQms> aTraiterParLAppelant() {
         List<UUID> aDecider = etatsDuCircuit.ressourcesADecider("DOCUMENT");
         if (aDecider.isEmpty()) {
@@ -1148,10 +1162,10 @@ public class QmsDocumentService {
      *
      * @param pageable page demandée ; son tri, s'il est renseigné, prime sur celui des critères
      */
-    public org.springframework.data.domain.Page<DocumentQms> searchDocuments(
-            DocumentSearchCriteria criteria, org.springframework.data.domain.Pageable pageable) {
-        org.springframework.data.domain.Pageable range = pageable.getSort().isSorted() ? pageable
-                : org.springframework.data.domain.PageRequest.of(
+    public Page<DocumentQms> searchDocuments(
+            DocumentSearchCriteria criteria, Pageable pageable) {
+        Pageable range = pageable.getSort().isSorted() ? pageable
+                : PageRequest.of(
                         pageable.getPageNumber(), pageable.getPageSize(), triDe(criteria));
         return documentRepository.findAll(specificationDe(criteria), range);
     }
@@ -1174,7 +1188,7 @@ public class QmsDocumentService {
     }
 
     /** Critères de recherche traduits en prédicats, visibilité de l'appelant comprise. */
-    private org.springframework.data.jpa.domain.Specification<DocumentQms> specificationDe(
+    private Specification<DocumentQms> specificationDe(
             DocumentSearchCriteria criteria) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -1415,7 +1429,7 @@ public class QmsDocumentService {
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
 
         Join<DocumentQms, DocumentUserAccess> accessJoin = root.join("userAccessList", JoinType.LEFT);
-        Join<DocumentQms, com.qualiapproche.support.model.DocumentStructureAccess> structureJoin =
+        Join<DocumentQms, DocumentStructureAccess> structureJoin =
                 root.join("structureAccessList", JoinType.LEFT);
         cq.distinct(true);
 
@@ -1636,7 +1650,7 @@ public class QmsDocumentService {
      * d'audit, ni décisions de circuit.</p>
      */
     @Transactional
-    public com.qualiapproche.support.model.DocumentStructureAccess partagerAvecStructure(
+    public DocumentStructureAccess partagerAvecStructure(
             UUID documentId, String structureId, String structureLibelle) {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
@@ -1654,7 +1668,7 @@ public class QmsDocumentService {
         return structureAccessRepository.findByDocumentIdAndStructureId(documentId, structureId)
                 .orElseGet(() -> {
                     var partage = structureAccessRepository.save(
-                            com.qualiapproche.support.model.DocumentStructureAccess.builder()
+                            DocumentStructureAccess.builder()
                                     .document(document)
                                     .structureId(structureId)
                                     .structureLibelle(structureLibelle)
@@ -1685,7 +1699,7 @@ public class QmsDocumentService {
     }
 
     /** Structures avec lesquelles le document est partagé. */
-    public List<com.qualiapproche.support.model.DocumentStructureAccess> getPartagesStructure(UUID documentId) {
+    public List<DocumentStructureAccess> getPartagesStructure(UUID documentId) {
         DocumentQms document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + documentId));
         exigerAccesInterne(document);
@@ -1848,7 +1862,7 @@ public class QmsDocumentService {
     }
 
     private String getCurrentUser() {
-        String fullName = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
+        String fullName = SecurityUtils.getCurrentUserFullName();
         if ("Système".equalsIgnoreCase(fullName)) {
             return "system";
         }

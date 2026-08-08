@@ -12,15 +12,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
+import com.qualiapproche.support.service.DemandeDocumentService;
+import org.springframework.security.access.prepost.PreAuthorize;
 
+/*
+ * Réservé aux services ({@code @perm.appelDeService()}) : ces points de rappel écrivent l'état
+ * métier sans passer par une décision de circuit. Sous la seule authentification, n'importe quel
+ * agent muni d'un jeton valide pouvait y poster un statut « validé ».
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/internal/callbacks")
+@PreAuthorize("@perm.appelDeService()")
 @RequiredArgsConstructor
 public class SupportInternalCallbackController {
 
     private final QmsDocumentService documentService;
-    private final com.qualiapproche.support.service.DemandeDocumentService demandeService;
+    private final DemandeDocumentService demandeService;
 
     @PostMapping("/documents/{documentId}/status")
     public ResponseEntity<Void> updateDocumentStatus(

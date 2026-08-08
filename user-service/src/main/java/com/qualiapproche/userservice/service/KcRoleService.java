@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import jakarta.ws.rs.NotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -94,7 +95,7 @@ public class KcRoleService {
                 .map(roleName -> {
                     try {
                         return rolesResource.get(roleName).toRepresentation();
-                    } catch (jakarta.ws.rs.NotFoundException e) {
+                    } catch (NotFoundException e) {
                         return null; // Le rôle n'existe pas dans Keycloak
                     }
                 })

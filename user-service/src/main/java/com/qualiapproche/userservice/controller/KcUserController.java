@@ -25,6 +25,7 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
+import com.qualiapproche.common.dto.DestinataireDto;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -118,11 +119,13 @@ public class KcUserController {
      */
     @Operation(summary = "Utilisateurs portant un rôle",
             description = "Usage interne : permet aux services aval de notifier les porteurs d'un rôle. "
-                    + "Le rôle est accepté par identifiant ou par nom.")
+                    + "Le rôle est accepté par identifiant ou par nom. La structure, facultative, "
+                    + "borne la réponse à ses membres — sauf pour les rôles à portée globale.")
     @GetMapping("/roles/{role}/users")
-    public ResponseEntity<ApiResponse<List<com.qualiapproche.common.dto.DestinataireDto>>> getUsersByRole(
-            @PathVariable("role") String role) {
-        return ResponseEntity.ok(ApiResponse.success(kcUserService.getUsersByRole(role)));
+    public ResponseEntity<ApiResponse<List<DestinataireDto>>> getUsersByRole(
+            @PathVariable("role") String role,
+            @RequestParam(value = "structureId", required = false) String structureId) {
+        return ResponseEntity.ok(ApiResponse.success(kcUserService.getUsersByRole(role, structureId)));
     }
 
     @PostMapping("/users/create")

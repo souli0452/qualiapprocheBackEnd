@@ -23,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import jakarta.mail.internet.MimeMultipart;
 
 /**
  * Envoi d'un courriel à partir d'un gabarit de fichier — le chemin des alertes de plan d'action et
@@ -82,7 +83,7 @@ class CourrielParGabaritTest {
         if (contenu instanceof String texte) {
             return texte;
         }
-        jakarta.mail.internet.MimeMultipart multipart = (jakarta.mail.internet.MimeMultipart) contenu;
+        MimeMultipart multipart = (MimeMultipart) contenu;
         return multipart.getBodyPart(0).getContent().toString();
     }
 

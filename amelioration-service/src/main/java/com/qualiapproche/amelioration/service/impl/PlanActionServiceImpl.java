@@ -36,6 +36,9 @@ import com.qualiapproche.amelioration.service.PlanActionService;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.common.utils.ClesReglages;
 import lombok.RequiredArgsConstructor;
+import com.qualiapproche.amelioration.client.UtilisateurClient;
+import com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -48,7 +51,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     private final ReglagesOrganisation reglagesOrganisation;
     private final PlanActionMapper planActionMapper;
-    private final com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper nonConformiteResumeMapper;
+    private final NonConformiteResumeMapper nonConformiteResumeMapper;
     private final PlanActionRepository planActionRepository;
     private final NonConformiteRepository nonConformiteRepository;
     private final SendMailService sendMailService;
@@ -56,9 +59,9 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PieceJointeStockageService fichierService;
     private final PlansActionDeLaNonConformiteService plansActionService;
     private final WorkflowClient workflowClient;
-    private final com.qualiapproche.amelioration.client.UtilisateurClient utilisateurClient;
+    private final UtilisateurClient utilisateurClient;
 
-    @org.springframework.beans.factory.annotation.Value("${frontend.url}")
+    @Value("${frontend.url}")
     private String frontendUrl;
 
     /**

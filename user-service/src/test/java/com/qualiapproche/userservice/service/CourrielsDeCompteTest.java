@@ -21,6 +21,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import jakarta.mail.internet.MimeMultipart;
 
 /**
  * Courriels de compte : vérification, réinitialisation, mot de passe temporaire.
@@ -72,7 +73,7 @@ class CourrielsDeCompteTest {
         if (contenu instanceof String texte) {
             return texte;
         }
-        if (contenu instanceof jakarta.mail.internet.MimeMultipart multipart) {
+        if (contenu instanceof MimeMultipart multipart) {
             for (int i = 0; i < multipart.getCount(); i++) {
                 String trouve = extraireHtml(multipart.getBodyPart(i).getContent());
                 if (trouve != null) {

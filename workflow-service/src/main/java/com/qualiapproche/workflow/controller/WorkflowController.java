@@ -13,13 +13,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
+import com.qualiapproche.common.response.ApiResponse;
+import com.qualiapproche.workflow.dto.ResultatDecisionDto;
+import com.qualiapproche.workflow.dto.ValidationHistoryDto;
+import com.qualiapproche.workflow.dto.WorkflowDto;
+import com.qualiapproche.workflow.dto.WorkflowStateDto;
+import com.qualiapproche.workflow.model.StepDecision;
+import com.qualiapproche.workflow.model.TypeRessource;
 
 /**
  * API du service de workflow.
@@ -47,28 +53,36 @@ import java.util.UUID;
 @RequirePermissions(
         create = {"workflow-write"},
         update = {"workflow-write"},
-        delete = {"workflow-write"}
+        delete = {"workflow-write"},
+        // Lecture de la traçabilité : toute permission de lecture d'un module suivi par un circuit.
+        // Elle nomme des personnes et rapporte leurs appréciations — la servir à « quiconque est
+        // authentifié » revenait à l'ouvrir aux comptes sans aucun droit métier.
+        read = {"workflow-read", "workflow-write", "workflow-validate",
+                "nc-read", "nc-write", "nc-validate", "NC_READ", "CONSULTATION_NC",
+                "document-read", "document-write", "DOC_READ",
+                "demande-document-read", "demande-document-write",
+                "plan-action-read", "plan-action-write", "TRAITEMENT_PLAN"}
 )
 public class WorkflowController {
 
     private final WorkflowService workflowService;
 
     @GetMapping
-    public ResponseEntity<List<com.qualiapproche.workflow.dto.WorkflowDto>> getAllWorkflows() {
+    public ResponseEntity<List<WorkflowDto>> getAllWorkflows() {
         return ResponseEntity.ok(workflowService.getAllWorkflows());
     }
 
     @PostMapping
     @PreAuthorize("@perm.canCreate(this)")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> createWorkflow(
-            @RequestBody com.qualiapproche.workflow.dto.WorkflowDto workflowDto) {
+    public ResponseEntity<WorkflowDto> createWorkflow(
+            @RequestBody WorkflowDto workflowDto) {
         return ResponseEntity.ok(workflowService.createWorkflow(workflowDto));
     }
 
     @PutMapping("/{workflowId}")
     @PreAuthorize("@perm.canUpdate(this)")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> updateWorkflow(@PathVariable UUID workflowId,
-            @RequestBody com.qualiapproche.workflow.dto.WorkflowDto workflowDto) {
+    public ResponseEntity<WorkflowDto> updateWorkflow(@PathVariable UUID workflowId,
+            @RequestBody WorkflowDto workflowDto) {
         return ResponseEntity.ok(workflowService.updateWorkflow(workflowId, workflowDto));
     }
 
@@ -88,11 +102,11 @@ public class WorkflowController {
      */
     @GetMapping("/resource-types")
     public ResponseEntity<List<String>> getResourceTypes() {
-        return ResponseEntity.ok(com.qualiapproche.workflow.model.TypeRessource.valeursAutorisees());
+        return ResponseEntity.ok(TypeRessource.valeursAutorisees());
     }
 
     @GetMapping("/type/{documentType}")
-    public ResponseEntity<List<com.qualiapproche.workflow.dto.WorkflowDto>> getWorkflowsByType(@PathVariable String documentType) {
+    public ResponseEntity<List<WorkflowDto>> getWorkflowsByType(@PathVariable String documentType) {
         return ResponseEntity.ok(workflowService.getWorkflowsByType(documentType));
     }
 
@@ -101,7 +115,7 @@ public class WorkflowController {
      * {@code /type/{documentType}} + "premier élément" côté services appelants.
      */
     @GetMapping("/type/{documentType}/active")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> getActiveWorkflowByType(@PathVariable String documentType) {
+    public ResponseEntity<WorkflowDto> getActiveWorkflowByType(@PathVariable String documentType) {
         return ResponseEntity.ok(workflowService.getActiveWorkflowByType(documentType));
     }
 
@@ -117,14 +131,14 @@ public class WorkflowController {
      * {@code /type/{famille}/active}. Répond 404 quand ni l'un ni l'autre n'existe.</p>
      */
     @GetMapping("/actif")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> circuitAOuvrir(
+    public ResponseEntity<WorkflowDto> circuitAOuvrir(
             @RequestParam("famille") String famille,
             @RequestParam(value = "cible", required = false) String cible) {
         return ResponseEntity.ok(workflowService.circuitPourFamilleEtCible(famille, cible));
     }
 
     @GetMapping("/{workflowId}")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowDto> getWorkflowById(@PathVariable UUID workflowId) {
+    public ResponseEntity<WorkflowDto> getWorkflowById(@PathVariable UUID workflowId) {
         return ResponseEntity.ok(workflowService.getWorkflowById(workflowId));
     }
 
@@ -135,10 +149,10 @@ public class WorkflowController {
     }
 
     @GetMapping("/instances/{resourceId}/state")
-    public ResponseEntity<com.qualiapproche.workflow.dto.WorkflowStateDto> getWorkflowState(@PathVariable UUID resourceId) {
-        com.qualiapproche.workflow.dto.WorkflowStateDto state = workflowService.getWorkflowStateForResource(resourceId);
+    public ResponseEntity<WorkflowStateDto> getWorkflowState(@PathVariable UUID resourceId) {
+        WorkflowStateDto state = workflowService.getWorkflowStateForResource(resourceId);
         if (state == null) {
-            state = com.qualiapproche.workflow.dto.WorkflowStateDto.builder()
+            state = WorkflowStateDto.builder()
                     .allowedActions(java.util.Collections.emptyList())
                     .build();
         }
@@ -150,7 +164,7 @@ public class WorkflowController {
      * une page de N documents déclenchait N requêtes.
      */
     @PostMapping("/instances/states")
-    public ResponseEntity<java.util.Map<UUID, com.qualiapproche.workflow.dto.WorkflowStateDto>> getWorkflowStates(
+    public ResponseEntity<java.util.Map<UUID, WorkflowStateDto>> getWorkflowStates(
             @RequestBody List<UUID> resourceIds) {
         return ResponseEntity.ok(workflowService.getWorkflowStatesForResources(resourceIds));
     }
@@ -175,8 +189,8 @@ public class WorkflowController {
      * tableau.</p>
      */
     @GetMapping("/faits")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<String>>> faitsConnus() {
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(workflowService.faitsConnus()));
+    public ResponseEntity<ApiResponse<List<String>>> faitsConnus() {
+        return ResponseEntity.ok(ApiResponse.success(workflowService.faitsConnus()));
     }
 
     /**
@@ -185,7 +199,11 @@ public class WorkflowController {
      * <p>Appelé de service à service, quand le module métier change la personne qui répond du
      * dossier hors d'une décision de circuit. Les deux doivent dire la même chose, sans quoi l'étape
      * reste ouverte à celui qui n'en répond plus.</p>
+     *
+     * <p>Réservé aux services : un utilisateur qui pourrait se désigner titulaire s'ouvrirait
+     * lui-même les étapes réservées au titulaire.</p>
      */
+    @PreAuthorize("@perm.appelDeService()")
     @PutMapping("/instances/{resourceId}/titulaire")
     public ResponseEntity<Void> designerTitulaire(
             @PathVariable UUID resourceId,
@@ -201,7 +219,11 @@ public class WorkflowController {
      * moteur se contente de l'exiger. C'est ce qui permet à un circuit de dire « on ne clôt pas
      * tant que les plans d'action ne sont pas soldés » sans que le moteur sache ce qu'est un plan
      * d'action.</p>
+     *
+     * <p>Réservé aux services : un utilisateur qui pourrait déclarer un fait déverrouillerait
+     * lui-même la clôture que la condition retient.</p>
      */
+    @PreAuthorize("@perm.appelDeService()")
     @PutMapping("/instances/{resourceId}/faits/{fait}")
     public ResponseEntity<Void> declarerFait(
             @PathVariable UUID resourceId,
@@ -220,16 +242,17 @@ public class WorkflowController {
      * un refus partiel n'est pas une erreur de la demande, c'est son résultat.</p>
      */
     @PostMapping("/decisions-groupees")
-    public ResponseEntity<List<com.qualiapproche.workflow.dto.ResultatDecisionDto>> deciderEnLot(
-            @RequestParam("decision") com.qualiapproche.workflow.model.StepDecision decision,
+    public ResponseEntity<List<ResultatDecisionDto>> deciderEnLot(
+            @RequestParam("decision") StepDecision decision,
             @RequestParam("resourceIds") List<UUID> resourceIds,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
         return ResponseEntity.ok(workflowService.deciderEnLot(resourceIds, decision, request));
     }
 
     /** Traçabilité du circuit d'une ressource : décisions, auteurs, commentaires, valeurs saisies. */
+    @PreAuthorize("@perm.appelDeService() or @perm.canRead(this)")
     @GetMapping("/instances/{resourceId}/history")
-    public ResponseEntity<List<com.qualiapproche.workflow.dto.ValidationHistoryDto>> getValidationHistory(
+    public ResponseEntity<List<ValidationHistoryDto>> getValidationHistory(
             @PathVariable UUID resourceId) {
         return ResponseEntity.ok(workflowService.getValidationHistory(resourceId));
     }
@@ -239,29 +262,36 @@ public class WorkflowController {
             @RequestParam("resourceId") UUID resourceId,
             @RequestParam("resourceType") String resourceType,
             @RequestParam("workflowId") UUID workflowId,
-            @RequestParam(value = "titulaireId", required = false) String titulaireId) {
+            @RequestParam(value = "titulaireId", required = false) String titulaireId,
+            // Référence lisible du dossier (« NC-2026-014 ») : citée par les courriels d'étape.
+            @RequestParam(value = "reference", required = false) String reference) {
 
         return ResponseEntity.ok(
-                workflowService.initiateWorkflow(resourceId, resourceType, workflowId, titulaireId));
+                workflowService.initiateWorkflow(resourceId, resourceType, workflowId, titulaireId, reference));
     }
 
+    /**
+     * L'identité du décideur est celle du jeton, exclusivement.
+     *
+     * <p>Ces trois points d'entrée acceptaient un en-tête {@code X-User-Id} — jamais lu par le
+     * service, qui juge et historise sur {@code SecurityUtils} — mais dont la seule présence
+     * laissait croire qu'on pouvait décider au nom d'un autre. Retiré.</p>
+     */
     @PostMapping("/validate/{resourceId}")
     public ResponseEntity<Void> validateStep(
             @PathVariable UUID resourceId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
 
-        workflowService.validateStep(resourceId, userId, request);
+        workflowService.validateStep(resourceId, request);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/reject/{resourceId}")
     public ResponseEntity<Void> rejectStep(
             @PathVariable UUID resourceId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
 
-        workflowService.rejectStep(resourceId, userId, request);
+        workflowService.rejectStep(resourceId, request);
         return ResponseEntity.ok().build();
     }
 
@@ -269,10 +299,9 @@ public class WorkflowController {
     public ResponseEntity<Void> executeTransition(
             @PathVariable UUID resourceId,
             @RequestParam("transitionCode") String transitionCode,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
 
-        workflowService.executeDynamicTransition(resourceId, userId, transitionCode, request);
+        workflowService.executeDynamicTransition(resourceId, transitionCode, request);
         return ResponseEntity.ok().build();
     }
 }

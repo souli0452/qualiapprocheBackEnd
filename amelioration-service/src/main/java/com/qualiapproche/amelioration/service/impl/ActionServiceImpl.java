@@ -14,6 +14,7 @@ import com.qualiapproche.amelioration.repository.ActionRepository;
 import com.qualiapproche.amelioration.service.ActionService;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +25,7 @@ public class ActionServiceImpl implements ActionService {
 
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ActionDto create(ActionDto actionDto) {
         Action action = actionMapper.toEntity(actionDto);
         action = actionRepository.save(action);
@@ -46,7 +47,7 @@ public class ActionServiceImpl implements ActionService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ActionDto update(ActionDto actionDto) {
         return actionRepository.findById(actionDto.getId()).map(ActionExisted -> {
             actionMapper.updateEntityFromDto(actionDto, ActionExisted);

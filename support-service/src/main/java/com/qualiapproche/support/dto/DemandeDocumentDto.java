@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import com.qualiapproche.common.dto.WorkflowStateDto;
 
 /** Demande de modification ou de suppression, telle que la présentent les écrans. */
 @Data
@@ -48,5 +49,5 @@ public class DemandeDocumentDto {
      * chaque fiche pour découvrir ce qu'on peut y faire ; et les demander une par une multipliait
      * les allers-retours autant que de lignes.</p>
      */
-    private com.qualiapproche.common.dto.WorkflowStateDto workflowState;
+    private WorkflowStateDto workflowState;
 }

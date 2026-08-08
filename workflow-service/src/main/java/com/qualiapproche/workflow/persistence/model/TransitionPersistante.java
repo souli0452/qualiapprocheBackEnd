@@ -3,7 +3,6 @@ package com.qualiapproche.workflow.persistence.model;
 import com.qualiapproche.workflow.core.model.Etat;
 import com.qualiapproche.workflow.core.model.Transition;
 import com.qualiapproche.workflow.model.SeveriteAction;
-import com.qualiapproche.workflow.model.StepDecision;
 import lombok.Getter;
 import lombok.Setter;
 

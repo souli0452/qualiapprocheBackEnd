@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.qualiapproche.common.dto.WorkflowStateDto;
 
 /**
  * Demandes de modification et de suppression d'un document.
@@ -110,7 +111,8 @@ public class DemandeDocumentService {
         // Le circuit est ouvert après l'enregistrement : c'est l'identifiant de la demande qui sert
         // de ressource au circuit, et il n'existe pas avant.
         UUID circuit = circuitDesDemandes();
-        WorkflowInstanceDto instance = workflowClient.initiateWorkflow(demande.getId(), FAMILLE, circuit);
+        WorkflowInstanceDto instance = workflowClient.initiateWorkflow(demande.getId(), FAMILLE, circuit,
+                demande.getDocumentNumber());
         demande.setWorkflowId(circuit);
         if (instance != null && instance.getCurrentStateName() != null) {
             demande.setCurrentEtape(instance.getCurrentStateName());
@@ -291,7 +293,7 @@ public class DemandeDocumentService {
             return List.of();
         }
 
-        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
+        Map<UUID, WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
                 demandes.stream().map(DemandeDocument::getId).toList());
 
         return demandes.stream()

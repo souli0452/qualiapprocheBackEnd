@@ -35,19 +35,33 @@ public class FeignConfig {
     @Value("${spring.security.oauth2.client.provider.keycloak.token-uri}")
     private String tokenUri;
 
+    /**
+     * Chemins du moteur de workflow réservés aux services : déclarer un fait, redésigner un
+     * titulaire. Ils sont appelés depuis des requêtes utilisateur — solder un plan déclare le fait
+     * dans la foulée — mais l'acte est celui du <b>module</b>, pas de la personne : le jeton du
+     * service part donc toujours, sans quoi le moteur refuserait l'appel.
+     */
+    private boolean estUnAppelTechnique(String url) {
+        if (!url.contains("/instances/")) {
+            return false;
+        }
+        return url.contains("/faits/") || url.contains("/titulaire");
+    }
+
     @Bean
     public RequestInterceptor requestInterceptor() {
         return requestTemplate -> {
-            // Propager le token de l'utilisateur actuel s'il existe
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
-                log.info("Interception Feign : Propagation du token utilisateur pour {}", requestTemplate.url());
-                requestTemplate.header("Authorization", "Bearer " + jwtAuthenticationToken.getToken().getTokenValue());
+            if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
                 return;
             }
 
-            // Sinon, utiliser le client credentials (pour les tâches de fond ou si pas de contexte utilisateur)
-            if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
+            // Propager le token de l'utilisateur actuel s'il existe — sauf sur les chemins
+            // techniques, où c'est l'identité du service qui est attendue.
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (!estUnAppelTechnique(requestTemplate.url())
+                    && authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
+                log.info("Interception Feign : Propagation du token utilisateur pour {}", requestTemplate.url());
+                requestTemplate.header("Authorization", "Bearer " + jwtAuthenticationToken.getToken().getTokenValue());
                 return;
             }
 

@@ -14,7 +14,7 @@ public interface ParametreService {
     /**
      * Met à jour la valeur et les intitulés — jamais la clé.
      *
-     * @throws com.qualiapproche.common.exception.BusinessException en 409 si une clé différente est
+     * @throws BusinessException en 409 si une clé différente est
      *         soumise : c'est par elle que le code désigne le réglage.
      */
     ParametreDto update(UUID id, ParametreDto dto);

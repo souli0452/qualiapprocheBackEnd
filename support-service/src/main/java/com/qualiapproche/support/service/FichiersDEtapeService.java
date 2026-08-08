@@ -1,6 +1,7 @@
 package com.qualiapproche.support.service;
 
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.storage.ReglesDePieceJointe;
 import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.support.model.PieceJointeEtape;
 import com.qualiapproche.support.repository.PieceJointeEtapeRepository;
@@ -58,6 +59,13 @@ public class FichiersDEtapeService {
         if (fichier == null || fichier.isEmpty()) {
             throw new BusinessException("Aucun fichier reçu : la pièce n'a pas été déposée.",
                     HttpStatus.BAD_REQUEST);
+        }
+        // Taille et type bornés avant tout rangement : la limite multipart du serveur (1 Go) n'est
+        // pas une règle métier, et rien n'excluait un exécutable.
+        try {
+            ReglesDePieceJointe.verifier(fichier.getOriginalFilename(), fichier.getSize());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
         String reference;

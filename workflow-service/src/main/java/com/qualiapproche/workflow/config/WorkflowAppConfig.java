@@ -8,6 +8,8 @@ import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.qualiapproche.workflow.core.exception.WorkflowException;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class WorkflowAppConfig {
@@ -19,7 +21,7 @@ public class WorkflowAppConfig {
      * chaque consultation du catalogue interrogeait la base. Il ne retarde pas les modifications
      * faites par cette instance, qui recharge explicitement après commit.</p>
      */
-    @org.springframework.beans.factory.annotation.Value("${workflow.catalogue.intervalle-controle-ms:5000}")
+    @Value("${workflow.catalogue.intervalle-controle-ms:5000}")
     private long intervalleControleMs;
 
     @Bean
@@ -29,7 +31,7 @@ public class WorkflowAppConfig {
                 new WorkflowEngine<>(daoPort, java.time.Duration.ofMillis(intervalleControleMs));
         try {
             engine.init();
-        } catch (com.qualiapproche.workflow.core.exception.WorkflowException e) {
+        } catch (WorkflowException e) {
             throw new RuntimeException("Failed to initialize WorkflowEngine", e);
         }
         return engine;

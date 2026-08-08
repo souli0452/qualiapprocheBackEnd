@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.assertj.core.api.InstanceOfAssertFactories;
 
 /**
  * Enveloppe appliquée aux réponses, et le piège qu'elle tend.
@@ -61,7 +62,7 @@ class GlobalResponseHandlerTest {
         // C'est la forme qu'attendent les sélecteurs du front : data est le tableau lui-même.
         assertThat(((ApiResponse<?>) aCorps).getData())
                 .isInstanceOf(List.class)
-                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .asInstanceOf(InstanceOfAssertFactories.LIST)
                 .hasSize(15);
     }
 }

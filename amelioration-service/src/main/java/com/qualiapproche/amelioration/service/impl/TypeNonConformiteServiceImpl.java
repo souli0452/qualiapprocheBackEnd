@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
     private final TypeNonConformiteRepository typeNonConformiteRepository;
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public TypeNonConformiteDto create(TypeNonConformiteDto typeNonConformiteDto) {
         TypeNonConformite typeNonConformite = typeNonConformiteMapper.toEntity(typeNonConformiteDto);
         typeNonConformite = typeNonConformiteRepository.save(typeNonConformite);
@@ -44,7 +45,7 @@ public class TypeNonConformiteServiceImpl implements TypeNonConformiteService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public TypeNonConformiteDto update(TypeNonConformiteDto typeNonConformiteDto) {
         return typeNonConformiteRepository.findById(typeNonConformiteDto.getId()).map(typeNonConformiteExisted -> {
             typeNonConformiteMapper.updateEntityFromDto(typeNonConformiteDto, typeNonConformiteExisted);

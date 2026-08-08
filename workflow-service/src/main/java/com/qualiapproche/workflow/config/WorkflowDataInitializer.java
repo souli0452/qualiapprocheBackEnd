@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import org.springframework.core.annotation.Order;
 
 /**
  * Circuits livrés d'origine, semés sur une base qui n'en a encore aucun pour le type concerné.
@@ -34,7 +35,7 @@ import java.util.List;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
-@org.springframework.core.annotation.Order(10) // avant WorkflowStepCodeInitializer, qui complète les codes
+@Order(10) // avant WorkflowStepCodeInitializer, qui complète les codes
 public class WorkflowDataInitializer implements CommandLineRunner {
 
     /**

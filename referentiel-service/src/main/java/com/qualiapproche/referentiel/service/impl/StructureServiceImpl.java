@@ -22,6 +22,12 @@ import org.springframework.data.domain.Sort;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
+import com.qualiapproche.common.enumeration.ModuleAbonnement;
+import com.qualiapproche.common.utils.CryptoUtils;
+import com.qualiapproche.referentiel.repository.AbonnementDirectionRepository;
+import java.time.temporal.ChronoUnit;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 
 @Service
 @AllArgsConstructor
@@ -29,7 +35,7 @@ import static java.util.Objects.nonNull;
 public class StructureServiceImpl implements StructureService {
     private final StructureRepository structureRepository;
     private final StructureMapper mapper;
-    private final com.qualiapproche.referentiel.repository.AbonnementDirectionRepository abonnementDirectionRepository;
+    private final AbonnementDirectionRepository abonnementDirectionRepository;
 
     @Override
     public StructureDto saveStructure(StructureDto structureDto) {
@@ -99,7 +105,7 @@ public class StructureServiceImpl implements StructureService {
                                                String recherche, Pageable pageable) {
         // Une spécification composée plutôt qu'un arbre de si : chaque critère facultatif
         // doublait le nombre de branches, et la recherche libre l'aurait encore doublé.
-        org.springframework.data.jpa.domain.Specification<Structure> criteres =
+        Specification<Structure> criteres =
                 (racine, requete, cb) -> cb.conjunction();
 
         if (!isNull(typeStructure)) {
@@ -118,7 +124,7 @@ public class StructureServiceImpl implements StructureService {
         }
 
         Pageable range = pageable.getSort().isSorted() ? pageable
-                : org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(),
+                : PageRequest.of(pageable.getPageNumber(),
                         pageable.getPageSize(), Sort.by("libelleLong"));
         return structureRepository.findAll(criteres, range).map(mapper::toDto);
     }
@@ -199,7 +205,7 @@ public class StructureServiceImpl implements StructureService {
         dto.setDateFinLicence(abo.getDateFin());
 
         if (abo.getDateFin() != null) {
-            long days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDateTime.now(), abo.getDateFin());
+            long days = ChronoUnit.DAYS.between(java.time.LocalDateTime.now(), abo.getDateFin());
             dto.setLicenseDaysRemaining(days);
             dto.setLicenceActive(days >= -7);
             log.info("DEBUG LICENCE: Jours restants: {}, Active: {}", days, dto.getLicenceActive());
@@ -212,7 +218,7 @@ public class StructureServiceImpl implements StructureService {
         if (abo.getLicense() != null) {
             try {
                 log.info("DEBUG LICENCE: Valeur cryptée en base: {}", abo.getLicense());
-                String decrypted = com.qualiapproche.common.utils.CryptoUtils.decrypt(abo.getLicense());
+                String decrypted = CryptoUtils.decrypt(abo.getLicense());
                 if (decrypted != null) {
                     log.info("DEBUG LICENCE: Modules décryptés: {}", decrypted);
                     dto.setModulesSubscribed(java.util.Arrays.asList(decrypted.split(",")));
@@ -232,7 +238,7 @@ public class StructureServiceImpl implements StructureService {
             // absents de ModuleAbonnement, donc reconnus par aucun garde côté front. Elle est
             // désormais dérivée de l'énumération, seule référence des noms de module.
             dto.setModulesSubscribed(java.util.Arrays.stream(
-                    com.qualiapproche.common.enumeration.ModuleAbonnement.values())
+                    ModuleAbonnement.values())
                     .map(Enum::name).toList());
         }
         return dto;

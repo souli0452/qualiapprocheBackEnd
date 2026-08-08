@@ -49,8 +49,8 @@ public interface PlanActionService {
      * vérifiée, ou déclinée et à ré-attribuer, n'apparaissait dans aucune de ses listes — il fallait
      * qu'il ouvre la non-conformité et en parcoure les actions pour la retrouver.</p>
      */
-    org.springframework.data.domain.Page<PlanActionDto> aTraiterParLAppelant(
-            org.springframework.data.domain.Pageable pageable);
+    Page<PlanActionDto> aTraiterParLAppelant(
+            Pageable pageable);
 
     /**
      * Répercute sur le plan l'étape que le circuit vient d'atteindre, et les valeurs qui y ont été

@@ -20,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import com.qualiapproche.workflow.core.interfaces.ITransitionAction;
+import com.qualiapproche.workflow.model.Workflow;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -43,17 +46,17 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
     @Override
     @Transactional(readOnly = true)
     public List<WorkflowPersistant> getAllWorkflow() throws WorkflowException {
-        List<com.qualiapproche.workflow.model.Workflow> dbWorkflows = workflowRepository.findAllAvecEtapes();
+        List<Workflow> dbWorkflows = workflowRepository.findAllAvecEtapes();
 
         // Transitions groupées par étape d'origine : le regroupement en mémoire remplace une
         // lecture différée par étape.
         Map<Long, List<WorkflowTransition>> transitionsParEtape = transitionRepository.findAll().stream()
                 .filter(t -> t.getFromStep() != null)
-                .collect(java.util.stream.Collectors.groupingBy(t -> t.getFromStep().getId()));
+                .collect(Collectors.groupingBy(t -> t.getFromStep().getId()));
 
         List<WorkflowPersistant> coreWorkflows = new ArrayList<>();
 
-        for (com.qualiapproche.workflow.model.Workflow dbWf : dbWorkflows) {
+        for (Workflow dbWf : dbWorkflows) {
             WorkflowPersistant coreWf = new WorkflowPersistant(dbWf.getId().toString());
             coreWf.setLibelle(dbWf.getNom());
             coreWf.setDescription(dbWf.getDescription());
@@ -112,8 +115,8 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
                     // Résoudre l'action via le bean factory (DefaultTransitionAction par défaut si non trouvé)
                     try {
                         @SuppressWarnings("unchecked")
-                        com.qualiapproche.workflow.core.interfaces.ITransitionAction<IWorkflowData, TransitionPersistante> action =
-                                beanFactory.getBean("workflowStepAction", com.qualiapproche.workflow.core.interfaces.ITransitionAction.class);
+                        ITransitionAction<IWorkflowData, TransitionPersistante> action =
+                                beanFactory.getBean("workflowStepAction", ITransitionAction.class);
                         transition.setAction(action);
                     } catch (Exception e) {
                         log.warn("L'action workflowStepAction n'a pas pu être résolue, on utilisera celle par défaut.", e);

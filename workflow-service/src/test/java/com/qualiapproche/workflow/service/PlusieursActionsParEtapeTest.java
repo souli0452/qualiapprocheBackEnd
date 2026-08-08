@@ -73,7 +73,8 @@ class PlusieursActionsParEtapeTest {
     void setUp() {
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
-                transitionRepository, stepRepository, null);
+                transitionRepository, stepRepository,
+                org.mockito.Mockito.mock(StructureUtilisateurService.class), null);
     }
 
     /** Un circuit d'une seule étape, telle qu'elle existe en base avant modification. */
@@ -177,7 +178,7 @@ class PlusieursActionsParEtapeTest {
 
         // Les deux approuvent mais ne mènent pas au même endroit : en choisir une au nom de
         // l'utilisateur ferait prendre au dossier une route que personne n'a décidée.
-        assertThatThrownBy(() -> service.validateStep(resourceId, "sam", null))
+        assertThatThrownBy(() -> service.validateStep(resourceId, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Valider")
                 .hasMessageContaining("Demander un complément");

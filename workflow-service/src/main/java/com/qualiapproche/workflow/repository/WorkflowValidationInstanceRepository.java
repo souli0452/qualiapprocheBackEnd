@@ -8,12 +8,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
 
 @Repository
 public interface WorkflowValidationInstanceRepository extends JpaRepository<WorkflowValidationInstance, UUID> {
 
     /** Faits déjà déclarés sur au moins un dossier, sous leur forme stockée. */
-    @org.springframework.data.jpa.repository.Query(
+    @Query(
             "select distinct i.faits from WorkflowValidationInstance i where i.faits is not null")
     java.util.List<String> faitsDeclares();
 

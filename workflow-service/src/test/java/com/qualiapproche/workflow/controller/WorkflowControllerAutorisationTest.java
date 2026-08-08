@@ -47,6 +47,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.common.annotation.RequirePermissions;
 
 /**
  * Protection de l'administration des circuits.
@@ -94,7 +95,9 @@ class WorkflowControllerAutorisationTest {
             // Pas de proxy ici : ce contexte de test ne monte pas la gestion transactionnelle.
             // Voir WorkflowService#self().
             return new WorkflowService(pMoteur, pHistory, pPublisher, pWorkflows, pInstances,
-                    pStepFields, pFieldValues, pTransitions, pSteps, null);
+                    pStepFields, pFieldValues, pTransitions, pSteps,
+                    org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class),
+                    null);
         }
 
         @Bean
@@ -228,16 +231,16 @@ class WorkflowControllerAutorisationTest {
         assertNonBloqueParLaSecurite(() -> controller.getAllWorkflows());
         assertNonBloqueParLaSecurite(() -> controller.getWorkflowState(UUID.randomUUID()));
         assertNonBloqueParLaSecurite(() -> controller.getLastValidationInstance(UUID.randomUUID()));
-        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId, null));
-        assertNonBloqueParLaSecurite(() -> controller.validateStep(UUID.randomUUID(), null, null));
-        assertNonBloqueParLaSecurite(() -> controller.rejectStep(UUID.randomUUID(), null, null));
+        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId, null, null));
+        assertNonBloqueParLaSecurite(() -> controller.validateStep(UUID.randomUUID(), null));
+        assertNonBloqueParLaSecurite(() -> controller.rejectStep(UUID.randomUUID(), null));
     }
 
     @Test
     @DisplayName("Le contrôleur porte bien la déclaration de permissions, y compris une fois proxyfié")
     void declarationDePermissions_lisibleAtraversLeProxy() {
         var aAnnotation = controller.getClass()
-                .getAnnotation(com.qualiapproche.common.annotation.RequirePermissions.class);
+                .getAnnotation(RequirePermissions.class);
 
         assertThat(aAnnotation)
                 .as("sans cette annotation, PermissionChecker refuse tout en silence")

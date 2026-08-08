@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,7 +24,7 @@ public class NiveauNonConformiteServiceImpl implements NiveauNonConformiteServic
 
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public NiveauNonConformiteDto create(NiveauNonConformiteDto niveauNonConformiteDto) {
         NiveauNonConformite niveauNonConformite = niveauNonConformiteMapper.toEntity(niveauNonConformiteDto);
         niveauNonConformite = niveauNonConformiteRepository.save(niveauNonConformite);
@@ -45,7 +46,7 @@ public class NiveauNonConformiteServiceImpl implements NiveauNonConformiteServic
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public NiveauNonConformiteDto update(NiveauNonConformiteDto niveauNonConformiteDto) {
         return niveauNonConformiteRepository.findById(niveauNonConformiteDto.getId()).map(niveauNonConformiteExisted -> {
             niveauNonConformiteMapper.updateEntityFromDto(niveauNonConformiteDto, niveauNonConformiteExisted);

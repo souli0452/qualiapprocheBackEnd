@@ -16,7 +16,8 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * Habilitation d'une transition : l'utilisateur courant doit porter le rôle exigé.
+ * Habilitation d'une transition : l'utilisateur courant doit porter le rôle exigé — et, pour un
+ * rôle ordinaire, appartenir à la structure où le dossier se trouve.
  *
  * <p>Le rôle exigé est résolu par {@code WorkflowEngineDAOAdapter} — habilitation propre à la
  * transition, à défaut rôle responsable de l'étape d'origine — et peut être désigné aussi bien par
@@ -33,6 +34,7 @@ import java.util.Set;
 public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowData, TransitionPersistante> {
 
     private final RolesUtilisateurService rolesUtilisateurService;
+    private final com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
 
     /**
      * Habilitation qui ne désigne pas un rôle mais la personne à qui le dossier est confié.
@@ -73,13 +75,54 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         Set<String> rolesUtilisateur = rolesUtilisateurService.rolesDeLUtilisateurCourant();
         String attendu = requiredRole.trim().toUpperCase();
 
-        if (rolesUtilisateur.contains(attendu) || peutDeciderPartout(rolesUtilisateur)) {
+        if (peutDeciderPartout(rolesUtilisateur)
+                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
             return true;
         }
 
-        // Repli sur le jeton : couvre les circuits dont l'habilitation désigne un rôle du realm.
-        return SecurityUtils.hasRole(requiredRole)
-                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole);
+        // Le repli sur le jeton couvre les circuits dont l'habilitation désigne un rôle du realm.
+        boolean porteLeRole = rolesUtilisateur.contains(attendu) || SecurityUtils.hasRole(requiredRole);
+
+        return porteLeRole && dansLaStructureDuDossier(pContexte, rolesUtilisateur);
+    }
+
+    /**
+     * Le porteur du rôle décide-t-il dans la structure où le dossier se trouve ?
+     *
+     * <p>Le rôle seul ne suffisait pas : porté dans toutes les structures, il ouvrait chaque étape
+     * à tous ses porteurs — le pilote d'une structure pouvait décider sur les dossiers de toutes
+     * les autres, comme il en recevait les courriels. La comparaison porte sur la structure
+     * inscrite sur le dossier : celle de son déclarant, ou du dernier transfert qu'une étape a
+     * désigné.</p>
+     *
+     * <p>En sont dispensés : les porteurs d'un rôle à portée globale — l'administration et la
+     * responsabilité qualité couvrent la plateforme par définition, et le circuit peut désigner
+     * leur rôle par un identifiant que ce service ne sait pas résoudre en nom, d'où la
+     * reconnaissance par les rôles de l'appelant ; les dossiers sans structure inscrite —
+     * antérieurs à la colonne, ou ouverts par un déclarant sans structure ; et les appelants dont
+     * le jeton ne porte pas de structure — on ne compare pas à l'inconnu.</p>
+     */
+    private boolean dansLaStructureDuDossier(ExecutionContext<IWorkflowData> pContexte,
+                                             Set<String> rolesUtilisateur) {
+        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
+            return true;
+        }
+        String structureDossier = instance.getStructureId();
+        if (structureDossier == null || structureDossier.isBlank()) {
+            return true;
+        }
+        if (rolesUtilisateur.stream().anyMatch(RolesPlateforme.PORTEE_GLOBALE::contains)
+                || RolesPlateforme.PORTEE_GLOBALE.stream().anyMatch(SecurityUtils::hasRole)) {
+            return true;
+        }
+        // Le jeton d'abord, user-service à défaut : le royaume Keycloak ne mappe pas l'attribut
+        // structure en claim, et se fier au seul jeton laissait la comparaison sans terme — donc
+        // le contrôle sans effet, pour tout le monde.
+        String structureAppelant = structureUtilisateurService.structureDeLUtilisateurCourant();
+        if (structureAppelant == null) {
+            return true;
+        }
+        return structureDossier.equals(structureAppelant);
     }
 
     /**

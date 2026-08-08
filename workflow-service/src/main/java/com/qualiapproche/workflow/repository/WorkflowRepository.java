@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.UUID;
 import java.util.List;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Query;
 
 @Repository
 public interface WorkflowRepository extends JpaRepository<Workflow, UUID> {
@@ -20,8 +22,8 @@ public interface WorkflowRepository extends JpaRepository<Workflow, UUID> {
      * qu'Hibernate refuse. L'adaptateur les charge donc en une seconde requête, et le catalogue
      * complet tient en deux allers-retours au lieu de croître avec le nombre d'étapes.</p>
      */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "steps")
-    @org.springframework.data.jpa.repository.Query("select distinct w from Workflow w")
+    @EntityGraph(attributePaths = "steps")
+    @Query("select distinct w from Workflow w")
     List<Workflow> findAllAvecEtapes();
 
     /**
@@ -29,7 +31,7 @@ public interface WorkflowRepository extends JpaRepository<Workflow, UUID> {
      * Permet au moteur de détecter, sans tout recharger, qu'un autre pod a modifié la
      * configuration. Une requête légère, appelée à chaque consultation du catalogue.
      */
-    @org.springframework.data.jpa.repository.Query(
+    @Query(
             "select concat(count(w), '-', coalesce(max(w.updateAt), max(w.createdAt))) from Workflow w")
     String signatureCatalogue();
 }

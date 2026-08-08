@@ -18,6 +18,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Propagation de l'identité sur les appels sortants du service de workflow.
@@ -61,8 +63,8 @@ public class FeignConfig {
     private static final String PERMISSIONS_HEADER = "X-User-Permissions";
 
     private void propagerLesPermissions(feign.RequestTemplate requestTemplate) {
-        var attributs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-        if (!(attributs instanceof org.springframework.web.context.request.ServletRequestAttributes servlet)) {
+        var attributs = RequestContextHolder.getRequestAttributes();
+        if (!(attributs instanceof ServletRequestAttributes servlet)) {
             return;
         }
         String permissions = servlet.getRequest().getHeader(PERMISSIONS_HEADER);
@@ -71,18 +73,40 @@ public class FeignConfig {
         }
     }
 
+    /**
+     * Chemins qui ne se franchissent qu'avec le jeton du <b>service</b>, jamais celui de
+     * l'utilisateur.
+     *
+     * <p>Les points de rappel {@code /internal/callbacks/**} sont désormais réservés aux comptes de
+     * service. Or la première remise d'une notification part parfois sur le fil de la requête,
+     * où le jeton de l'utilisateur est présent : le propager ferait refuser la remise, qui ne
+     * réussirait qu'à la reprise de l'ordonnanceur — chaque avancement de dossier prendrait une
+     * minute de retard. Une remise d'outbox est un acte du système, elle en porte l'identité.</p>
+     */
+    private static final String[] CHEMINS_TECHNIQUES = {"/internal/callbacks/"};
+
+    private boolean estUnAppelTechnique(String url) {
+        for (String chemin : CHEMINS_TECHNIQUES) {
+            if (url.contains(chemin)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Bean
     public RequestInterceptor requestInterceptor() {
         return requestTemplate -> {
             propagerLesPermissions(requestTemplate);
 
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
-                requestTemplate.header("Authorization", "Bearer " + jwtAuthenticationToken.getToken().getTokenValue());
+            if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
                 return;
             }
 
-            if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (!estUnAppelTechnique(requestTemplate.url())
+                    && authentication instanceof JwtAuthenticationToken jwtAuthenticationToken) {
+                requestTemplate.header("Authorization", "Bearer " + jwtAuthenticationToken.getToken().getTokenValue());
                 return;
             }
 

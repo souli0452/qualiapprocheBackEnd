@@ -26,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.NON_CONFORMITE_ROOT_URL;
+import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
 
 /**
  * Fichiers attachés à une non-conformité.
@@ -49,7 +50,7 @@ import static com.qualiapproche.common.utils.ApiUrls.NON_CONFORMITE_ROOT_URL;
 public class NonConformiteFichierController {
 
     private final NonConformiteFichierService fichierService;
-    private final com.qualiapproche.amelioration.service.impl.PieceJointeStockageService stockage;
+    private final PieceJointeStockageService stockage;
 
     /**
      * Dépose un fichier et rend sa référence.

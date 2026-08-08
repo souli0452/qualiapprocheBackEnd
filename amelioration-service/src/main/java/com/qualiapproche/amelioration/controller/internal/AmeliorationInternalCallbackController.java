@@ -15,10 +15,17 @@ import java.util.UUID;
 
 import com.qualiapproche.amelioration.service.NonConformiteService;
 import com.qualiapproche.amelioration.service.PlanActionService;
+import org.springframework.security.access.prepost.PreAuthorize;
 
+/*
+ * Réservé aux services ({@code @perm.appelDeService()}) : ces points de rappel écrivent l'état
+ * métier sans passer par une décision de circuit. Sous la seule authentification, n'importe quel
+ * agent muni d'un jeton valide pouvait y poster un statut « validé ».
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/internal/callbacks")
+@PreAuthorize("@perm.appelDeService()")
 @RequiredArgsConstructor
 public class AmeliorationInternalCallbackController {
 

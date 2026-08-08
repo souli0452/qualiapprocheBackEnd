@@ -3,6 +3,7 @@ package com.qualiapproche.workflow.event;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.workflow.config.EmailTemplateEngineConfig;
+import com.qualiapproche.workflow.config.LienVersLeDossier;
 import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
@@ -35,10 +36,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
+import jakarta.mail.internet.MimeMultipart;
 
 /**
  * Le courriel d'étape part réellement — de l'étape franchie jusqu'au serveur SMTP.
@@ -56,6 +60,8 @@ class CourrielsDEtapeTest {
     private JavaMailSender mailSender;
     private WorkflowNotificationRepository notificationRepository;
     private DestinatairesEtapeService destinatairesEtapeService;
+    private WorkflowValidationInstanceRepository instances;
+    private EmailTemplateRepository gabaritsPartages;
     private ReglagesOrganisation reglages;
     private NotificateurEtapeParEmail notificateur;
 
@@ -93,7 +99,8 @@ class CourrielsDEtapeTest {
         // conteneur, il se suffit à lui-même.
         ReflectionTestUtils.setField(notificationService, "self", notificationService);
 
-        EmailTemplateRepository gabarits = mock(EmailTemplateRepository.class);
+        gabaritsPartages = mock(EmailTemplateRepository.class);
+        EmailTemplateRepository gabarits = gabaritsPartages;
         when(gabarits.findByCode("NOTIF_ETAPE")).thenReturn(Optional.of(EmailTemplate.builder()
                 .code("NOTIF_ETAPE")
                 .subject("Un dossier vous attend")
@@ -103,9 +110,16 @@ class CourrielsDEtapeTest {
                 .build()));
 
         destinatairesEtapeService = mock(DestinatairesEtapeService.class);
+        instances = mock(WorkflowValidationInstanceRepository.class);
+        // La table de routes telle que la configuration la livre : les liens des courriels sont
+        // vérifiés jusqu'à l'adresse complète.
+        LienVersLeDossier liens = new LienVersLeDossier();
+        liens.setBaseUrl("https://qualisira.horeb.tech");
+        liens.setLiens(Map.of("NON_CONFORMITE", "/non-conformite/suivi?ncId={resourceId}",
+                "DOCUMENT", "/gestion-documentaire/documents?documentId={resourceId}"));
         notificateur = new NotificateurEtapeParEmail(gabarits, notificationService,
-                destinatairesEtapeService, mock(
-                        com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository.class));
+                destinatairesEtapeService, liens, instances,
+                org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
     }
 
     private WorkflowStep etapeVerification() {
@@ -127,7 +141,7 @@ class CourrielsDEtapeTest {
     }
 
     private void responsables(DestinataireDto... destinataires) {
-        when(destinatairesEtapeService.destinatairesDuRole("VERIFICATEUR"))
+        when(destinatairesEtapeService.destinatairesDuRole(eq("VERIFICATEUR"), any()))
                 .thenReturn(List.of(destinataires));
     }
 
@@ -150,7 +164,7 @@ class CourrielsDEtapeTest {
         if (contenu instanceof String texte) {
             return texte;
         }
-        if (contenu instanceof jakarta.mail.internet.MimeMultipart multipart) {
+        if (contenu instanceof MimeMultipart multipart) {
             for (int i = 0; i < multipart.getCount(); i++) {
                 String trouve = extraireHtml(multipart.getBodyPart(i).getContent());
                 if (trouve != null) {
@@ -252,7 +266,7 @@ class CourrielsDEtapeTest {
     @Test
     @DisplayName("Aucun responsable joignable : rien n'est envoyé, et ce n'est pas silencieux")
     void aucunResponsable_aucunEnvoi() {
-        when(destinatairesEtapeService.destinatairesDuRole("VERIFICATEUR")).thenReturn(List.of());
+        when(destinatairesEtapeService.destinatairesDuRole(eq("VERIFICATEUR"), any())).thenReturn(List.of());
 
         notificateur.notifier(etapeVerification(), etapeFranchieSur("DOCUMENT", "42"));
 
@@ -282,5 +296,70 @@ class CourrielsDEtapeTest {
         notificateur.notifier(autreGabarit, etapeFranchieSur("DOCUMENT", "42"));
 
         verify(mailSender, org.mockito.Mockito.never()).send(any(MimeMessage.class));
+    }
+
+    // ------------------------------------------------------------------ référence du dossier
+
+    @Test
+    @DisplayName("La référence transmise à l'ouverture arrive dans le corps et l'objet du courriel")
+    void reference_dansLeCourriel() throws Exception {
+        responsables(claire());
+        TransitionFranchieEvent event = etapeFranchieSur("NON_CONFORMITE", "NC-UUID");
+        WorkflowValidationInstance instance =
+                WorkflowValidationInstance.builder()
+                        .referenceLisible("NC-2026-014").build();
+        when(instances.findById(UUID.fromString(event.getEntityId())))
+                .thenReturn(Optional.of(instance));
+        // Gabarit et objet écrits comme un rédacteur le ferait : à l'accolade.
+        when(gabaritsPartages.findByCode("NOTIF_ETAPE"))
+                .thenReturn(Optional.of(EmailTemplate.builder()
+                        .code("NOTIF_ETAPE")
+                        .subject("Validation attendue – NC {numeroNc}")
+                        .body("<p>Le dossier {numeroNc} attend votre décision.</p>")
+                        .build()));
+
+        notificateur.notifier(etapeVerification(), event);
+
+        MimeMessage message = messagesExpedies().get(0);
+        // Sans la référence, le destinataire recevait « n°__ » : le message partait, mais sans
+        // l'information qui identifie le dossier.
+        assertThat(message.getSubject()).isEqualTo("Validation attendue – NC NC-2026-014");
+        assertThat(corps(message)).contains("Le dossier NC-2026-014 attend votre décision.");
+    }
+
+    @Test
+    @DisplayName("Sans référence — dossiers antérieurs — l'objet reste propre et le courriel part")
+    void sansReference_courrielPropre() throws Exception {
+        responsables(claire());
+        when(gabaritsPartages.findByCode("NOTIF_ETAPE"))
+                .thenReturn(Optional.of(EmailTemplate.builder()
+                        .code("NOTIF_ETAPE")
+                        .subject("Validation attendue – {numeroNc}")
+                        .body("<p>Une décision vous attend. {numeroNc}</p>")
+                        .build()));
+
+        notificateur.notifier(etapeVerification(), etapeFranchieSur("NON_CONFORMITE", "NC-UUID"));
+
+        MimeMessage message = messagesExpedies().get(0);
+        assertThat(message.getSubject()).isEqualTo("Validation attendue");
+        assertThat(corps(message)).doesNotContain("{numeroNc}");
+    }
+
+    @Test
+    @DisplayName("Le lien du courriel mène à l'écran du type de dossier")
+    void lien_versLEcranDuType() throws Exception {
+        responsables(claire());
+        when(gabaritsPartages.findByCode("NOTIF_ETAPE"))
+                .thenReturn(Optional.of(EmailTemplate.builder()
+                        .code("NOTIF_ETAPE").subject("Un dossier vous attend")
+                        .body("<p><a th:href=\"${link}\">Consulter</a></p>")
+                        .build()));
+
+        notificateur.notifier(etapeVerification(), etapeFranchieSur("NON_CONFORMITE", "nc-42"));
+
+        // Un motif unique ne pouvait être juste que pour un type à la fois : chaque famille a sa
+        // route, et c'est elle qui doit figurer dans le message.
+        assertThat(corps(messagesExpedies().get(0)))
+                .contains("https://qualisira.horeb.tech/non-conformite/suivi?ncId=nc-42");
     }
 }

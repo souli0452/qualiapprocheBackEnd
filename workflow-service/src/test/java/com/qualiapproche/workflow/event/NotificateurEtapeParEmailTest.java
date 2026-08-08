@@ -5,6 +5,7 @@ import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
+import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
 import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
@@ -35,6 +36,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.springframework.scheduling.annotation.Async;
 
 /**
  * Envoi du courriel d'étape à ses responsables réels.
@@ -56,6 +58,16 @@ class NotificateurEtapeParEmailTest {
     @Mock private EmailTemplateRepository emailTemplateRepository;
     @Mock private WorkflowNotificationService notificationService;
     @Mock private DestinatairesEtapeService destinatairesEtapeService;
+    // Requis depuis que chaque courriel lit la référence du dossier sur l'instance : sans ce mock,
+    // l'injection laisse le champ nul et la variable {numeroNc} fait échouer tout enregistrement.
+    @Mock private WorkflowValidationInstanceRepository validationInstanceRepository;
+    // Résout la structure d'un dossier qui n'en porte pas encore, depuis son créateur. Les tests
+    // le laissent muet — il rend null — sauf celui qui vérifie la réparation.
+    @Mock private com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
+    // Réelle et vide plutôt que simulée : sans routes configurées, le lien est vide — le
+    // comportement qu'attendent ces tests, écrits avant la table.
+    @org.mockito.Spy private com.qualiapproche.workflow.config.LienVersLeDossier lienVersLeDossier =
+            new com.qualiapproche.workflow.config.LienVersLeDossier();
 
     @InjectMocks private NotificateurEtapeParEmail notificateur;
 
@@ -84,7 +96,7 @@ class NotificateurEtapeParEmailTest {
     }
 
     private void destinataires(DestinataireDto... destinataires) {
-        when(destinatairesEtapeService.destinatairesDuRole("VERIFICATEUR"))
+        when(destinatairesEtapeService.destinatairesDuRole(eq("VERIFICATEUR"), any()))
                 .thenReturn(List.of(destinataires));
     }
 
@@ -180,13 +192,59 @@ class NotificateurEtapeParEmailTest {
     }
 
     @Test
+    @DisplayName("La structure du dossier borne la résolution : elle est transmise avec le rôle")
+    void structureDuDossier_transmiseAvecLeRole() {
+        UUID instanceId = UUID.randomUUID();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(
+                WorkflowValidationInstance.builder()
+                        .resourceId("42").resourceType("DOCUMENT")
+                        .structureId("structure-7")
+                        .build()));
+        when(destinatairesEtapeService.destinatairesDuRole("VERIFICATEUR", "structure-7"))
+                .thenReturn(List.of(destinataire("claire@exemple.fr", "Claire Martin")));
+
+        TransitionFranchieEvent event = new TransitionFranchieEvent(
+                WorkflowValidationInstance.class.getName(), instanceId.toString(),
+                "circuit", "42", "1", "2", "agent-qualite", "avis favorable");
+        notificateur.notifier(etape, event);
+
+        // Sans la structure, le rôle seul était interrogé : les vérificateurs de toutes les
+        // structures recevaient le courriel d'un dossier qui ne concernait qu'une seule d'entre elles.
+        verify(destinatairesEtapeService).destinatairesDuRole("VERIFICATEUR", "structure-7");
+    }
+
+    @Test
+    @DisplayName("Un dossier sans structure emprunte celle de son créateur, et la garde")
+    void dossierSansStructure_repareDepuisLeCreateur() {
+        UUID instanceId = UUID.randomUUID();
+        WorkflowValidationInstance instance = WorkflowValidationInstance.builder()
+                .resourceId("42").resourceType("DOCUMENT")
+                .createurId("createur-1")
+                .build();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(instance));
+        when(structureUtilisateurService.structureDe("createur-1")).thenReturn("structure-7");
+        when(destinatairesEtapeService.destinatairesDuRole("VERIFICATEUR", "structure-7"))
+                .thenReturn(List.of(destinataire("claire@exemple.fr", "Claire Martin")));
+
+        notificateur.notifier(etape, new TransitionFranchieEvent(
+                WorkflowValidationInstance.class.getName(), instanceId.toString(),
+                "circuit", "42", "1", "2", "agent-qualite", "avis favorable"));
+
+        // Dossiers ouverts avant la colonne, ou pendant que le jeton ne portait pas de structure :
+        // sans cette réparation, leurs courriels repartaient vers toute la plateforme.
+        verify(destinatairesEtapeService).destinatairesDuRole("VERIFICATEUR", "structure-7");
+        assertThat(instance.getStructureId()).isEqualTo("structure-7");
+        verify(validationInstanceRepository).save(instance);
+    }
+
+    @Test
     @DisplayName("Une étape sans modèle d'e-mail n'entraîne aucune résolution ni envoi")
     void etapeSansModele_rien() {
         etape.setEmailTemplateCode(null);
 
         notificateur.notifier(etape, evenement());
 
-        verify(destinatairesEtapeService, never()).destinatairesDuRole(anyString());
+        verify(destinatairesEtapeService, never()).destinatairesDuRole(anyString(), any());
         verify(notificationService, never()).enregistrerCourriel(
                 nullable(String.class), nullable(String.class),
                 anyString(), anyString(), anyString(), anyMap());
@@ -212,7 +270,7 @@ class NotificateurEtapeParEmailTest {
         // WorkflowEventListener, qui l'appelait directement, l'envoi serait resté synchrone.
         assertThat(NotificateurEtapeParEmail.class.getMethod("notifier", WorkflowStep.class,
                 TransitionFranchieEvent.class)
-                .isAnnotationPresent(org.springframework.scheduling.annotation.Async.class))
+                .isAnnotationPresent(Async.class))
                 .isTrue();
         assertThat(WorkflowEventListener.class.getDeclaredMethods())
                 .noneMatch(m -> m.getName().equals("notifierParEmail"));

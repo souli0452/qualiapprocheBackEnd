@@ -18,6 +18,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Slf4j
 @Configuration
@@ -48,8 +50,8 @@ public class FeignConfig {
     private static final String PERMISSIONS_HEADER = "X-User-Permissions";
 
     private void propagerLesPermissions(feign.RequestTemplate requestTemplate) {
-        var attributs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-        if (!(attributs instanceof org.springframework.web.context.request.ServletRequestAttributes servlet)) {
+        var attributs = RequestContextHolder.getRequestAttributes();
+        if (!(attributs instanceof ServletRequestAttributes servlet)) {
             return;
         }
         String permissions = servlet.getRequest().getHeader(PERMISSIONS_HEADER);

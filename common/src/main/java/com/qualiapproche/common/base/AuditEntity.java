@@ -15,6 +15,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import com.qualiapproche.common.utils.SecurityUtils;
 
 @Data
 @SuperBuilder
@@ -55,15 +56,15 @@ public class AuditEntity {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        this.createdById = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
-        this.currentUserfullName = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
-        this.currentUserEmail = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserEmail();
-        this.directionId = com.qualiapproche.common.utils.SecurityUtils.getCurrentDirectionId();
+        this.createdById = SecurityUtils.getCurrentUserId();
+        this.currentUserfullName = SecurityUtils.getCurrentUserFullName();
+        this.currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        this.directionId = SecurityUtils.getCurrentDirectionId();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updateAt = LocalDateTime.now();
-        this.updateById = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        this.updateById = SecurityUtils.getCurrentUserId();
     }
 }

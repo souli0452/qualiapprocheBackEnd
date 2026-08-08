@@ -16,6 +16,7 @@ import com.qualiapproche.amelioration.entities.Risque;
 import com.qualiapproche.amelioration.entities.mappers.RisqueMapper;
 
 import com.qualiapproche.amelioration.repository.RisqueRepository;
+import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RisqueServiceImpl implements RisqueService {
@@ -24,7 +25,7 @@ public class RisqueServiceImpl implements RisqueService {
     private final RisqueMapper risqueMapper;
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public RisqueDto create(RisqueDto risqueDto) {
         Risque risque = risqueMapper.toEntity(risqueDto);
         risque = risqueRepository.save(risque);
@@ -32,7 +33,7 @@ public class RisqueServiceImpl implements RisqueService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public RisqueDto update(RisqueDto risqueDto) {
         return risqueRepository.findById(risqueDto.getId()).map(risqueExisted -> {
             risqueMapper.updateEntityFromDto(risqueDto, risqueExisted);

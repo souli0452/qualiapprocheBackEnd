@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import com.qualiapproche.common.utils.SecurityUtils;
 
 @Slf4j
 @Service
@@ -17,7 +18,7 @@ public class QmsAuditLogService {
     private final QmsAuditLogRepository auditLogRepository;
 
     public void logAction(String action, String documentNumber, String details) {
-        String username = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
+        String username = SecurityUtils.getCurrentUserFullName();
         if ("Système".equalsIgnoreCase(username)) {
             username = "system";
         }

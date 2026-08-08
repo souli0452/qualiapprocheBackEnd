@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @FeignClient(name = "workflow-service")
 public interface WorkflowClient {
@@ -28,10 +29,17 @@ public interface WorkflowClient {
     @GetMapping("/api/v1/workflows/{workflowId}")
     Map<String, Object> getWorkflowById(@PathVariable("workflowId") UUID workflowId);
 
+    /**
+     * Ouvre le circuit en transmettant la référence lisible du dossier.
+     *
+     * <p>C'est elle que citent les courriels d'étape (« n°{numeroNc} ») : le moteur ne détient que
+     * l'UUID, et sans elle les messages partaient avec un numéro vide.</p>
+     */
     @PostMapping("/api/v1/workflows/initiate")
     WorkflowInstanceDto initiateWorkflow(@RequestParam("resourceId") UUID resourceId,
                                          @RequestParam("resourceType") String resourceType,
-                                         @RequestParam("workflowId") UUID workflowId);
+                                         @RequestParam("workflowId") UUID workflowId,
+                                         @RequestParam(value = "reference", required = false) String reference);
 
     /**
      * Ouvre un circuit en désignant d'emblée son titulaire.
@@ -43,7 +51,8 @@ public interface WorkflowClient {
     WorkflowInstanceDto initiateWorkflow(@RequestParam("resourceId") UUID resourceId,
                                          @RequestParam("resourceType") String resourceType,
                                          @RequestParam("workflowId") UUID workflowId,
-                                         @RequestParam("titulaireId") String titulaireId);
+                                         @RequestParam("titulaireId") String titulaireId,
+                                         @RequestParam(value = "reference", required = false) String reference);
 
     @GetMapping("/api/v1/workflows/instances/{resourceId}")
     WorkflowInstanceDto getLastValidationInstance(@PathVariable("resourceId") UUID resourceId);
@@ -75,7 +84,7 @@ public interface WorkflowClient {
      * « tous les plans d'action sont soldés » devient vrai, le circuit l'exige pour clore. Aucun
      * des deux n'a besoin de connaître l'autre.</p>
      */
-    @org.springframework.web.bind.annotation.PutMapping("/api/v1/workflows/instances/{resourceId}/faits/{fait}")
+    @PutMapping("/api/v1/workflows/instances/{resourceId}/faits/{fait}")
     void declarerFait(@PathVariable("resourceId") UUID resourceId,
                       @PathVariable("fait") String fait,
                       @RequestParam("etabli") boolean etabli);
@@ -87,7 +96,7 @@ public interface WorkflowClient {
      * l'ancien : l'un croyait avoir transféré la responsabilité, l'autre l'ouvrait toujours à celui
      * qui ne l'avait plus.</p>
      */
-    @org.springframework.web.bind.annotation.PutMapping("/api/v1/workflows/instances/{resourceId}/titulaire")
+    @PutMapping("/api/v1/workflows/instances/{resourceId}/titulaire")
     void designerTitulaire(@PathVariable("resourceId") UUID resourceId,
                            @RequestParam("titulaireId") String titulaireId);
 

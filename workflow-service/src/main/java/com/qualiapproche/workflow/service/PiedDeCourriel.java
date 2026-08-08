@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * Pied de page ajouté au bas des courriels : qui écrit, et comment le joindre.
@@ -112,6 +113,6 @@ public class PiedDeCourriel {
 
     /** Les valeurs viennent d'une saisie : elles ne doivent pas pouvoir injecter de balisage. */
     private String echapper(String valeur) {
-        return org.springframework.web.util.HtmlUtils.htmlEscape(valeur);
+        return HtmlUtils.htmlEscape(valeur);
     }
 }

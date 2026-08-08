@@ -29,6 +29,9 @@ import org.springdoc.core.annotations.ParameterObject;
 
 import com.qualiapproche.amelioration.service.PlanActionService;
 import static com.qualiapproche.common.utils.ApiUrls.*;
+import com.qualiapproche.amelioration.client.WorkflowClient;
+import com.qualiapproche.common.dto.WorkflowStateDto;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @RestController
 @RequiredArgsConstructor
@@ -44,7 +47,7 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 public class PlanActionController {
 
     private final PlanActionService planActionService;
-    private final com.qualiapproche.amelioration.client.WorkflowClient workflowClient;
+    private final WorkflowClient workflowClient;
 
     @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_PLAN_ACTION)
@@ -61,7 +64,7 @@ public class PlanActionController {
      * relève du circuit.</p>
      */
     @PreAuthorize("@perm.canUpdate(this)")
-    @org.springframework.web.bind.annotation.PutMapping(UPDATE_PLAN_ACTION)
+    @PutMapping(UPDATE_PLAN_ACTION)
     public ResponseEntity<PlanActionDto> corriger(@RequestBody PlanActionDto dto) {
         return ResponseEntity.ok(planActionService.corriger(dto));
     }
@@ -108,11 +111,11 @@ public class PlanActionController {
             return page;
         }
 
-        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = new HashMap<>();
+        Map<UUID, WorkflowStateDto> etats = new HashMap<>();
         for (int debut = 0; debut < identifiants.size(); debut += TAILLE_LOT_ETATS) {
             List<UUID> lot = identifiants.subList(debut, Math.min(debut + TAILLE_LOT_ETATS, identifiants.size()));
             try {
-                Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> reponse = workflowClient.getWorkflowStates(lot);
+                Map<UUID, WorkflowStateDto> reponse = workflowClient.getWorkflowStates(lot);
                 if (reponse != null) {
                     etats.putAll(reponse);
                 }
@@ -137,7 +140,7 @@ public class PlanActionController {
      * Étape courante et actions autorisées du circuit de validation. Une indisponibilité du
      * service de workflow ne doit pas empêcher la consultation du plan d'action.
      */
-    private com.qualiapproche.common.dto.WorkflowStateDto etatWorkflow(UUID resourceId) {
+    private WorkflowStateDto etatWorkflow(UUID resourceId) {
         try {
             return workflowClient.getWorkflowState(resourceId);
         } catch (Exception e) {

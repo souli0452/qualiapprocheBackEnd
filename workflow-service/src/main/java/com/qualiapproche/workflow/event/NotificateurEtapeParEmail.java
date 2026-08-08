@@ -7,6 +7,8 @@ import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
+import com.qualiapproche.workflow.config.LienVersLeDossier;
+import com.qualiapproche.workflow.service.SmtpEmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -15,6 +17,9 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
+import com.qualiapproche.workflow.service.WorkflowNotificationService;
+import java.util.function.Function;
 
 /**
  * Prévient par courriel les responsables de l'étape qu'un dossier vient d'atteindre.
@@ -31,17 +36,14 @@ import java.util.Map;
 public class NotificateurEtapeParEmail {
 
     private final EmailTemplateRepository emailTemplateRepository;
-    private final com.qualiapproche.workflow.service.WorkflowNotificationService notificationService;
+    private final WorkflowNotificationService notificationService;
     private final DestinatairesEtapeService destinatairesEtapeService;
-    private final com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository
+    /** Adresse du dossier dans le frontal, par type de ressource : le bouton des courriels. */
+    private final LienVersLeDossier lienVersLeDossier;
+    private final WorkflowValidationInstanceRepository
             validationInstanceRepository;
+    private final com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
 
-    /**
-     * Motif du lien inséré dans les courriels, avec {@code {resourceType}} et {@code {resourceId}}.
-     * À aligner sur les routes réelles du frontal.
-     */
-    @org.springframework.beans.factory.annotation.Value("${workflow.notifications.motif-lien:}")
-    private String motifDeLien;
 
     /**
      * Compose et envoie le courriel d'étape à chacun de ses responsables.
@@ -84,10 +86,14 @@ public class NotificateurEtapeParEmail {
                 // Enregistré puis remis, plutôt qu'envoyé directement : un serveur SMTP
                 // indisponible ou un mot de passe expiré ne perd plus la notification, elle est
                 // rejouée par l'ordonnanceur jusqu'à aboutir ou être explicitement abandonnée.
+                // L'objet est rendu ici, à l'enregistrement : la notification stockée porte le
+                // texte final, et une reprise le remet tel quel.
+                Map<String, String> variables = variables(template, step, event, destinataire);
                 var notification = notificationService.enregistrerCourriel(
                         event.getResourceId(), event.getResourceType(),
-                        destinataire.getEmail(), template.getSubject(), template.getBody(),
-                        variables(template, step, event, destinataire));
+                        destinataire.getEmail(),
+                        SmtpEmailService.sujet(template.getSubject(), variables),
+                        template.getBody(), variables);
                 notificationService.remettre(notification.getId());
             } catch (Exception e) {
                 // Seul l'enregistrement peut encore échouer ici : la remise, elle, est rattrapée
@@ -99,8 +105,8 @@ public class NotificateurEtapeParEmail {
     }
 
     /**
-     * Qui prévenir : les porteurs du rôle de l'étape, ou la seule personne à qui le dossier a été
-     * confié.
+     * Qui prévenir : les porteurs du rôle de l'étape — dans la structure où le dossier se trouve —
+     * ou la seule personne à qui le dossier a été confié.
      *
      * <p>Une étape réservée au titulaire ne porte pas de rôle — la chercher par rôle ne renverrait
      * jamais personne, et l'agent qui vient de recevoir une imputation n'apprendrait par aucun
@@ -119,12 +125,55 @@ public class NotificateurEtapeParEmail {
             return destinatairesEtapeService.destinataire(
                     surLInstance(event, WorkflowValidationInstance::getCreateurId));
         }
-        return destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole());
+        // La structure du dossier borne l'envoi : le rôle d'une étape est porté dans toutes les
+        // structures, et l'interroger seul écrivait à la plateforme entière — le supérieur de
+        // chaque structure recevait les soumissions de toutes les autres.
+        return destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole(),
+                structureDuDossier(event));
+    }
+
+    /**
+     * Structure où le dossier se trouve — réparée depuis son créateur si elle manque.
+     *
+     * <p>Les dossiers ouverts avant la colonne, ou pendant que le jeton ne portait pas de
+     * structure, n'en ont pas : leurs courriels repartaient vers toute la plateforme. Celle du
+     * créateur, lue chez user-service, tient lieu de structure d'origine ; elle est inscrite sur
+     * le dossier pour que l'habilitation en profite aussi, pas seulement le prochain courriel.</p>
+     */
+    private String structureDuDossier(TransitionFranchieEvent event) {
+        WorkflowValidationInstance instance;
+        try {
+            instance = validationInstanceRepository
+                    .findById(java.util.UUID.fromString(event.getEntityId()))
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        if (instance == null) {
+            return null;
+        }
+        if (instance.getStructureId() != null && !instance.getStructureId().isBlank()) {
+            return instance.getStructureId();
+        }
+
+        String duCreateur = structureUtilisateurService.structureDe(instance.getCreateurId());
+        if (duCreateur == null) {
+            return null;
+        }
+        try {
+            instance.setStructureId(duCreateur);
+            validationInstanceRepository.save(instance);
+        } catch (Exception e) {
+            // Un conflit d'écriture ne prive personne du courriel : la réparation attendra le
+            // prochain franchissement, la valeur résolue sert dès celui-ci.
+            log.debug("Structure du dossier {} non inscrite : {}", instance.getResourceId(), e.getMessage());
+        }
+        return duCreateur;
     }
 
     /** Une désignation portée par l'instance du circuit — son titulaire, son créateur. */
     private String surLInstance(TransitionFranchieEvent event,
-                                java.util.function.Function<WorkflowValidationInstance, String> designation) {
+                                Function<WorkflowValidationInstance, String> designation) {
         try {
             return validationInstanceRepository.findById(java.util.UUID.fromString(event.getEntityId()))
                     .map(designation)
@@ -150,6 +199,12 @@ public class NotificateurEtapeParEmail {
         variables.put("link", lienVersLaRessource(event));
         variables.put("observation", event.getCommentaire());
         variables.put("subject", template.getSubject());
+        // La référence lisible du dossier, transmise par le module à l'ouverture du circuit.
+        // « numeroNc » est le nom qu'emploient les gabarits livrés ; « reference » le nom neutre,
+        // pour les gabarits de documents et de demandes.
+        String reference = surLInstance(event, WorkflowValidationInstance::getReferenceLisible);
+        variables.put("numeroNc", reference);
+        variables.put("reference", reference);
 
         // Contexte du franchissement, pour les gabarits propres au workflow.
         variables.put("etape", step.getNomEtape());
@@ -166,21 +221,8 @@ public class NotificateurEtapeParEmail {
         return variables;
     }
 
-    /**
-     * Lien vers le dossier dans l'application.
-     *
-     * <p>Le motif est configurable parce que la route appartient au frontal, que ce service ne
-     * connaît pas : le figer ici produirait des liens morts au premier changement de navigation.
-     * Vide si aucun motif n'est configuré — le gabarit rend alors un lien sans cible plutôt qu'un
-     * lien erroné.</p>
-     */
+    /** Adresse du dossier dans le frontal — vide plutôt qu'un lien mort. */
     private String lienVersLaRessource(TransitionFranchieEvent event) {
-        if (motifDeLien == null || motifDeLien.isBlank() || event.getResourceId() == null) {
-            return "";
-        }
-        return motifDeLien
-                .replace("{resourceType}", event.getResourceType() != null
-                        ? event.getResourceType().toLowerCase() : "")
-                .replace("{resourceId}", event.getResourceId());
+        return lienVersLeDossier.pour(event.getResourceType(), event.getResourceId());
     }
 }

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.NIVEAU_CONFIDENTIALITE_ROOT_URL;
+import com.qualiapproche.common.response.ApiResponse;
 
 /**
  * Référentiel des niveaux de confidentialité.
@@ -69,8 +70,8 @@ public class NiveauConfidentialiteController {
      */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/all")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<NiveauConfidentialiteDto>>> all() {
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(service.getAll()));
+    public ResponseEntity<ApiResponse<List<NiveauConfidentialiteDto>>> all() {
+        return ResponseEntity.ok(ApiResponse.success(service.getAll()));
     }
 
     /**
