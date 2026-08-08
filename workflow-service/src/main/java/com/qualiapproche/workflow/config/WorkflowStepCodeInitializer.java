@@ -14,6 +14,7 @@ import java.text.Normalizer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Filet de sécurité pour les bases créées avant l'introduction du code d'étape.
@@ -43,7 +44,7 @@ public class WorkflowStepCodeInitializer implements CommandLineRunner {
             Set<String> codesUtilises = circuit.getSteps().stream()
                     .map(WorkflowStep::getCode)
                     .filter(c -> c != null && !c.isBlank())
-                    .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+                    .collect(Collectors.toCollection(HashSet::new));
 
             boolean modifie = false;
             for (WorkflowStep step : circuit.getSteps()) {

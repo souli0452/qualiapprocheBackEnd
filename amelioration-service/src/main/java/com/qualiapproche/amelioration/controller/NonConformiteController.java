@@ -35,6 +35,9 @@ import org.springdoc.core.annotations.ParameterObject;
 import com.qualiapproche.amelioration.service.NonConformiteService;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
+import com.qualiapproche.amelioration.client.WorkflowClient;
+import com.qualiapproche.common.dto.PlanActionDto;
+import com.qualiapproche.common.dto.WorkflowStateDto;
 
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
@@ -50,7 +53,7 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 )
 public class NonConformiteController {
     private final NonConformiteService nonConformiteService;
-    private final com.qualiapproche.amelioration.client.WorkflowClient workflowClient;
+    private final WorkflowClient workflowClient;
 
     /**
      * Endpoint pour créer une non-conformité
@@ -203,7 +206,7 @@ public class NonConformiteController {
                 .map(NonConformiteDto::getPlanActions)
                 .filter(java.util.Objects::nonNull)
                 .flatMap(List::stream)
-                .map(com.qualiapproche.common.dto.PlanActionDto::getId)
+                .map(PlanActionDto::getId)
                 .filter(java.util.Objects::nonNull)
                 .forEach(identifiants::add);
 
@@ -211,11 +214,11 @@ public class NonConformiteController {
             return page;
         }
 
-        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = new java.util.HashMap<>();
+        Map<UUID, WorkflowStateDto> etats = new java.util.HashMap<>();
         for (int debut = 0; debut < identifiants.size(); debut += TAILLE_LOT_ETATS) {
             List<UUID> lot = identifiants.subList(debut, Math.min(debut + TAILLE_LOT_ETATS, identifiants.size()));
             try {
-                Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> reponse =
+                Map<UUID, WorkflowStateDto> reponse =
                         workflowClient.getWorkflowStates(lot);
                 if (reponse != null) {
                     etats.putAll(reponse);
@@ -258,19 +261,19 @@ public class NonConformiteController {
      * lisible — les plans s'affichent alors avec la valeur recopiée.</p>
      */
     private void joindreLEtatDesPlans(NonConformiteDto nonConformite) {
-        List<com.qualiapproche.common.dto.PlanActionDto> plans = nonConformite.getPlanActions();
+        List<PlanActionDto> plans = nonConformite.getPlanActions();
         if (plans == null || plans.isEmpty()) {
             return;
         }
         List<UUID> identifiants = plans.stream()
-                .map(com.qualiapproche.common.dto.PlanActionDto::getId)
+                .map(PlanActionDto::getId)
                 .filter(java.util.Objects::nonNull)
                 .toList();
         if (identifiants.isEmpty()) {
             return;
         }
         try {
-            Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats =
+            Map<UUID, WorkflowStateDto> etats =
                     workflowClient.getWorkflowStates(identifiants);
             if (etats != null) {
                 plans.forEach(plan -> plan.setWorkflowState(etats.get(plan.getId())));
@@ -289,7 +292,7 @@ public class NonConformiteController {
      * <p>Une indisponibilité du service de workflow ne doit pas empêcher la consultation de la
      * non-conformité : l'état est alors simplement absent.</p>
      */
-    private com.qualiapproche.common.dto.WorkflowStateDto etatWorkflow(UUID resourceId) {
+    private WorkflowStateDto etatWorkflow(UUID resourceId) {
         try {
             return workflowClient.getWorkflowState(resourceId);
         } catch (Exception e) {

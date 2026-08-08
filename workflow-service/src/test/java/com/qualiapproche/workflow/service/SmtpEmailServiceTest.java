@@ -22,6 +22,10 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import jakarta.mail.internet.MimeMultipart;
+import org.assertj.core.api.Assertions;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailException;
 
 /**
  * Rendu des courriels.
@@ -51,7 +55,7 @@ class SmtpEmailServiceTest {
         service = new SmtpEmailService(mailSender, new EmailTemplateEngineConfig().moteurGabaritEmail(), aPied);
         ReflectionTestUtils.setField(service, "fromEmail", "qualite@exemple.fr");
         when(mailSender.createMimeMessage()).thenAnswer(i ->
-                new jakarta.mail.internet.MimeMessage((jakarta.mail.Session) null));
+                new MimeMessage((jakarta.mail.Session) null));
     }
 
     /** Gabarit réellement livré, chargé depuis le classpath comme le fait l'initialiseur. */
@@ -80,7 +84,7 @@ class SmtpEmailServiceTest {
         if (contenu instanceof String texte) {
             return texte;
         }
-        if (contenu instanceof jakarta.mail.internet.MimeMultipart multipart) {
+        if (contenu instanceof MimeMultipart multipart) {
             for (int i = 0; i < multipart.getCount(); i++) {
                 String aTrouve = extraireHtml(multipart.getBodyPart(i).getContent());
                 if (aTrouve != null) {
@@ -199,20 +203,20 @@ class SmtpEmailServiceTest {
         // L'envoi attrapait l'échec et rendait la main normalement : le registre des notifications
         // marquait alors la notification « remise » alors qu'aucun courriel n'était parti, et ne la
         // rejouait jamais. Un mot de passe expiré se traduisait par un silence complet.
-        org.mockito.Mockito.doThrow(new org.springframework.mail.MailAuthenticationException("535 auth failed"))
-                .when(mailSender).send(org.mockito.ArgumentMatchers.any(jakarta.mail.internet.MimeMessage.class));
+        org.mockito.Mockito.doThrow(new MailAuthenticationException("535 auth failed"))
+                .when(mailSender).send(org.mockito.ArgumentMatchers.any(MimeMessage.class));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        Assertions.assertThatThrownBy(() ->
                         service.sendEmail("sam@exemple.fr", "Objet", "<p>Corps</p>", java.util.Map.of()))
-                .isInstanceOf(org.springframework.mail.MailException.class);
+                .isInstanceOf(MailException.class);
     }
 
     @Test
     @DisplayName("Une adresse de destinataire inexploitable remonte aussi, sans être rejouée en boucle")
     void adresseInexploitable_remonte() {
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+        Assertions.assertThatThrownBy(() ->
                         service.sendEmail("pas une adresse", "Objet", "<p>Corps</p>", java.util.Map.of()))
-                .isInstanceOf(org.springframework.mail.MailException.class);
+                .isInstanceOf(MailException.class);
     }
 
     // ------------------------------------------------------------------ copie
@@ -239,5 +243,61 @@ class SmtpEmailServiceTest {
         ArgumentCaptor<MimeMessage> aMessage = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(aMessage.capture());
         assertThat(aMessage.getValue().getRecipients(jakarta.mail.Message.RecipientType.CC)).isNull();
+    }
+
+    // ------------------------------------------------------------------ syntaxe {variable}
+
+    @Test
+    @DisplayName("{variable} dans le corps est substitué, avec le même échappement que Thymeleaf")
+    void accolades_substituees() throws Exception {
+        service.sendEmail("claire@exemple.fr", "Objet",
+                "<p>Dossier {numeroNc}, commentaire : {observation}</p>",
+                Map.of("numeroNc", "NC-2026-014", "observation", "<script>alert('x')</script>"));
+
+        String corps = corpsEnvoye();
+        assertThat(corps).contains("Dossier NC-2026-014");
+        // La réécriture passe par Thymeleaf : une valeur saisie ne peut pas injecter de balisage.
+        assertThat(corps).doesNotContain("<script>");
+        assertThat(corps).contains("&lt;script&gt;");
+    }
+
+    @Test
+    @DisplayName("Les accolades du CSS et un {mot} inconnu ne sont pas touchés")
+    void accolades_etrangeresIntactes() throws Exception {
+        service.sendEmail("claire@exemple.fr", "Objet",
+                "<style>p { margin: 0; }</style><p>{inconnu} — dossier {numeroNc}</p>",
+                Map.of("numeroNc", "NC-7"));
+
+        String corps = corpsEnvoye();
+        // Seules les variables fournies sont réécrites : le CSS du gabarit reste du CSS.
+        assertThat(corps).contains("p { margin: 0; }");
+        assertThat(corps).contains("{inconnu}");
+        assertThat(corps).contains("dossier NC-7");
+    }
+
+    // ------------------------------------------------------------------ objet
+
+    @Test
+    @DisplayName("L'objet substitue {variable} et reste du texte d'une seule ligne")
+    void sujet_substitue() {
+        assertThat(SmtpEmailService.sujet("Validation attendue - NC {numeroNc}",
+                Map.of("numeroNc", "NC-2026-014")))
+                .isEqualTo("Validation attendue - NC NC-2026-014");
+        // Une valeur avec retour à la ligne ne peut pas scinder l'en-tête.
+        assertThat(SmtpEmailService.sujet("Objet {observation}",
+                Map.of("observation", "ligne1\r\nligne2")))
+                .isEqualTo("Objet ligne1 ligne2");
+    }
+
+    @Test
+    @DisplayName("Une référence absente s'efface de l'objet, séparateur compris")
+    void sujet_referenceAbsente() {
+        // « Validation attendue – NC  » avec un vide en fin d'objet trahirait le gabarit ;
+        // l'objet redevient simplement ce qu'il était.
+        assertThat(SmtpEmailService.sujet("Non-Conformité transmise – {numeroNc}", Map.of()))
+                .isEqualTo("Non-Conformité transmise");
+        assertThat(SmtpEmailService.sujet("Validation requise - Clôture NC {numeroNc}",
+                java.util.Collections.singletonMap("numeroNc", null)))
+                .isEqualTo("Validation requise - Clôture NC");
     }
 }

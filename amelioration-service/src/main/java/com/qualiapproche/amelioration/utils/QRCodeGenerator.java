@@ -9,10 +9,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import com.google.zxing.WriterException;
 
 public class QRCodeGenerator {
 
-  public static String generateAndSaveQRCodeImage(NonConformiteDto demande) throws IOException, com.google.zxing.WriterException {
+  public static String generateAndSaveQRCodeImage(NonConformiteDto demande) throws IOException, WriterException {
     String qrContent = generateQRContent(demande);
     String fileName = "qr_" + demande.getNumeroReference().replace("/", "_") + ".png";
 

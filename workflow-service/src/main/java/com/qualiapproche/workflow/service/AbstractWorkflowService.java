@@ -19,6 +19,10 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.workflow.event.TransitionFranchieEvent;
+import com.qualiapproche.workflow.model.FaitsDuDossier;
+import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 
 /**
  * Service abstrait fournissant le socle de base pour la gestion des workflows.
@@ -69,7 +73,7 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
      * une décision prise par un traitement automatique se lit alors comme telle.</p>
      */
     protected String getCurrentUserFullName() {
-        return com.qualiapproche.common.utils.SecurityUtils.getCurrentUserFullName();
+        return SecurityUtils.getCurrentUserFullName();
     }
 
     @Transactional
@@ -281,9 +285,9 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         if (exigee == null || exigee.isBlank()) {
             return;
         }
-        String faits = pData instanceof com.qualiapproche.workflow.model.WorkflowValidationInstance instance
+        String faits = pData instanceof WorkflowValidationInstance instance
                 ? instance.getFaits() : null;
-        if (!com.qualiapproche.workflow.model.FaitsDuDossier.contient(faits, exigee)) {
+        if (!FaitsDuDossier.contient(faits, exigee)) {
             throw new BusinessException(
                     "Cette action n'est pas encore possible sur ce dossier : la condition « "
                             + exigee + " » n'est pas remplie.",
@@ -331,15 +335,15 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
 
         // For Quali SIRA, ValidationHistory has a ManyToOne to WorkflowValidationInstance.
         // We will inject the instance if it's indeed D.
-        if (aSauvegardee instanceof com.qualiapproche.workflow.model.WorkflowValidationInstance) {
-            history.setValidationInstance((com.qualiapproche.workflow.model.WorkflowValidationInstance) aSauvegardee);
+        if (aSauvegardee instanceof WorkflowValidationInstance) {
+            history.setValidationInstance((WorkflowValidationInstance) aSauvegardee);
         }
 
         this.historyRepository.save(history);
 
         // Publish event
         // We'll create TransitionFranchieEvent in a moment.
-        this.eventPublisher.publishEvent(new com.qualiapproche.workflow.event.TransitionFranchieEvent(
+        this.eventPublisher.publishEvent(new TransitionFranchieEvent(
                 aSauvegardee.getClass().getName(),
                 aSauvegardee.getId().toString(),
                 aSauvegardee.getWorkflowCode(),

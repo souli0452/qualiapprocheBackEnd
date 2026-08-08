@@ -140,7 +140,10 @@ public class PlansActionDeLaNonConformiteService {
             // Le responsable du plan en devient le titulaire : c'est lui, et lui seul, que
             // l'étape de traitement doit ouvrir.
             workflowClient.initiateWorkflow(plan.getId(), "PLAN_ACTION", circuit.getId(),
-                    plan.getResponsableId() == null ? null : plan.getResponsableId().toString());
+                    plan.getResponsableId() == null ? null : plan.getResponsableId().toString(),
+                    // Les courriels des plans citent la non-conformité d'origine : c'est elle que
+                    // le destinataire connaît, le numéro d'ordre du plan ne parle qu'à la fiche.
+                    plan.getNumeroNc());
             plan.setWorkflowId(circuit.getId());
         } catch (Exception e) {
             // Le plan reste confié à son responsable même sans circuit : le suivi par le moteur

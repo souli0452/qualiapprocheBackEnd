@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.amelioration.client.WorkflowClient;
 
 /**
  * Ce que la fiche peut faire d'un plan d'action, et ce qui relève de son circuit.
@@ -51,7 +52,7 @@ class PlanActionGardeFousTest {
     @Mock private PieceJointeStockageService fichierService;
     @Mock private PlansActionDeLaNonConformiteService plansActionService;
     @Mock private UtilisateurClient utilisateurClient;
-    @Mock private com.qualiapproche.amelioration.client.WorkflowClient workflowClient;
+    @Mock private WorkflowClient workflowClient;
 
     @InjectMocks private PlanActionServiceImpl service;
 

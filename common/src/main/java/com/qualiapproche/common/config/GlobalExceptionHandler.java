@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -73,16 +74,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Restitue le statut porté par une {@link org.springframework.web.server.ResponseStatusException}.
+     * Restitue le statut porté par une {@link ResponseStatusException}.
      *
      * <p>Sans ce gestionnaire, ces exceptions tombaient dans le filet générique et repartaient
      * toutes en 500 : un refus métier explicite — document déjà validé, circuit non configuré,
      * ressource introuvable — devenait indiscernable d'une panne pour l'appelant, alors que le
      * statut voulu était porté par l'exception elle-même.</p>
      */
-    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(
-            org.springframework.web.server.ResponseStatusException ex) {
+            ResponseStatusException ex) {
         HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
         if (status == null) {
             status = HttpStatus.INTERNAL_SERVER_ERROR;

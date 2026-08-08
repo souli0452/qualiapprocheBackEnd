@@ -1,7 +1,9 @@
 package com.qualiapproche.common.config;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.common.utils.SecurityUtils;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -73,6 +75,34 @@ public class PermissionChecker {
                 .anyMatch(req -> userPerms.contains(req)
                         || userPerms.contains("ROLE_" + req)
                         || (req.startsWith("ROLE_") && userPerms.contains(req.substring(5))));
+    }
+
+    /**
+     * L'appel vient-il d'un <b>service</b>, et non d'un utilisateur ?
+     *
+     * <p>Certains points d'entrée n'existent que pour le dialogue entre services : les callbacks
+     * d'avancement de circuit, la déclaration d'un fait, la redésignation d'un titulaire. Laissés
+     * sous la seule authentification, n'importe quel agent muni d'un jeton valide pouvait y poster —
+     * faire passer un document à « validé » sans décision de circuit, ou déclarer « plans soldés »
+     * et déverrouiller une clôture.</p>
+     *
+     * <p>Deux preuves sont admises, l'une ou l'autre :</p>
+     * <ul>
+     *   <li>le jeton est celui d'un <b>compte de service</b> Keycloak : {@code preferred_username}
+     *       commence par {@code service-account-}. Ce nom est posé par Keycloak lui-même sur les
+     *       jetons {@code client_credentials} — l'obtenir exige le secret du client, un utilisateur
+     *       ne peut pas se le donner ;</li>
+     *   <li>le porteur détient le rôle {@code SERVICE_TECHNIQUE}, pour les déploiements qui
+     *       préfèrent un rôle explicite accordé au compte de service.</li>
+     * </ul>
+     */
+    public boolean appelDeService() {
+        Jwt jwt = SecurityUtils.getJwt();
+        String nom = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+        if (nom != null && nom.startsWith("service-account-")) {
+            return true;
+        }
+        return detient("SERVICE_TECHNIQUE");
     }
 
     private boolean check(final Object controller, final Function<RequirePermissions, String[]> extractor) {

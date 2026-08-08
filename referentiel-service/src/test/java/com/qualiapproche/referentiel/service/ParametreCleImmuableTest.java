@@ -23,6 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.assertj.core.api.Assertions;
 
 /**
  * Réglages de l'organisation : la clé fait l'identité, et elle ne bouge pas.
@@ -168,7 +169,7 @@ class ParametreCleImmuableTest {
         // Un réglage vide transmis obligerait chaque consommateur à refaire ce tri, et un pied de
         // page afficherait « Téléphone : » suivi de rien.
         assertThat(service.valeursPubliques()).containsExactly(
-                org.assertj.core.api.Assertions.entry("CONTACT_EMAIL", "qualite@exemple.fr"));
+                Assertions.entry("CONTACT_EMAIL", "qualite@exemple.fr"));
     }
 
     @Test

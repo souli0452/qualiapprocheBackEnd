@@ -3,6 +3,8 @@ package com.qualiapproche.workflow.repository;
 import com.qualiapproche.workflow.model.WorkflowFieldValue;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface WorkflowFieldValueRepository extends JpaRepository<WorkflowFieldValue, Long> {
@@ -23,13 +25,13 @@ public interface WorkflowFieldValueRepository extends JpaRepository<WorkflowFiel
      * dossiers, et une lecture par ligne — voire par décision — aurait rendu ruineux l'affichage
      * d'une page.</p>
      */
-    @org.springframework.data.jpa.repository.Query("""
+    @Query("""
             select v from WorkflowFieldValue v
             join fetch v.history h
             where h.validationInstance.id in :instances
             order by h.decisionDate asc, v.id asc
             """)
     java.util.List<WorkflowFieldValue> saisiesDesInstances(
-            @org.springframework.data.repository.query.Param("instances")
+            @Param("instances")
             java.util.Collection<java.util.UUID> instances);
 }

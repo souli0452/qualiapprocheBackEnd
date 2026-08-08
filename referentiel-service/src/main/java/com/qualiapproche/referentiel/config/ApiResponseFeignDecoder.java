@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Type;
 import java.util.Collection;
+import java.lang.reflect.ParameterizedType;
 
 /**
  * Décodeur Feign personnalisé qui extrait automatiquement le champ "data"
@@ -78,8 +79,8 @@ public class ApiResponseFeignDecoder implements Decoder {
                    clazz.getName().contains("Page") ||
                    clazz.getName().contains("Slice");
         }
-        if (type instanceof java.lang.reflect.ParameterizedType) {
-            Type rawType = ((java.lang.reflect.ParameterizedType) type).getRawType();
+        if (type instanceof ParameterizedType) {
+            Type rawType = ((ParameterizedType) type).getRawType();
             return isCollectionOrPage(rawType);
         }
         return false;

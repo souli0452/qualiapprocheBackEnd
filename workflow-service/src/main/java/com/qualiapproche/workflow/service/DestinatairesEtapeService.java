@@ -47,11 +47,18 @@ public class DestinatairesEtapeService {
     }
 
     /**
-     * Utilisateurs à prévenir pour un rôle responsable.
+     * Utilisateurs à prévenir pour un rôle responsable, dans la structure où le dossier se trouve.
      *
+     * <p>Le rôle seul ne suffit pas : il est porté dans toutes les structures, et l'interroger sans
+     * borne écrivait à la plateforme entière à chaque franchissement. La restriction est appliquée
+     * par user-service, qui sait aussi ne pas l'opposer aux rôles à portée globale — administration,
+     * responsabilité qualité.</p>
+     *
+     * @param structureId structure du dossier, ou {@code null} pour ne pas restreindre — dossiers
+     *                    antérieurs à la colonne, déclarant sans structure
      * @return les destinataires, éventuellement vide — jamais {@code null}
      */
-    public List<DestinataireDto> destinatairesDuRole(String role) {
+    public List<DestinataireDto> destinatairesDuRole(String role, String structureId) {
         if (role == null || role.isBlank()) {
             return List.of();
         }
@@ -63,14 +70,17 @@ public class DestinatairesEtapeService {
             // destinataire(String utilisateurId).
             return List.of();
         }
-        String aCle = role.trim().toUpperCase();
+        String aStructure = structureId == null || structureId.isBlank() ? null : structureId.trim();
+        // La structure entre dans la clé : un même rôle n'a pas les mêmes porteurs d'une structure
+        // à l'autre, et une entrée par rôle seul servirait la liste d'un dossier à un autre.
+        String aCle = role.trim().toUpperCase() + "|" + (aStructure == null ? "" : aStructure);
 
         Entree aEntree = cache.get(aCle);
         if (aEntree != null && !aEntree.estPerimee()) {
             return aEntree.destinataires();
         }
 
-        List<DestinataireDto> aDestinataires = interroger(role.trim());
+        List<DestinataireDto> aDestinataires = interroger(role.trim(), aStructure);
         if (aDestinataires != null) {
             cache.put(aCle, new Entree(aDestinataires,
                     Instant.now().plus(Duration.ofSeconds(retentionSecondes))));
@@ -124,9 +134,9 @@ public class DestinatairesEtapeService {
     }
 
     /** @return les destinataires, ou {@code null} si l'interrogation a échoué. */
-    private List<DestinataireDto> interroger(String role) {
+    private List<DestinataireDto> interroger(String role, String structureId) {
         try {
-            Map<String, Object> aReponse = userRoleClient.getUsersByRole(role);
+            Map<String, Object> aReponse = userRoleClient.getUsersByRole(role, structureId);
             Object aData = aReponse != null ? aReponse.get("data") : null;
             if (!(aData instanceof List<?> aListe)) {
                 log.warn("Réponse inattendue de user-service pour les porteurs du rôle {}.", role);

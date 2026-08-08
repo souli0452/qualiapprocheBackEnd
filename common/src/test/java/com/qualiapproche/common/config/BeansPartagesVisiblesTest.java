@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.springframework.stereotype.Component;
 
 /**
  * Les beans de ce module doivent vivre où les services les cherchent.
@@ -37,7 +38,7 @@ class BeansPartagesVisiblesTest {
     /**
      * Stéréotypes cherchés, sous leur forme courte comme pleinement qualifiée.
      *
-     * <p>Le projet écrit volontiers {@code @org.springframework.stereotype.Component} sans import :
+     * <p>Le projet écrit volontiers {@code @Component} sans import :
      * ne chercher que la forme courte laisserait passer exactement ce que ce test doit voir.</p>
      */
     private static final Pattern STEREOTYPE = Pattern.compile(

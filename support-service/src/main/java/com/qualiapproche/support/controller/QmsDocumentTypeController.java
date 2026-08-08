@@ -19,6 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_TYPE;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 
 @RestController
@@ -43,9 +46,9 @@ public class QmsDocumentTypeController {
      */
     @GetMapping
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<org.springframework.data.domain.Page<QmsDocumentType>> getAllTypes(
+    public ResponseEntity<Page<QmsDocumentType>> getAllTypes(
             @RequestParam(value = "search", required = false) String search,
-            @org.springdoc.core.annotations.ParameterObject org.springframework.data.domain.Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(typeService.getTypes(search, pageable));
     }
 

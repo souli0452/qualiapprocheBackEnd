@@ -11,6 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @Slf4j
 @Service
@@ -46,11 +50,11 @@ public class QmsDocumentTypeService {
      * <p>Rangée par libellé à défaut de tri demandé : sans ordre stable, deux pages
      * successives peuvent ramener la même entrée et en taire une autre.</p>
      */
-    public org.springframework.data.domain.Page<QmsDocumentType> getTypes(
-            String recherche, org.springframework.data.domain.Pageable pageable) {
-        org.springframework.data.domain.Pageable range = pageable.getSort().isSorted() ? pageable
-                : org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(),
-                        pageable.getPageSize(), org.springframework.data.domain.Sort.by("libelle"));
+    public Page<QmsDocumentType> getTypes(
+            String recherche, Pageable pageable) {
+        Pageable range = pageable.getSort().isSorted() ? pageable
+                : PageRequest.of(pageable.getPageNumber(),
+                        pageable.getPageSize(), Sort.by("libelle"));
         if (recherche == null || recherche.isBlank()) {
             return typeRepository.findAll(range);
         }

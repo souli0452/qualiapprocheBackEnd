@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
 
 /**
  * Garde-fous d'ouverture et de suppression d'un circuit.
@@ -76,6 +77,7 @@ class WorkflowServiceGardeFousTest {
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
                 transitionRepository, stepRepository,
+                org.mockito.Mockito.mock(StructureUtilisateurService.class),
                 // Pas de proxy hors contexte Spring : voir WorkflowService#self().
                 null);
     }
@@ -503,7 +505,7 @@ class WorkflowServiceGardeFousTest {
                 .steps(new ArrayList<>(List.of(
                         WorkflowStepDto.builder().nomEtape("Rédaction").stepOrder(1)
                                 .transitions(new ArrayList<>(List.of(
-                                        com.qualiapproche.workflow.dto.WorkflowTransitionDto.builder()
+                                        WorkflowTransitionDto.builder()
                                                 .decision("APPROUVE")
                                                 .label("Soumettre")
                                                 .icon(icone)

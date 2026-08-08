@@ -1,5 +1,6 @@
 package com.qualiapproche.common.enumeration;
 
+
 /**
  * Modules qu'une direction peut souscrire. La licence en porte la liste, séparée par des
  * virgules, et c'est cette liste — et elle seule — qui ouvre un pan de l'application : une
@@ -25,5 +26,5 @@ public enum ModuleAbonnement {
 // Le plan d'action ne se souscrit pas : il relève du traitement des non-conformités, et donc du
 // module NON_CONFORMITE. Un module PLAN_ACTION figurait ici, qu'aucune licence n'a jamais porté ;
 // il ne faut pas le confondre avec la famille de ressource du même nom
-// (com.qualiapproche.workflow.model.TypeRessource.PLAN_ACTION), qui désigne le service auquel un
+// (TypeRessource.PLAN_ACTION), qui désigne le service auquel un
 // circuit rend ses décisions — une tout autre notion.

@@ -28,6 +28,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.support.model.DocumentQms;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * L'aboutissement d'une demande est ce qui la distingue d'un simple changement d'état, et c'est là
@@ -82,21 +89,21 @@ class DemandeDocumentServiceTest {
     private static final String TIERS = "utilisateur-2";
 
     private void authentifier(String userId) {
-        org.springframework.security.oauth2.jwt.Jwt jwt =
-                org.springframework.security.oauth2.jwt.Jwt.withTokenValue("jeton")
+        Jwt jwt =
+                Jwt.withTokenValue("jeton")
                         .header("alg", "none")
                         .subject(userId)
                         .issuedAt(java.time.Instant.EPOCH)
                         .expiresAt(java.time.Instant.EPOCH.plusSeconds(3600))
                         .build();
-        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
                         jwt, null, java.util.List.of()));
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void nettoyerContexte() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        SecurityContextHolder.clearContext();
     }
 
     private DemandeDocument demande(TypeDemande type, EtatDemande etat) {
@@ -201,7 +208,7 @@ class DemandeDocumentServiceTest {
 
         // C'est l'acte le plus lourd de cet écran : il publie une version sur le document.
         assertThatThrownBy(() -> service.deposerRemplacant(DEMANDE,
-                mock(org.springframework.web.multipart.MultipartFile.class), null))
+                mock(MultipartFile.class), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("introuvable");
     }
@@ -247,7 +254,7 @@ class DemandeDocumentServiceTest {
         when(demandeRepository.findById(DEMANDE))
                 .thenReturn(Optional.of(demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS)));
 
-        assertThatThrownBy(() -> service.deposerRemplacant(DEMANDE, mock(org.springframework.web.multipart.MultipartFile.class), null))
+        assertThatThrownBy(() -> service.deposerRemplacant(DEMANDE, mock(MultipartFile.class), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("acceptée");
     }
@@ -258,7 +265,7 @@ class DemandeDocumentServiceTest {
         when(demandeRepository.findById(DEMANDE))
                 .thenReturn(Optional.of(demande(TypeDemande.SUPPRESSION, EtatDemande.ACCEPTEE)));
 
-        assertThatThrownBy(() -> service.deposerRemplacant(DEMANDE, mock(org.springframework.web.multipart.MultipartFile.class), null))
+        assertThatThrownBy(() -> service.deposerRemplacant(DEMANDE, mock(MultipartFile.class), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("pas une demande de modification");
     }
@@ -266,7 +273,7 @@ class DemandeDocumentServiceTest {
     @Test
     @DisplayName("Sans circuit configuré pour les demandes, le dépôt est refusé et expliqué")
     void sansCircuit_depotRefuse() {
-        com.qualiapproche.support.model.DocumentQms document = new com.qualiapproche.support.model.DocumentQms();
+        DocumentQms document = new DocumentQms();
         document.setId(DOCUMENT);
         document.setDocumentNumber("PRO-DSI-2026-001");
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
@@ -283,7 +290,7 @@ class DemandeDocumentServiceTest {
     @Test
     @DisplayName("L'objectif est obligatoire : c'est lui qu'instruit le responsable qualité")
     void objectifObligatoire() {
-        com.qualiapproche.support.model.DocumentQms document = new com.qualiapproche.support.model.DocumentQms();
+        DocumentQms document = new DocumentQms();
         document.setId(DOCUMENT);
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
         when(documentService.peutVoirLeSuiviInterne(document)).thenReturn(true);
@@ -314,7 +321,7 @@ class DemandeDocumentServiceTest {
         when(demandeRepository.findAllById(java.util.List.of(DEMANDE)))
                 .thenReturn(java.util.List.of(demande(TypeDemande.SUPPRESSION, EtatDemande.EN_COURS)));
 
-        com.qualiapproche.common.dto.WorkflowStateDto etat = new com.qualiapproche.common.dto.WorkflowStateDto();
+        WorkflowStateDto etat = new WorkflowStateDto();
         etat.setCurrentStateName("Instruction qualité");
         when(etatsDuCircuit.pourRessources(java.util.List.of(DEMANDE)))
                 .thenReturn(Map.of(DEMANDE, etat));
@@ -356,7 +363,7 @@ class DemandeDocumentServiceTest {
     @Test
     @DisplayName("Un circuit ouvert renseigne l'étape courante de la demande")
     void creation_ouvreLeCircuit() {
-        com.qualiapproche.support.model.DocumentQms document = new com.qualiapproche.support.model.DocumentQms();
+        DocumentQms document = new DocumentQms();
         document.setId(DOCUMENT);
         document.setDocumentNumber("PRO-DSI-2026-001");
         document.setServiceId("structure-1");
@@ -372,7 +379,9 @@ class DemandeDocumentServiceTest {
 
         WorkflowInstanceDto instance = new WorkflowInstanceDto();
         instance.setCurrentStateName("Soumission de la demande");
-        when(workflowClient.initiateWorkflow(any(), eq("DEMANDE_DOCUMENT"), eq(circuit))).thenReturn(instance);
+        // La référence du document accompagne l'ouverture : c'est elle que citeront les courriels.
+        when(workflowClient.initiateWorkflow(any(), eq("DEMANDE_DOCUMENT"), eq(circuit), any()))
+                .thenReturn(instance);
 
         DemandeDocument creee = service.creer(DOCUMENT, TypeDemande.MODIFICATION, "Objectif", "Détail", null);
 

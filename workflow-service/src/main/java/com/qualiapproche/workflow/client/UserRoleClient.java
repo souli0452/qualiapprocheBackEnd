@@ -4,6 +4,8 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.Map;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * Rôles applicatifs de l'utilisateur connecté, détenus par user-service.
@@ -27,9 +29,15 @@ public interface UserRoleClient {
      *
      * <p>Seule source des adresses des responsables d'étape : ce service ne connaît que le rôle
      * inscrit sur l'étape, pas les personnes qui l'occupent.</p>
+     *
+     * <p>La structure, facultative, borne la réponse à ses membres : sans elle, les porteurs du
+     * rôle de toutes les structures étaient prévenus de chaque franchissement. user-service ne
+     * l'oppose pas aux rôles à portée globale, qu'il est seul à savoir reconnaître quand le rôle
+     * est désigné par identifiant.</p>
      */
     @GetMapping("/api/v1/roles/{role}/users")
-    Map<String, Object> getUsersByRole(@org.springframework.web.bind.annotation.PathVariable("role") String role);
+    Map<String, Object> getUsersByRole(@PathVariable("role") String role,
+                                       @RequestParam(value = "structureId", required = false) String structureId);
 
     /**
      * Un utilisateur désigné nommément.
@@ -39,5 +47,5 @@ public interface UserRoleClient {
      * non-conformité vient d'être imputée n'était prévenu par rien.</p>
      */
     @GetMapping("/api/v1/user-by-id")
-    Map<String, Object> getUserById(@org.springframework.web.bind.annotation.RequestParam("userId") String userId);
+    Map<String, Object> getUserById(@RequestParam("userId") String userId);
 }

@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +22,7 @@ public class ReclamationServiceImpl implements ReclamationService {
     private final ReclamationMapper reclamationMapper;
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ReclamationDto create(ReclamationDto reclamationDto) {
         Reclamation reclamation = reclamationMapper.toEntity(reclamationDto);
         reclamation = reclamationRepository.save(reclamation);
@@ -29,7 +30,7 @@ public class ReclamationServiceImpl implements ReclamationService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ReclamationDto update(ReclamationDto reclamationDto) {
         return reclamationRepository.findById(reclamationDto.getId()).map(reclamationExisted -> {
             reclamationMapper.updateEntityFromDto(reclamationDto, reclamationExisted);

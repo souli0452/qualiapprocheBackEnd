@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
+import com.qualiapproche.common.response.ApiResponse;
 
 /**
  * Demandes de modification et de suppression d'un document.
@@ -58,9 +59,9 @@ public class DemandeDocumentController {
     /** Demandes visibles de l'appelant : celles de sa structure, toutes pour le responsable qualité. */
     @GetMapping
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DemandeDocumentDto>>> mesDemandes() {
+    public ResponseEntity<ApiResponse<List<DemandeDocumentDto>>> mesDemandes() {
         return ResponseEntity.ok(
-                com.qualiapproche.common.response.ApiResponse.success(demandeService.mesDemandes()));
+                ApiResponse.success(demandeService.mesDemandes()));
     }
 
     /**
@@ -78,27 +79,27 @@ public class DemandeDocumentController {
      */
     @GetMapping("/a-traiter")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DemandeDocumentDto>>> aTraiter() {
+    public ResponseEntity<ApiResponse<List<DemandeDocumentDto>>> aTraiter() {
         return ResponseEntity.ok(
-                com.qualiapproche.common.response.ApiResponse.success(demandeService.aTraiterParLAppelant()));
+                ApiResponse.success(demandeService.aTraiterParLAppelant()));
     }
 
     /** Historique des demandes portées sur un document. */
     @GetMapping("/document/{documentId}")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DemandeDocumentDto>>> parDocument(
+    public ResponseEntity<ApiResponse<List<DemandeDocumentDto>>> parDocument(
             @PathVariable("documentId") UUID documentId) {
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(
+        return ResponseEntity.ok(ApiResponse.success(
                 demandeService.demandesDuDocument(documentId)));
     }
 
     /** Statistiques des demandes visibles : par état, par nature, et dépôts par mois. */
     @GetMapping("/stats")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<java.util.Map<String, Object>>> statistiques(
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> statistiques(
             @RequestParam(value = "mois", required = false, defaultValue = "12") int mois) {
         return ResponseEntity.ok(
-                com.qualiapproche.common.response.ApiResponse.success(demandeService.statistiques(mois)));
+                ApiResponse.success(demandeService.statistiques(mois)));
     }
 
     @GetMapping("/{id}")

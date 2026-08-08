@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -54,7 +55,7 @@ public class DomaineApplicationServiceImpl implements DomaineApplicationService 
     @Override
     public Page<DomaineApplicationDto> getAll(String recherche, Pageable pageable) {
         Pageable range = pageable.getSort().isSorted() ? pageable
-                : org.springframework.data.domain.PageRequest.of(
+                : PageRequest.of(
                         pageable.getPageNumber(), pageable.getPageSize(), ORDRE);
         if (recherche == null || recherche.isBlank()) {
             return repository.findAll(range).map(mapper::toDto);

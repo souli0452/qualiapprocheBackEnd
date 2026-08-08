@@ -213,4 +213,34 @@ class FichiersDEtapeServiceTest {
                 .extracting(e -> ((BusinessException) e).getStatus())
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
+
+    // ------------------------------------------------------------------ bornes du dépôt
+
+    @Test
+    @DisplayName("Un exécutable est refusé avant tout rangement")
+    void executable_refuse() throws Exception {
+        MultipartFile executable = new MockMultipartFile("file", "outil.exe",
+                "application/octet-stream", "MZ".getBytes());
+
+        assertThatThrownBy(() -> service.deposer("documents", DOSSIER, executable))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("n'est pas admis")
+                .extracting(e -> ((BusinessException) e).getStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        // Rien ne part vers le serveur de fichiers, rien ne s'inscrit en table.
+        verify(stockage, never()).uploadFile(any(), any());
+        verify(pieces, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Une pièce trop lourde est refusée avec la limite dans le message")
+    void tropLourde_refusee() throws Exception {
+        MultipartFile lourde = new MockMultipartFile("file", "rapport.pdf", "application/pdf",
+                new byte[26 * 1024 * 1024]);
+
+        assertThatThrownBy(() -> service.deposer("documents", DOSSIER, lourde))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("25");
+    }
 }

@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
     private final ActionExigenceRepository actionExigenceRepository;
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ActionCorrectivePreventiveDto createAction(ActionCorrectivePreventiveDto actionCorrectivePreventiveDto) {
         ActionCorrectivePreventive actionCorrectivePreventive = actionMapper.toEntity(actionCorrectivePreventiveDto);
         actionCorrectivePreventive.setStatut(StatutEnum.ACTIF);
@@ -57,7 +58,7 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ActionCorrectivePreventiveDto updateAction(ActionCorrectivePreventiveDto actionCorrectivePreventiveDto) {
         ActionCorrectivePreventive actionCorrectivePreventive = repository.getReferenceById(actionCorrectivePreventiveDto.getId());
         if (Objects.nonNull(actionCorrectivePreventive)) {
@@ -100,7 +101,7 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public ActionCorrectivePreventiveDto deleteAction(UUID id) {
         ActionCorrectivePreventive actionCorrectivePreventive = repository.getReferenceById(id);
         actionCorrectivePreventive.setStatut(StatutEnum.INACTIF);

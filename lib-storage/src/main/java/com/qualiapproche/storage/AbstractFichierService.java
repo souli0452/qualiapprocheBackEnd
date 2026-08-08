@@ -62,6 +62,9 @@ public abstract class AbstractFichierService<E extends FichierStocke> {
         if (fichier == null || fichier.isEmpty()) {
             throw new StorageException("Aucun fichier n'a été transmis.");
         }
+        // Bornes communes à tous les modules : sans elles, seul le plafond multipart du serveur
+        // (1 Go) s'appliquait, et rien n'excluait un exécutable déposé comme justificatif.
+        ReglesDePieceJointe.verifier(fichier.getOriginalFilename(), fichier.getSize());
         String reference = executer(
                 () -> storageService.uploadFile(fichier, dossierDuModule(), sousDossier),
                 "dépôt du fichier « " + fichier.getOriginalFilename() + " »");
@@ -80,6 +83,7 @@ public abstract class AbstractFichierService<E extends FichierStocke> {
         if (contenu == null || contenu.length == 0) {
             throw new StorageException("Le fichier « " + nom + " » est vide.");
         }
+        ReglesDePieceJointe.verifier(nom, contenu.length);
         String reference = executer(
                 () -> storageService.uploadContent(contenu, nom, type, dossierDuModule(), sousDossier),
                 "dépôt du fichier « " + nom + " »");

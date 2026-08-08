@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import com.qualiapproche.common.utils.CryptoUtils;
 
 @Slf4j
 @Service
@@ -96,7 +97,7 @@ public class TenantProvisioningService implements CommandLineRunner {
         }
 
         String modulesRaw = String.join(",", modules);
-        String encryptedLicense = com.qualiapproche.common.utils.CryptoUtils.encrypt(modulesRaw);
+        String encryptedLicense = CryptoUtils.encrypt(modulesRaw);
 
         AbonnementDirection abonnement = AbonnementDirection.builder()
                 .direction(direction)
@@ -177,7 +178,7 @@ public class TenantProvisioningService implements CommandLineRunner {
                 modules.add(m.asText());
             }
             String modulesRaw = String.join(",", modules);
-            String encryptedLicense = com.qualiapproche.common.utils.CryptoUtils.encrypt(modulesRaw);
+            String encryptedLicense = CryptoUtils.encrypt(modulesRaw);
             abo.setLicense(encryptedLicense);
             log.info("Modules mis à jour pour la direction '{}': {}", direction.getLibelleLong(), modules);
         }

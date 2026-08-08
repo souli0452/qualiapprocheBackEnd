@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * partaient <b>à l'intérieur</b> de la transaction, avant commit : un rollback ultérieur laissait
  * le service métier avec une décision jamais enregistrée, et l'e-mail d'étape faisait doublon
  * avec celui de {@code WorkflowEventListener}. Ces effets sont désormais publiés une seule fois,
- * après commit, par {@link com.qualiapproche.workflow.event.WorkflowEventListener}.</p>
+ * après commit, par {@link WorkflowEventListener}.</p>
  */
 @Component
 @RequiredArgsConstructor

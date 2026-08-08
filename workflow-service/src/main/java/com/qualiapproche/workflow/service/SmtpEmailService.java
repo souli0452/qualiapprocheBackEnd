@@ -52,7 +52,7 @@ public class SmtpEmailService {
      * @param subject      objet du message
      * @param htmlTemplate corps du gabarit, tel qu'enregistré en base
      * @param variables    valeurs exposées au gabarit ; une variable absente rend une chaîne vide
-     * @throws org.springframework.mail.MailException si le serveur refuse ou n'est pas joignable —
+     * @throws MailException si le serveur refuse ou n'est pas joignable —
      *         volontairement propagée : le registre des notifications l'inscrit et programme une
      *         reprise. Rien ici ne doit faire croire à un envoi qui n'a pas eu lieu.
      */
@@ -119,10 +119,62 @@ public class SmtpEmailService {
             if (variables != null) {
                 contexte.setVariables(new HashMap<>(variables));
             }
-            return moteurGabarit.process(htmlTemplate, contexte);
+            return moteurGabarit.process(accoladesVersThymeleaf(htmlTemplate, variables), contexte);
         } catch (Exception e) {
             log.error("Gabarit d'e-mail illisible, le corps est envoyé sans substitution : {}", e.getMessage());
             return htmlTemplate;
         }
+    }
+
+    /**
+     * Traduit la syntaxe {@code {variable}} de l'éditeur vers Thymeleaf, avant le rendu.
+     *
+     * <p>Les gabarits livrés sont écrits en Thymeleaf ({@code [[${numeroNc}]]}), mais cette syntaxe
+     * n'est pas celle qu'un rédacteur de modèle devine : {@code {numeroNc}} l'est. Plutôt qu'un
+     * second moteur de substitution — il y en a déjà eu deux, et c'est ce qui avait cassé les
+     * envois — les accolades sont réécrites en inline Thymeleaf et le rendu reste unique :
+     * même échappement HTML, mêmes règles, gabarits existants intacts.</p>
+     *
+     * <p>Seules les variables <b>fournies</b> sont réécrites : les accolades du CSS des gabarits
+     * ({@code p '{' margin: 0 '}'}) et un {@code {mot}} quelconque ne sont pas touchés.</p>
+     */
+    private String accoladesVersThymeleaf(String gabarit, Map<String, String> variables) {
+        if (variables == null || variables.isEmpty() || gabarit.indexOf('{') < 0) {
+            return gabarit;
+        }
+        String resultat = gabarit;
+        for (String nom : variables.keySet()) {
+            // Pas d'accolade précédée de « $ » : « [[${fullName}]] » contient « {fullName} », et le
+            // réécrire donnerait un gabarit illisible — les modèles livrés sont écrits ainsi.
+            resultat = resultat.replaceAll("(?<!\\$)\\{" + java.util.regex.Pattern.quote(nom) + "\\}",
+                    java.util.regex.Matcher.quoteReplacement("[[${" + nom + "}]]"));
+        }
+        return resultat;
+    }
+
+    /**
+     * Objet du courriel, avec la même syntaxe {@code {variable}} que le corps.
+     *
+     * <p>L'objet est du texte simple, hors de portée du moteur HTML : la substitution est directe.
+     * Une variable absente ou vide s'efface, et le séparateur qui la précédait avec elle —
+     * « Validation attendue – NC {numeroNc} » sans référence redevient « Validation attendue »,
+     * pas « Validation attendue – NC  ». Les retours à la ligne des valeurs sont retirés : un
+     * en-tête ne doit pas pouvoir être scindé par une valeur saisie.</p>
+     */
+    public static String sujet(String sujet, Map<String, String> variables) {
+        if (sujet == null) {
+            return "";
+        }
+        String resultat = sujet;
+        if (variables != null) {
+            for (Map.Entry<String, String> variable : variables.entrySet()) {
+                String valeur = variable.getValue() == null
+                        ? "" : variable.getValue().replaceAll("[\r\n]+", " ").trim();
+                resultat = resultat.replace("{" + variable.getKey() + "}", valeur);
+            }
+        }
+        // Variables inconnues restantes, puis séparateurs orphelins en fin d'objet.
+        resultat = resultat.replaceAll("\\{[a-zA-Z_][a-zA-Z0-9_]*\\}", "");
+        return resultat.replaceAll("(\\s*[–—:-])+\\s*$", "").trim();
     }
 }

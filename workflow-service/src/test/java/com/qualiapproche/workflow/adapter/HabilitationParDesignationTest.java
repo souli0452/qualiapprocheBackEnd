@@ -16,6 +16,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * Habilitations qui désignent une <b>personne</b> et non un rôle : le créateur, le titulaire.
@@ -45,24 +48,27 @@ class HabilitationParDesignationTest {
     void setUp() {
         rolesUtilisateurService = mock(RolesUtilisateurService.class);
         when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("AGENT"));
-        adapter = new WorkflowConditionAdapter(rolesUtilisateurService);
+        // Structure inconnue de part et d'autre : ces tests jugent les désignations, pas la
+        // structure — le mock rend null, ce qui laisse le contrôle de structure sans effet.
+        adapter = new WorkflowConditionAdapter(rolesUtilisateurService,
+                mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
     }
 
     @AfterEach
     void nettoyerContexte() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        SecurityContextHolder.clearContext();
     }
 
     private void authentifier(String userId) {
-        org.springframework.security.oauth2.jwt.Jwt jwt =
-                org.springframework.security.oauth2.jwt.Jwt.withTokenValue("jeton")
+        Jwt jwt =
+                Jwt.withTokenValue("jeton")
                         .header("alg", "none")
                         .subject(userId)
                         .issuedAt(java.time.Instant.EPOCH)
                         .expiresAt(java.time.Instant.EPOCH.plusSeconds(3600))
                         .build();
-        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
-                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
                         jwt, null, java.util.List.of()));
     }
 

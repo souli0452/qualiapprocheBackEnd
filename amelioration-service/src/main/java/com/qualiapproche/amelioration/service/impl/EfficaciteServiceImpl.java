@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class EfficaciteServiceImpl implements EfficaciteService {
 
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public EfficaciteDto create(EfficaciteDto efficaciteDto) {
         Efficacite efficacite = efficaciteMapper.toEntity(efficaciteDto);
         efficacite = efficaciteRepository.save(efficacite);
@@ -44,7 +45,7 @@ public class EfficaciteServiceImpl implements EfficaciteService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public EfficaciteDto update(EfficaciteDto efficaciteDto) {
         return efficaciteRepository.findById(efficaciteDto.getId()).map(efficaciteExisted -> {
             efficaciteMapper.updateEntityFromDto(efficaciteDto, efficaciteExisted);

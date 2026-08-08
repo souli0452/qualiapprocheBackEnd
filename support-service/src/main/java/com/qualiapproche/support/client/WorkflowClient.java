@@ -43,10 +43,17 @@ public interface WorkflowClient {
     @GetMapping("/api/v1/workflows/{workflowId}")
     Map<String, Object> getWorkflowById(@PathVariable("workflowId") UUID workflowId);
 
+    /**
+     * Ouvre le circuit en transmettant la référence lisible du dossier.
+     *
+     * <p>C'est elle que citent les courriels d'étape (« n°{numeroNc} ») : le moteur ne détient que
+     * l'UUID, et sans elle les messages partaient avec un numéro vide.</p>
+     */
     @PostMapping("/api/v1/workflows/initiate")
     WorkflowInstanceDto initiateWorkflow(@RequestParam("resourceId") UUID resourceId,
                                          @RequestParam("resourceType") String resourceType,
-                                         @RequestParam("workflowId") UUID workflowId);
+                                         @RequestParam("workflowId") UUID workflowId,
+                                         @RequestParam(value = "reference", required = false) String reference);
 
     @GetMapping("/api/v1/workflows/instances/{resourceId}")
     WorkflowInstanceDto getLastValidationInstance(@PathVariable("resourceId") UUID resourceId);

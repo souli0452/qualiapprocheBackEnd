@@ -11,7 +11,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    # Journalisation des requêtes : coupée par défaut. Chaque requête y passait avec ses
+    # valeurs — donc des données de dossiers dans les journaux, et un volume qui noie les
+    # lignes qui comptent. Pour déboguer en local : SPRING_JPA_SHOW_SQL=true.
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
   security:
     oauth2:
       resourceserver:

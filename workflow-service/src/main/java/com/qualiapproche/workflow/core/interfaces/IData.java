@@ -11,7 +11,7 @@ import com.qualiapproche.workflow.core.model.Etat;
  * jointes, montants) appartient a l'implementation, pas au moteur.</p>
  *
  * <p>L'extension de {@link Serializable} rend coherente la serialisation de
- * {@link com.qualiapproche.workflow.core.model.ExecutionContext} : le contexte se declare
+ * {@link ExecutionContext} : le contexte se declare
  * serialisable, or il porte la donnee. Sans cette contrainte, sa serialisation
  * echouait a l'execution des que la donnee ne l'etait pas.</p>
  */

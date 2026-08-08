@@ -14,6 +14,8 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import org.springframework.stereotype.Component;
 
 import java.util.stream.Collectors;
+import com.qualiapproche.common.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 
 @Component
 public class WorkflowMapper {
@@ -166,8 +168,8 @@ public class WorkflowMapper {
         try {
             return SeveriteAction.depuis(severite);
         } catch (IllegalArgumentException e) {
-            throw new com.qualiapproche.common.exception.BusinessException(
-                    e.getMessage(), org.springframework.http.HttpStatus.BAD_REQUEST);
+            throw new BusinessException(
+                    e.getMessage(), HttpStatus.BAD_REQUEST);
         }
     }
 

@@ -35,6 +35,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import com.qualiapproche.common.dto.DestinataireDto;
+import com.qualiapproche.common.dto.StructureDto;
+import com.qualiapproche.common.dto.auth.KcResponseDto;
+import com.qualiapproche.common.utils.RolesPlateforme;
+import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.userservice.client.StructureClient;
+import com.qualiapproche.userservice.repository.AppRoleRepository;
+import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
+import org.springframework.http.HttpStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -44,9 +53,9 @@ public class KcUserService {
     private final KcUserMapper kcUserMapper;
     private final Keycloak keycloak;
     private final KcAuthProperties kcAuthProperties;
-    private final com.qualiapproche.userservice.repository.AppRoleRepository appRoleRepository;
-    private final com.qualiapproche.userservice.repository.UserRoleAssignmentRepository userRoleAssignmentRepository;
-    private final com.qualiapproche.userservice.client.StructureClient structureClient;
+    private final AppRoleRepository appRoleRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
+    private final StructureClient structureClient;
     private final SendMailService sendMailService;
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -68,7 +77,7 @@ public class KcUserService {
         List<String> modulesSubscribed = new java.util.ArrayList<>();
 
         try {
-            com.qualiapproche.common.dto.StructureDto direction = structureClient.getDirection();
+            StructureDto direction = structureClient.getDirection();
             if (direction != null) {
                 licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
                 licenseDaysRemaining = direction.getLicenseDaysRemaining() != null
@@ -289,14 +298,14 @@ public class KcUserService {
             // 3. Mise à jour du mot de passe
             updatePassword(users.get(0).getId(), password);
 
-            return ResponseEntity.ok(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
+            return ResponseEntity.ok(KcResponseDto.builder()
                     .status("SUCCESS")
                     .message("Votre mot de passe a été mis à jour avec succès.")
                     .build());
         } catch (Exception e) {
             log.error("Erreur lors de la mise à jour du mot de passe: {}", e.getMessage());
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
-                    .body(com.qualiapproche.common.dto.auth.KcResponseDto.builder()
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(KcResponseDto.builder()
                             .status("ERROR")
                             .message("Ancien mot de passe incorrect.")
                             .build());
@@ -375,7 +384,7 @@ public class KcUserService {
         List<String> modulesSubscribed = new java.util.ArrayList<>();
 
         try {
-            com.qualiapproche.common.dto.StructureDto direction = structureClient.getDirection();
+            StructureDto direction = structureClient.getDirection();
             if (direction != null) {
                 licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
                 licenseDaysRemaining = direction.getLicenseDaysRemaining() != null
@@ -454,7 +463,7 @@ public class KcUserService {
      * jeton ni {@code X-User-Permissions} ne transportent les rôles.</p>
      */
     public List<Map<String, String>> getMyRoles() {
-        String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("Utilisateur non authentifié.");
         }
@@ -483,30 +492,58 @@ public class KcUserService {
      * impossible, et les compter comme destinataires masquerait le fait que personne n'est
      * prévenu.</p>
      *
-     * @param role identifiant ou nom du rôle
+     * <p>La structure, facultative, borne la réponse à ses membres. C'est elle qui empêche les
+     * courriels d'étape d'arroser la plateforme : le supérieur à prévenir est celui de la
+     * structure du dossier, pas tout porteur du rôle où qu'il soit. Les rôles à portée globale
+     * — administration, responsabilité qualité — couvrent toutes les structures par définition :
+     * la borne ne leur est pas opposée, sinon leurs étapes ne préviendraient plus personne dès
+     * que le dossier vient d'une autre structure que la leur.</p>
+     *
+     * @param role        identifiant ou nom du rôle
+     * @param structureId structure à laquelle restreindre, ou {@code null} pour ne pas restreindre
      * @return les destinataires, sans doublon ; liste vide si le rôle n'est porté par personne
      */
-    public List<com.qualiapproche.common.dto.DestinataireDto> getUsersByRole(String role) {
+    public List<DestinataireDto> getUsersByRole(String role, String structureId) {
         if (role == null || role.isBlank()) {
             return List.of();
         }
 
-        List<com.qualiapproche.userservice.entities.UserRoleAssignment> affectations =
+        List<UserRoleAssignment> affectations =
                 affectationsDuRole(role.trim());
+        String structureExigee = structureExigee(affectations, structureId);
 
         return affectations.stream()
-                .map(com.qualiapproche.userservice.entities.UserRoleAssignment::getUserId)
+                .map(UserRoleAssignment::getUserId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
-                .map(this::destinataire)
+                .map(userId -> destinataire(userId, structureExigee))
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Structure que les destinataires doivent partager, ou {@code null} si rien ne restreint.
+     *
+     * <p>Décidée ici et non chez l'appelant : le rôle lui est parfois désigné par identifiant, et
+     * seul ce service sait le résoudre en nom pour reconnaître une portée globale.</p>
+     */
+    private String structureExigee(List<UserRoleAssignment> affectations, String structureId) {
+        if (structureId == null || structureId.isBlank()) {
+            return null;
+        }
+        boolean porteeGlobale = affectations.stream()
+                .map(UserRoleAssignment::getRole)
+                .filter(java.util.Objects::nonNull)
+                .map(com.qualiapproche.userservice.entities.AppRole::getName)
+                .filter(java.util.Objects::nonNull)
+                .anyMatch(nom -> RolesPlateforme.PORTEE_GLOBALE.stream().anyMatch(nom::equalsIgnoreCase));
+        return porteeGlobale ? null : structureId.trim();
+    }
+
     /** Affectations du rôle, cherché par identifiant puis, à défaut, par nom. */
-    private List<com.qualiapproche.userservice.entities.UserRoleAssignment> affectationsDuRole(String role) {
+    private List<UserRoleAssignment> affectationsDuRole(String role) {
         try {
-            List<com.qualiapproche.userservice.entities.UserRoleAssignment> parId =
+            List<UserRoleAssignment> parId =
                     userRoleAssignmentRepository.findByRole_Id(java.util.UUID.fromString(role));
             if (!parId.isEmpty()) {
                 return parId;
@@ -518,18 +555,23 @@ public class KcUserService {
     }
 
     /**
-     * Profil de contact d'un utilisateur, ou {@code null} s'il n'est pas joignable.
+     * Profil de contact d'un utilisateur, ou {@code null} s'il n'est pas joignable — ou s'il
+     * n'appartient pas à la structure exigée.
      *
      * <p>Un compte peut avoir disparu de Keycloak sans que son affectation ait été retirée :
      * l'échec est alors propre à cet utilisateur et ne doit pas priver les autres de leur
      * notification.</p>
      */
-    private com.qualiapproche.common.dto.DestinataireDto destinataire(String userId) {
+    private DestinataireDto destinataire(String userId, String structureExigee) {
         try {
             UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
                     .users().get(userId).toRepresentation();
 
             if (user == null || Boolean.FALSE.equals(user.isEnabled())) {
+                return null;
+            }
+            if (structureExigee != null
+                    && !structureExigee.equals(getAttributeValue(user.getAttributes(), "structure"))) {
                 return null;
             }
             String email = user.getEmail();
@@ -542,7 +584,7 @@ public class KcUserService {
             String nomComplet = ((user.getFirstName() != null ? user.getFirstName() : "") + " "
                     + (user.getLastName() != null ? user.getLastName() : "")).trim();
 
-            return com.qualiapproche.common.dto.DestinataireDto.builder()
+            return DestinataireDto.builder()
                     .userId(userId)
                     .email(email)
                     .nomComplet(nomComplet.isBlank() ? email : nomComplet)
@@ -561,7 +603,7 @@ public class KcUserService {
      * {@code X-User-Permissions} transmis aux services en aval.
      */
     public List<String> getMyPermissions() {
-        String userId = com.qualiapproche.common.utils.SecurityUtils.getCurrentUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
             throw new RuntimeException("Utilisateur non authentifié.");
         }

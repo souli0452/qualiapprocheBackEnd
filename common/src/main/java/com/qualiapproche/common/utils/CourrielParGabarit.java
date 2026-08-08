@@ -51,7 +51,7 @@ public class CourrielParGabarit {
      * @param nomGabarit   nom du gabarit Thymeleaf, tel que le résolveur de fichiers l'attend
      * @param moteur       moteur de rendu du service appelant : chacun a le sien, avec son
      *                     résolveur et son préfixe de dossier
-     * @throws org.springframework.mail.MailException si le serveur refuse ou n'est pas joignable.
+     * @throws MailException si le serveur refuse ou n'est pas joignable.
      *         Volontairement propagée : un appelant qui l'avale fait croire à un envoi qui n'a pas
      *         eu lieu, ce qui a longtemps rendu les échecs de courriel indétectables.
      */

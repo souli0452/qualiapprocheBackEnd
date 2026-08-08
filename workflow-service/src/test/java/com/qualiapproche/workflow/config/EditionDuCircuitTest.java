@@ -11,6 +11,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
+import com.qualiapproche.workflow.model.Workflow;
+import com.qualiapproche.workflow.model.WorkflowTransition;
 
 /**
  * Ce que l'enregistrement d'un circuit depuis l'éditeur conserve du circuit précédent.
@@ -59,14 +62,14 @@ class EditionDuCircuitTest {
     @Test
     @DisplayName("La condition d'une transition et son explication survivent à un enregistrement")
     void condition_conservee() {
-        com.qualiapproche.workflow.model.WorkflowTransition transition =
-                com.qualiapproche.workflow.model.WorkflowTransition.builder()
+        WorkflowTransition transition =
+                WorkflowTransition.builder()
                         .decision(StepDecision.APPROUVE)
                         .conditionRequise("PLANS_ACTION_SOLDES")
                         .conditionLibelle("toutes les actions correctives sont soldées")
                         .build();
 
-        com.qualiapproche.workflow.dto.WorkflowTransitionDto relu = mapper.toDto(transition);
+        WorkflowTransitionDto relu = mapper.toDto(transition);
 
         assertThat(relu.getConditionRequise()).isEqualTo("PLANS_ACTION_SOLDES");
         assertThat(relu.getConditionLibelle()).isEqualTo("toutes les actions correctives sont soldées");
@@ -77,7 +80,7 @@ class EditionDuCircuitTest {
     void circuitLivre_allerRetourComplet() {
         // Le circuit de non-conformité porte toutes les propriétés à risque à la fois : désignation
         // du titulaire, portée de champ, source de choix, condition. S'il survit, le contrat tient.
-        com.qualiapproche.workflow.model.Workflow circuit =
+        Workflow circuit =
                 WorkflowDataInitializer.circuitNonConformiteParDefaut();
 
         for (WorkflowStep etape : circuit.getSteps()) {
@@ -100,14 +103,14 @@ class EditionDuCircuitTest {
     @Test
     @DisplayName("Le code d'une action survit à un enregistrement")
     void codeDeLAction_conserve() {
-        com.qualiapproche.workflow.model.WorkflowTransition transition =
-                com.qualiapproche.workflow.model.WorkflowTransition.builder()
+        WorkflowTransition transition =
+                WorkflowTransition.builder()
                         .code("DEMANDER_COMPLEMENT")
                         .decision(StepDecision.APPROUVE)
                         .label("Demander un complément")
                         .build();
 
-        com.qualiapproche.workflow.dto.WorkflowTransitionDto relu = mapper.toDto(transition);
+        WorkflowTransitionDto relu = mapper.toDto(transition);
 
         // C'est le code qui identifie l'action dans son étape : perdu, deux actions de même nature
         // se confondent, et l'enregistrement suivant en efface une.
@@ -134,8 +137,8 @@ class EditionDuCircuitTest {
     @Test
     @DisplayName("Une action sans code se nomme d'après sa décision")
     void actionSansCode_prendCelleDeSaDecision() {
-        com.qualiapproche.workflow.model.WorkflowTransition transition =
-                com.qualiapproche.workflow.model.WorkflowTransition.builder()
+        WorkflowTransition transition =
+                WorkflowTransition.builder()
                         .decision(StepDecision.REJETE)
                         .build();
 

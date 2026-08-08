@@ -33,22 +33,24 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
     }
 
     private void initializeTemplates() {
+        // {numeroNc} dans l'objet : la même syntaxe {variable} que le corps, substituée à l'envoi.
+        // Une référence absente s'efface avec son séparateur — l'objet reste propre.
         List<TemplateDef> definitions = List.of(
-            new TemplateDef("emailTemplate", "Nouvelle Non-Conformité imputée", "Attribution d'une NC à un utilisateur"),
-            new TemplateDef("structureToStructure", "Non-Conformité transmise", "NC relevée par une structure envers une autre"),
-            new TemplateDef("validationNonConformite", "Validation requise - Non-Conformité", "Validation hiérarchique requise"),
-            new TemplateDef("rejectNonConformite", "Non-Conformité rejetée", "Rejet d'une NC"),
-            new TemplateDef("emailPlanAction", "Nouveau plan d'action correctif", "Attribution d'un plan d'action correctif"),
-            new TemplateDef("validationPlanRequise", "Validation requise - Plans d'actions", "Validation des plans d'actions par RQ"),
-            new TemplateDef("validationRq", "Validation attendue - Non-Conformité", "Validation attendue par RQ"),
-            new TemplateDef("emailRqPlan", "Mise en œuvre du plan d'action", "Info au RQ : plan mis en œuvre"),
-            new TemplateDef("validationAfterPlan", "Validation requise - Clôture NC", "Validation pour clôture après plan"),
-            new TemplateDef("succesTraitementNonformite", "Traitement NC réussi", "Traitement NC terminé avec succès"),
-            new TemplateDef("traitementReussi", "Non-conformité traitée avec succès", "Traitement NC terminé (notification)"),
+            new TemplateDef("emailTemplate", "Nouvelle Non-Conformité imputée – {numeroNc}", "Attribution d'une NC à un utilisateur"),
+            new TemplateDef("structureToStructure", "Non-Conformité transmise – {numeroNc}", "NC relevée par une structure envers une autre"),
+            new TemplateDef("validationNonConformite", "Validation requise - Non-Conformité {numeroNc}", "Validation hiérarchique requise"),
+            new TemplateDef("rejectNonConformite", "Non-Conformité {numeroNc} rejetée", "Rejet d'une NC"),
+            new TemplateDef("emailPlanAction", "Nouveau plan d'action correctif – {numeroNc}", "Attribution d'un plan d'action correctif"),
+            new TemplateDef("validationPlanRequise", "Validation requise - Plans d'actions – {numeroNc}", "Validation des plans d'actions par RQ"),
+            new TemplateDef("validationRq", "Validation attendue - Non-Conformité {numeroNc}", "Validation attendue par RQ"),
+            new TemplateDef("emailRqPlan", "Mise en œuvre du plan d'action – {numeroNc}", "Info au RQ : plan mis en œuvre"),
+            new TemplateDef("validationAfterPlan", "Validation requise - Clôture NC {numeroNc}", "Validation pour clôture après plan"),
+            new TemplateDef("succesTraitementNonformite", "Traitement NC {numeroNc} réussi", "Traitement NC terminé avec succès"),
+            new TemplateDef("traitementReussi", "Non-conformité {numeroNc} traitée avec succès", "Traitement NC terminé (notification)"),
             new TemplateDef("alertePlanAction", "Alerte : échéance plan d'action", "Alerte sur échéance de plan d'action"),
             new TemplateDef("alerteLastDay", "Alerte : dernier jour échéance", "Alerte dernier jour avant échéance"),
             new TemplateDef("alerteEpuise", "Alerte : délai épuisé", "Alerte délai plan d'action épuisé"),
-            new TemplateDef("rejectPlanAction", "Rejet d'un plan d'action", "Rejet d'un plan d'action")
+            new TemplateDef("rejectPlanAction", "Rejet d'un plan d'action – {numeroNc}", "Rejet d'un plan d'action")
         );
 
         int crees = 0;

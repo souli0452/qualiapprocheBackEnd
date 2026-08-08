@@ -30,6 +30,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.qualiapproche.workflow.adapter.action.WorkflowStepAction;
+import org.assertj.core.groups.Tuple;
 
 /**
  * Construction du catalogue à partir de la base.
@@ -55,7 +57,7 @@ class WorkflowEngineDAOAdapterTest {
         adapter = new WorkflowEngineDAOAdapter(workflowRepository, transitionRepository,
                 conditionAdapter, beanFactory);
         when(beanFactory.getBean(anyString(), any(Class.class)))
-                .thenReturn(new com.qualiapproche.workflow.adapter.action.WorkflowStepAction());
+                .thenReturn(new WorkflowStepAction());
     }
 
     /** Circuit à deux étapes : « Rédaction » puis « Vérification ». */
@@ -265,8 +267,8 @@ class WorkflowEngineDAOAdapterTest {
                 .extracting(t -> ((TransitionPersistante) t).getIcon(),
                         t -> ((TransitionPersistante) t).getSeverite())
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple("pi pi-check", SeveriteAction.SUCCESS),
-                        org.assertj.core.groups.Tuple.tuple("pi pi-times", SeveriteAction.DANGER));
+                        Tuple.tuple("pi pi-check", SeveriteAction.SUCCESS),
+                        Tuple.tuple("pi pi-times", SeveriteAction.DANGER));
     }
 
     @Test

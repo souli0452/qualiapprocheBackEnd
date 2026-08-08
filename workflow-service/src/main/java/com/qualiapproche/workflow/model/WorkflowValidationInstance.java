@@ -46,6 +46,18 @@ public class WorkflowValidationInstance implements IWorkflowData {
     @Column(name = "workflow_code", nullable = false)
     private String workflowCode;
 
+    /**
+     * Référence lisible du dossier — « NC-2026-014 », « PRO-01 » — transmise par le module à
+     * l'ouverture du circuit.
+     *
+     * <p>Le moteur ne connaît la ressource que par son UUID : sans cette référence, les courriels
+     * d'étape annonçaient « Non-Conformité n°__ » — le message partait, mais sans l'information qui
+     * identifie le dossier pour son destinataire. Figée à l'ouverture, comme le créateur : c'est un
+     * repère, pas un état.</p>
+     */
+    @Column(name = "reference_lisible", length = 100, updatable = false)
+    private String referenceLisible;
+
     @Column(name = "etat_code", nullable = false)
     private String etatCode;
 
@@ -80,6 +92,21 @@ public class WorkflowValidationInstance implements IWorkflowData {
      */
     @Column(name = "createur_id", updatable = false)
     private String createurId;
+
+    /**
+     * Structure où le dossier se trouve.
+     *
+     * <p>Inscrite à l'ouverture — la structure de rattachement du déclarant, lue dans son jeton —
+     * puis déplacée par toute étape qui désigne une structure destinataire. C'est elle qui borne
+     * les notifications d'étape : le rôle responsable d'une étape est porté dans toutes les
+     * structures, et prévenir tous ses porteurs revenait à écrire à la plateforme entière pour un
+     * dossier qui ne concerne qu'une structure.</p>
+     *
+     * <p>Absente — jeton sans structure, instance antérieure à la colonne — la notification
+     * retrouve son ancienne portée plutôt que de se taire.</p>
+     */
+    @Column(name = "structure_id")
+    private String structureId;
 
     /**
      * Faits établis sur ce dossier, séparés par des virgules.

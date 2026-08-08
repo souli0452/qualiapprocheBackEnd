@@ -40,6 +40,18 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.DOCUMENT_URL;
+import com.qualiapproche.common.dto.NiveauConfidentialiteDto;
+import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.common.response.ApiResponse;
+import com.qualiapproche.support.client.WorkflowClient;
+import com.qualiapproche.support.dto.DocumentUpdateDto;
+import com.qualiapproche.support.model.DocumentStructureAccess;
+import com.qualiapproche.support.service.EtatsDuCircuitService;
+import com.qualiapproche.support.service.NiveauxConfidentialiteService;
+import com.qualiapproche.support.service.ProfilUtilisateurService;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Slf4j
 @RestController
@@ -56,10 +68,10 @@ public class QmsDocumentController {
     private final QmsDocumentService documentService;
     private final QmsAuditLogService auditLogService;
     private final DocumentMapper documentMapper;
-    private final com.qualiapproche.support.client.WorkflowClient workflowClient;
-    private final com.qualiapproche.support.service.EtatsDuCircuitService etatsDuCircuit;
-    private final com.qualiapproche.support.service.NiveauxConfidentialiteService niveauxConfidentialiteService;
-    private final com.qualiapproche.support.service.ProfilUtilisateurService profilUtilisateurService;
+    private final WorkflowClient workflowClient;
+    private final EtatsDuCircuitService etatsDuCircuit;
+    private final NiveauxConfidentialiteService niveauxConfidentialiteService;
+    private final ProfilUtilisateurService profilUtilisateurService;
 
     /**
      * Niveaux de confidentialité proposables à l'appelant comme critère de recherche.
@@ -76,10 +88,10 @@ public class QmsDocumentController {
      */
     @GetMapping("/filtres/niveaux-confidentialite")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<
-            List<com.qualiapproche.common.dto.NiveauConfidentialiteDto>>> niveauxFiltrables() {
+    public ResponseEntity<ApiResponse<
+            List<NiveauConfidentialiteDto>>> niveauxFiltrables() {
         var profil = profilUtilisateurService.profilCourant();
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(
+        return ResponseEntity.ok(ApiResponse.success(
                 niveauxConfidentialiteService.visiblesPour(
                         profil.roles(), profil.estAdministrateur())));
     }
@@ -136,12 +148,12 @@ public class QmsDocumentController {
      */
     @PutMapping("/{id}/niveau-confidentialite")
     @PreAuthorize("@perm.canUpdate(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<String>> reclasser(
+    public ResponseEntity<ApiResponse<String>> reclasser(
             @PathVariable("id") UUID id,
             @RequestParam(value = "niveauConfidentialiteId", required = false) String niveauId,
             @RequestParam(value = "niveauConfidentialiteLibelle", required = false) String niveauLibelle) {
         String avertissement = documentService.reclasser(id, niveauId, niveauLibelle);
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(avertissement));
+        return ResponseEntity.ok(ApiResponse.success(avertissement));
     }
 
     @PostMapping("/{id}/workflow")
@@ -224,9 +236,9 @@ public class QmsDocumentController {
      */
     @GetMapping("/search")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<org.springframework.data.domain.Page<DocumentQmsDto>> searchDocuments(
-            @org.springdoc.core.annotations.ParameterObject
-            org.springframework.data.domain.Pageable pageable,
+    public ResponseEntity<Page<DocumentQmsDto>> searchDocuments(
+            @ParameterObject
+            Pageable pageable,
             @RequestParam(value = "query",               required = false) String query,
             @RequestParam(value = "documentType",        required = false) String documentType,
             @RequestParam(value = "serviceId",           required = false) String serviceId,
@@ -318,13 +330,13 @@ public class QmsDocumentController {
     @GetMapping("/a-traiter")
     @PreAuthorize("@perm.canRead(this)")
     @Operation(summary = "Documents sur lesquels l'appelant peut décider")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<List<DocumentQmsDto>>> aTraiter() {
+    public ResponseEntity<ApiResponse<List<DocumentQmsDto>>> aTraiter() {
         List<DocumentQms> documents = documentService.aTraiterParLAppelant();
         if (documents.isEmpty()) {
-            return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(List.of()));
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
         }
 
-        Map<UUID, com.qualiapproche.common.dto.WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
+        Map<UUID, WorkflowStateDto> etats = etatsDuCircuit.pourRessources(
                 documents.stream().map(DocumentQms::getId).toList());
 
         List<DocumentQmsDto> lignes = documents.stream()
@@ -334,7 +346,7 @@ public class QmsDocumentController {
                     return dto;
                 })
                 .toList();
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(lignes));
+        return ResponseEntity.ok(ApiResponse.success(lignes));
     }
 
     /**
@@ -363,9 +375,9 @@ public class QmsDocumentController {
      */
     @GetMapping("/stats/mensuel")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<com.qualiapproche.common.response.ApiResponse<Map<String, Long>>> getStatsMensuelles(
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getStatsMensuelles(
             @RequestParam(value = "mois", required = false, defaultValue = "12") int mois) {
-        return ResponseEntity.ok(com.qualiapproche.common.response.ApiResponse.success(
+        return ResponseEntity.ok(ApiResponse.success(
                 documentService.getDocumentsParMois(mois)));
     }
 
@@ -397,7 +409,7 @@ public class QmsDocumentController {
     @PreAuthorize("@perm.canUpdate(this)")
     public ResponseEntity<DocumentQmsDto> updateDocument(
             @PathVariable("id") UUID id,
-            @RequestBody com.qualiapproche.support.dto.DocumentUpdateDto dto) {
+            @RequestBody DocumentUpdateDto dto) {
         return ResponseEntity.ok(documentMapper.toDto(documentService.updateDocument(id, dto)));
     }
 
@@ -438,7 +450,7 @@ public class QmsDocumentController {
         DocumentQms doc = documentService.getDocumentById(id);
         DocumentQmsDto dto = versDtoSitue(doc);
         try {
-            com.qualiapproche.common.dto.WorkflowStateDto state = workflowClient.getWorkflowState(id);
+            WorkflowStateDto state = workflowClient.getWorkflowState(id);
             dto.setWorkflowState(state);
         } catch (Exception e) {
             log.warn("Could not fetch workflow state for document {}: {}", id, e.getMessage());
@@ -482,7 +494,7 @@ public class QmsDocumentController {
      */
     @PostMapping("/{id}/share/structure")
     @PreAuthorize("@perm.canUpdate(this)")
-    public ResponseEntity<com.qualiapproche.support.model.DocumentStructureAccess> partagerAvecStructure(
+    public ResponseEntity<DocumentStructureAccess> partagerAvecStructure(
             @PathVariable("id") UUID id,
             @RequestParam("structureId") String structureId,
             @RequestParam(value = "structureLibelle", required = false) String structureLibelle) {
@@ -502,7 +514,7 @@ public class QmsDocumentController {
     /** Structures avec lesquelles ce document est partagé. */
     @GetMapping("/{id}/share/structure")
     @PreAuthorize("@perm.canRead(this)")
-    public ResponseEntity<List<com.qualiapproche.support.model.DocumentStructureAccess>> getPartagesStructure(
+    public ResponseEntity<List<DocumentStructureAccess>> getPartagesStructure(
             @PathVariable("id") UUID id) {
         return ResponseEntity.ok(documentService.getPartagesStructure(id));
     }
