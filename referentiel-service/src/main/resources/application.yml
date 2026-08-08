@@ -93,3 +93,15 @@ eureka:
 docs:
   pj:
     directory: ./uploads/pj
+
+# ===============================
+# Licence de l'installation
+# ===============================
+qualisira:
+  licence:
+    # Clé publique de l'éditeur : elle permet de VÉRIFIER une licence, jamais d'en signer une.
+    # Sa présence dans le produit livré ne donne donc aucun moyen d'en fabriquer. Elle est
+    # fournie par l'outil d'émission (écran « Clé de vérification »).
+    cle-publique: ${QUALISIRA_CLE_PUBLIQUE:MCowBQYDK2VwAyEAs2ajPoJ/faSW2FTtOV9tVXc/k3Fk2ZNc3SwQsyEJbxg}
+    # Durée de l'essai gratuit, accordé une seule fois par installation.
+    essai-jours: ${QUALISIRA_ESSAI_JOURS:7}

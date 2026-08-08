@@ -29,6 +29,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/login", "/api/v1/structures/direction").permitAll()
+                        // L'état de la licence est lu par la gateway avant toute résolution
+                        // d'utilisateur : c'est lui qui décide si une écriture est recevable, et
+                        // l'exiger authentifié ferait échouer ce contrôle sur les requêtes mêmes
+                        // qu'il doit arbitrer. Il ne divulgue que les modules souscrits et
+                        // l'échéance — l'installation d'une licence, elle, reste réservée.
+                        .requestMatchers("/api/v1/licence/etat").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakRoleConverter)))

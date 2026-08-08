@@ -109,3 +109,37 @@ gateway:
   # Durée de mise en cache (par token) des permissions applicatives résolues via user-service
   # avant de les ré-interroger. Voir AuthCookieFilter / UserPermissionsCache.
   permissions-cache-ttl-seconds: ${GATEWAY_PERMISSIONS_CACHE_TTL_SECONDS:60}
+
+  # Durée de mise en cache de l'état de la licence. Une licence ne change qu'à son installation :
+  # une minute de retard au plus, contre un appel au référentiel à chaque requête.
+  licence-cache-ttl-seconds: ${GATEWAY_LICENCE_CACHE_TTL_SECONDS:60}
+
+  licence:
+    # Chemins soustraits au contrôle, même en écriture : tout ce sans quoi une installation
+    # expirée ne pourrait plus jamais être réactivée. Se connecter et poser une licence doivent
+    # rester possibles, sinon le blocage se retourne contre nous.
+    exemptions:
+      - /user-service/api/v1/login
+      - /user-service/api/v1/logout
+      - /user-service/api/v1/refresh
+      - /user-service/api/v1/initiate-reset-pwd
+      - /referentiel-service/api/v1/licence
+
+    # Module exigé selon le début du chemin ; le préfixe le plus long l'emporte. Les réclamations
+    # et les risques vivent dans le même service que les non-conformités, et relèvent pourtant de
+    # modules distincts — d'où les préfixes fins.
+    #
+    # Un chemin qui ne figure pas ici n'exige aucun module : seule la validité de la licence est
+    # vérifiée. C'est le cas de la configuration, des utilisateurs et du moteur de workflow, qui
+    # sert tous les modules à la fois.
+    modules:
+      /amelioration-service/api/v1/reclamation: RECLAMATION
+      /amelioration-service/api/v1/risque: RISQUE
+      /amelioration-service: NON_CONFORMITE
+      /support-service: DOCUMENTAIRE
+      /referentiel-service/api/v1/formation: FORMATION
+      /referentiel-service/api/v1/fournisseur: FORMATION
+      /referentiel-service/api/v1/exigence: REGLEMENTATION
+      /evaluation-service: EVALUATION
+      /planification-service: AUDIT
+      /contexte-service: CONTEXTE
