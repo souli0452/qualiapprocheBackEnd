@@ -1,8 +1,8 @@
 
 package com.qualiapproche.referentiel.service.impl;
 
+import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.dto.StructureDto;
-import com.qualiapproche.referentiel.entities.AbonnementDirection;
 import com.qualiapproche.referentiel.entities.Structure;
 import com.qualiapproche.referentiel.entities.mappers.StructureMapper;
 import com.qualiapproche.common.enumeration.TypeStructure;
@@ -22,10 +22,9 @@ import org.springframework.data.domain.Sort;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
-import com.qualiapproche.common.enumeration.ModuleAbonnement;
 import com.qualiapproche.common.utils.CryptoUtils;
-import com.qualiapproche.referentiel.repository.AbonnementDirectionRepository;
-import java.time.temporal.ChronoUnit;
+import com.qualiapproche.referentiel.service.CodeDeLInstallation;
+import com.qualiapproche.referentiel.service.LicenceInstalleeService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -35,12 +34,14 @@ import org.springframework.data.jpa.domain.Specification;
 public class StructureServiceImpl implements StructureService {
     private final StructureRepository structureRepository;
     private final StructureMapper mapper;
-    private final AbonnementDirectionRepository abonnementDirectionRepository;
+    private final LicenceInstalleeService licenceInstalleeService;
+    private final CodeDeLInstallation installation;
 
     @Override
     public StructureDto saveStructure(StructureDto structureDto) {
         Structure structure = mapper.toEntity(structureDto);
         structure.setTitreHonorifiqueSignataire(structureDto.getTitreHonorifiqueSignataire());
+        reporterLeCodePartenaire(structure);
 
         if ((isNull(structure.getId()) && structureRepository.existsByLibelleLong(structure.getLibelleLong())
                 || nonNull(structure.getId()) && structureRepository
@@ -72,6 +73,36 @@ public class StructureServiceImpl implements StructureService {
         structure = structureRepository.save(structure);
 
         return mapper.toDto(structure);
+    }
+
+    /**
+     * Donne à la structure le code partenaire de l'installation, que l'écran ne connaît pas.
+     *
+     * <p>Le code ne figure dans aucun DTO : il n'entre pas et ne ressort pas, ni en consultation
+     * ni en liste. Il est posé ici, où qu'une structure soit créée ou modifiée, parce qu'il
+     * appartient à l'installation et non à qui remplit le formulaire.</p>
+     *
+     * <p><b>À la création</b>, la structure hérite du code de l'installation : toutes les
+     * structures d'une même installation relèvent du même partenaire, et une seule qui en
+     * manquerait suffirait à créer un angle mort.</p>
+     *
+     * <p><b>À la modification</b>, le code est relu en base et reporté. C'est indispensable :
+     * l'enregistrement reconstruit l'entité depuis le DTO, et une colonne absente du DTO serait
+     * écrite à nul. Modifier le libellé d'une direction depuis l'écran effacerait le code, et le
+     * contrôle du destinataire s'éteindrait sans que rien ne le dise — jusqu'au jour où la licence
+     * d'un autre client serait acceptée.</p>
+     *
+     * <p>Dans les deux cas, un enregistrement ne peut pas <i>changer</i> le code : il vient de
+     * l'installation, et rien de ce que l'on saisit ne l'atteint.</p>
+     */
+    private void reporterLeCodePartenaire(Structure structure) {
+        if (nonNull(structure.getId())) {
+            structureRepository.findById(structure.getId())
+                    .ifPresent(existante -> structure.setCodePartenaire(existante.getCodePartenaire()));
+            return;
+        }
+        String code = installation.attendu();
+        structure.setCodePartenaire(code.isBlank() ? null : CryptoUtils.encrypt(code));
     }
 
     @Override
@@ -158,89 +189,35 @@ public class StructureServiceImpl implements StructureService {
         return mapper.toDto(structures.get(0));
     }
 
+    /**
+     * La direction, accompagnée de l'état de la licence installée.
+     *
+     * <p>Les champs de licence proviennent de {@link LicenceInstalleeService}, seule source de
+     * vérité : c'est la même que celle dont la passerelle se sert pour autoriser ou refuser une
+     * écriture. Ils étaient auparavant lus dans {@code abonnements_directions}, alimentée au
+     * démarrage par un fichier du produit — les écrans annonçaient donc des modules ouverts et
+     * une licence valide pendant que la passerelle répondait 402.</p>
+     *
+     * <p>Sans licence posée, {@code licenceActive} est faux et la liste des modules vide : la
+     * consultation reste ouverte, les actions non. L'écran dédié propose alors l'essai gratuit.</p>
+     */
     @Override
     public StructureDto getDirection() {
-        log.info("Récupération de la licence globale (Tenant License)...");
-
-        // Requête robuste : charge directement les abonnements des structures de type DIRECTION
-        // avec JOIN FETCH (évite le lazy loading) et ordrée par date de création
-        List<AbonnementDirection> allAbos = abonnementDirectionRepository.findGlobalDirectionLicense();
-
-        if (allAbos.isEmpty()) {
-            log.error("DEBUG LICENCE: Aucun abonnement trouvé dans la table 'abonnements_directions'.");
-            // Tentative de renvoyer au moins la direction avec son statut par défaut
-            List<Structure> directions = structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION);
-            if (!directions.isEmpty()) {
-                Structure targetDir = directions.get(0);
-                StructureDto dto = mapper.toDto(targetDir);
-                // On respecte le statut 'licenceActive' de l'entité Structure si aucun
-                // abonnement spécifique n'existe
-                dto.setLicenceActive(targetDir.getLicenceActive() != null && targetDir.getLicenceActive());
-                dto.setModulesSubscribed(new java.util.ArrayList<>()); // Liste vide par défaut
-                dto.setLicenseDaysRemaining(0L);
-                return dto;
-            }
+        List<Structure> directions = structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION);
+        if (directions.isEmpty()) {
+            log.error("Aucune structure de type DIRECTION n'existe.");
             return null;
         }
 
-        AbonnementDirection abo = allAbos.get(0);
-        log.info("DEBUG LICENCE: Utilisation de l'abonnement ID: {}", abo.getId());
+        StructureDto dto = mapper.toDto(directions.get(0));
+        EtatLicenceDto licence = licenceInstalleeService.etat();
 
-        // On cherche la direction liée ou on prend la première direction racine
-        Structure targetDir = abo.getDirection();
-        if (targetDir == null) {
-            List<Structure> directions = structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION);
-            if (!directions.isEmpty()) {
-                targetDir = directions.get(0);
-            }
-        }
+        dto.setLicenceActive(licence.isActionsOuvertes());
+        dto.setModulesSubscribed(licence.getModules());
+        dto.setDateDebutLicence(licence.getDebut() != null ? licence.getDebut().atStartOfDay() : null);
+        dto.setDateFinLicence(licence.getFin() != null ? licence.getFin().atStartOfDay() : null);
+        dto.setLicenseDaysRemaining("ABSENTE".equals(licence.getStatut()) ? 0L : licence.getJoursRestants());
 
-        if (targetDir == null) {
-            log.error("DEBUG LICENCE: Aucune direction trouvée pour porter l'abonnement.");
-            return null;
-        }
-
-        StructureDto dto = mapper.toDto(targetDir);
-        dto.setDateDebutLicence(abo.getDateDebut());
-        dto.setDateFinLicence(abo.getDateFin());
-
-        if (abo.getDateFin() != null) {
-            long days = ChronoUnit.DAYS.between(java.time.LocalDateTime.now(), abo.getDateFin());
-            dto.setLicenseDaysRemaining(days);
-            dto.setLicenceActive(days >= -7);
-            log.info("DEBUG LICENCE: Jours restants: {}, Active: {}", days, dto.getLicenceActive());
-        } else {
-            dto.setLicenceActive(true); // Si pas de date de fin, on considère active par défaut pour le tenant
-            dto.setLicenseDaysRemaining(999L);
-        }
-
-        // Décryptage des modules
-        if (abo.getLicense() != null) {
-            try {
-                log.info("DEBUG LICENCE: Valeur cryptée en base: {}", abo.getLicense());
-                String decrypted = CryptoUtils.decrypt(abo.getLicense());
-                if (decrypted != null) {
-                    log.info("DEBUG LICENCE: Modules décryptés: {}", decrypted);
-                    dto.setModulesSubscribed(java.util.Arrays.asList(decrypted.split(",")));
-                }
-            } catch (Exception e) {
-                log.error("DEBUG LICENCE: Échec décryptage: {}. Tentative lecture en clair...", e.getMessage());
-                // Fallback si jamais c'est stocké en clair par erreur
-                if (abo.getLicense().contains(",")) {
-                    dto.setModulesSubscribed(java.util.Arrays.asList(abo.getLicense().split(",")));
-                } else if (abo.getLicense().contains("NON_CONFORMITE")) {
-                    dto.setModulesSubscribed(java.util.Collections.singletonList(abo.getLicense()));
-                }
-            }
-        } else {
-            // Abonnement sans licence : tous les modules sont ouverts. La liste était écrite à la
-            // main et nommait « QMS », « DOCUMENT », « ACTION », « FOURNISSEUR » — quatre noms
-            // absents de ModuleAbonnement, donc reconnus par aucun garde côté front. Elle est
-            // désormais dérivée de l'énumération, seule référence des noms de module.
-            dto.setModulesSubscribed(java.util.Arrays.stream(
-                    ModuleAbonnement.values())
-                    .map(Enum::name).toList());
-        }
         return dto;
     }
 

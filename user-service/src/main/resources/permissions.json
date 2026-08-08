@@ -490,6 +490,11 @@
     "module": "Référentiel"
   },
   {
+    "label": "Installer la licence de l'installation",
+    "value": "licence-write",
+    "module": "Référentiel"
+  },
+  {
     "label": "Consulter les catégories de fichier",
     "value": "categorie-fichier-read",
     "module": "Référentiel"

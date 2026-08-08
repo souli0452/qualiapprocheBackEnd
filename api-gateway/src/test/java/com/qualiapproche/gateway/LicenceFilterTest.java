@@ -49,6 +49,9 @@ class LicenceFilterTest {
         modules.put("/support-service", "DOCUMENTAIRE");
         filtre.setModules(modules);
         filtre.setExemptions(List.of("/user-service/api/v1/login",
+                "/user-service/api/v1/initiate-reset-pwd",
+                "/user-service/api/v1/reinitialize-pwd",
+                "/user-service/api/v1/update-pwd",
                 "/referentiel-service/api/v1/licence"));
 
         laissePasser = new AtomicBoolean(false);
@@ -138,6 +141,37 @@ class LicenceFilterTest {
         filtre.filter(echange, suite).block();
 
         assertThat(laissePasser).isTrue();
+    }
+
+    @Test
+    @DisplayName("Reprendre la main sur son mot de passe reste possible, licence échue")
+    void motDePasse_toujoursOuvert() {
+        licence(false);
+
+        // La réinitialisation tient en deux temps. Exempter la demande sans la reprise laissait
+        // l'utilisateur devant un lien de courriel qui n'aboutissait pas.
+        for (String chemin : List.of("/user-service/api/v1/initiate-reset-pwd",
+                "/user-service/api/v1/reinitialize-pwd",
+                "/user-service/api/v1/update-pwd")) {
+            laissePasser.set(false);
+            filtre.filter(requete(HttpMethod.PUT, chemin), suite).block();
+            assertThat(laissePasser).as(chemin).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("Réinitialiser le mot de passe d'un tiers reste soumis à la licence")
+    void motDePasseDUnTiers_soumisALaLicence() {
+        licence(false);
+        MockServerWebExchange echange = requete(HttpMethod.PATCH,
+                "/user-service/api/v1/users/reset-password");
+
+        // Administrer les comptes des autres n'est pas récupérer son propre accès : rien n'oblige
+        // à l'ouvrir pour qu'une installation expirée reste réactivable.
+        filtre.filter(echange, suite).block();
+
+        assertThat(laissePasser).isFalse();
+        assertThat(statut(echange)).isEqualTo(402);
     }
 
     // ------------------------------------------------------------ modules souscrits

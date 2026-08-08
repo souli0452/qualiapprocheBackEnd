@@ -4,10 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.common.enumeration.TypeStructure;
 import com.qualiapproche.common.dto.auth.KcUserDto;
+import com.qualiapproche.common.utils.CryptoUtils;
 import com.qualiapproche.referentiel.client.UserClient;
-import com.qualiapproche.referentiel.entities.AbonnementDirection;
 import com.qualiapproche.referentiel.entities.Structure;
-import com.qualiapproche.referentiel.repository.AbonnementDirectionRepository;
 import com.qualiapproche.referentiel.repository.StructureRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,17 +16,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
-import com.qualiapproche.common.utils.CryptoUtils;
 
+/**
+ * Amorçage d'une nouvelle installation : la direction et son super administrateur.
+ *
+ * <p>Ce fichier ne décide rien de ce qui est permis. Il a longtemps porté aussi la licence —
+ * dates et modules souscrits, chiffrés avec une clé livrée dans le produit : n'importe quel
+ * détenteur du code pouvait s'accorder tous les modules jusqu'en 2099 en éditant un JSON. La
+ * licence est désormais signée par l'éditeur et posée par un administrateur
+ * ({@link LicenceInstalleeService}) ; une installation neuve démarre donc sans licence, et
+ * propose l'essai gratuit.</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TenantProvisioningService implements CommandLineRunner {
 
     private final StructureRepository structureRepository;
-    private final AbonnementDirectionRepository abonnementDirectionRepository;
     private final UserClient userClient;
     private final ObjectMapper objectMapper;
 
@@ -58,62 +64,25 @@ public class TenantProvisioningService implements CommandLineRunner {
         String libelleLong = node.get("libelleLong").asText();
         String libelleCourt = node.get("libelleCourt").asText();
 
-        if (structureRepository.findByLibelleLong(libelleLong).isPresent()) {
-            log.info("Direction {} already exists, updating license if necessary.", libelleLong);
-            Structure existingDirection = structureRepository.findByLibelleLong(libelleLong).get();
-            updateLicenseForExistingDirection(existingDirection, node);
+        Structure direction = structureRepository.findByLibelleLong(libelleLong).orElse(null);
 
-            // Tenter de provisionner l'admin même si la direction existe
-            JsonNode adminNode = node.get("superAdmin");
-            if (adminNode != null) {
-                try {
-                    provisionSuperAdmin(existingDirection, adminNode);
-                } catch (Exception e) {
-                    log.warn("Non-critical error during Super Admin provisioning: {}.", e.getMessage());
-                }
-            }
-            return;
+        if (direction != null) {
+            log.info("Direction {} already exists, skipping creation.", libelleLong);
+            // Le code, lui, est reposé si elle n'en a pas : une installation déjà en service
+            // n'aurait sinon jamais de repère, et n'exercerait aucun contrôle du destinataire —
+            // précisément là où il compte le plus.
+            poserLeCodeSiAbsent(direction, node);
+        } else {
+            log.info("Provisioning Direction: {}", libelleLong);
+            direction = structureRepository.save(Structure.builder()
+                    .libelleLong(libelleLong)
+                    .libelleCourt(libelleCourt)
+                    .email(node.get("email").asText())
+                    .typeStructure(TypeStructure.DIRECTION)
+                    .licenceActive(true)
+                    .codePartenaire(codeObfusque(node))
+                    .build());
         }
-
-        log.info("Provisioning Direction: {}", libelleLong);
-
-        Structure direction = Structure.builder()
-                .libelleLong(libelleLong)
-                .libelleCourt(libelleCourt)
-                .email(node.get("email").asText())
-                .typeStructure(TypeStructure.DIRECTION)
-                .licenceActive(true)
-                .build();
-
-        direction = structureRepository.save(direction);
-
-        // Provision Subscription (Encrypted)
-        JsonNode modulesNode = node.get("modulesSubscribed");
-        List<String> modules = new ArrayList<>();
-        if (modulesNode != null && modulesNode.isArray()) {
-            for (JsonNode m : modulesNode) {
-                modules.add(m.asText());
-            }
-        }
-
-        String modulesRaw = String.join(",", modules);
-        String encryptedLicense = CryptoUtils.encrypt(modulesRaw);
-
-        AbonnementDirection abonnement = AbonnementDirection.builder()
-                .direction(direction)
-                .license(encryptedLicense)
-                .active(true)
-                .build();
-
-        if (node.has("dateDebutLicence")) {
-            abonnement.setDateDebut(java.time.LocalDateTime.parse(node.get("dateDebutLicence").asText()));
-        }
-        if (node.has("dateFinLicence")) {
-            abonnement.setDateFin(java.time.LocalDateTime.parse(node.get("dateFinLicence").asText()));
-        }
-
-        abonnementDirectionRepository.save(abonnement);
-        log.info("License created and saved for direction: {}", direction.getLibelleLong());
 
         // Super Admin Info - ISOLATED to prevent rollback
         JsonNode adminNode = node.get("superAdmin");
@@ -121,9 +90,44 @@ public class TenantProvisioningService implements CommandLineRunner {
             try {
                 provisionSuperAdmin(direction, adminNode);
             } catch (Exception e) {
-                log.warn("Non-critical error during Super Admin provisioning: {}. License remains active.", e.getMessage());
+                log.warn("Non-critical error during Super Admin provisioning: {}.", e.getMessage());
             }
         }
+    }
+
+    /**
+     * Le code du partenaire, tel qu'il est rangé en base : obfusqué.
+     *
+     * <p>Il s'écrit en clair dans {@code tenant-init.json} — un fichier de livraison doit se
+     * relire — et n'est chiffré qu'en base. Sur ce que cette obfuscation vaut, voir
+     * {@link CodeDeLInstallation} : la clé étant livrée avec le produit, elle décourage la
+     * retouche désinvolte d'une colonne, elle ne l'interdit pas.</p>
+     *
+     * <p>Absent, rien n'est posé : l'installation n'exerce alors aucun contrôle du destinataire,
+     * et c'est le démarrage qui le dit.</p>
+     */
+    private String codeObfusque(JsonNode node) {
+        JsonNode code = node.get("code");
+        if (code == null || code.asText().isBlank()) {
+            log.warn("Aucun code partenaire dans tenant-init.json : cette installation acceptera "
+                    + "toute licence authentique, y compris celle d'un autre client.");
+            return null;
+        }
+        return CryptoUtils.encrypt(code.asText().trim());
+    }
+
+    private void poserLeCodeSiAbsent(Structure direction, JsonNode node) {
+        if (direction.getCodePartenaire() != null && !direction.getCodePartenaire().isBlank()) {
+            return;
+        }
+        String obfusque = codeObfusque(node);
+        if (obfusque == null) {
+            return;
+        }
+        direction.setCodePartenaire(obfusque);
+        structureRepository.save(direction);
+        log.info("Code partenaire posé sur la direction {} : les licences y seront désormais "
+                + "confrontées.", direction.getLibelleLong());
     }
 
     private void provisionSuperAdmin(Structure direction, JsonNode adminNode) {
@@ -149,41 +153,5 @@ public class TenantProvisioningService implements CommandLineRunner {
                 log.error("Error creating Super Admin: {}", e.getMessage());
             }
         }
-        }
-
-
-    private void updateLicenseForExistingDirection(Structure direction, JsonNode node) {
-        // Recherche de l'abonnement par UUID direct (robuste, basé sur subscribed_direction_id)
-        // Double fallback : par UUID d'abord, puis par entité, puis création si rien trouvé
-        AbonnementDirection abo = abonnementDirectionRepository.findByDirectionUUID(direction.getId())
-                .orElseGet(() -> abonnementDirectionRepository.findByDirection(direction)
-                        .orElseGet(() -> {
-                            log.info("Aucun abonnement trouvé pour la direction '{}', création d'un nouvel abonnement.", direction.getLibelleLong());
-                            return AbonnementDirection.builder()
-                                    .direction(direction)
-                                    .active(true)
-                                    .build();
-                        }));
-
-        // Mise à jour systématique de toutes les données depuis tenant-init.json (update idempotent)
-        if (node.has("dateDebutLicence")) {
-            abo.setDateDebut(java.time.LocalDateTime.parse(node.get("dateDebutLicence").asText()));
-        }
-        if (node.has("dateFinLicence")) {
-            abo.setDateFin(java.time.LocalDateTime.parse(node.get("dateFinLicence").asText()));
-        }
-        if (node.has("modulesSubscribed")) {
-            List<String> modules = new java.util.ArrayList<>();
-            for (JsonNode m : node.get("modulesSubscribed")) {
-                modules.add(m.asText());
-            }
-            String modulesRaw = String.join(",", modules);
-            String encryptedLicense = CryptoUtils.encrypt(modulesRaw);
-            abo.setLicense(encryptedLicense);
-            log.info("Modules mis à jour pour la direction '{}': {}", direction.getLibelleLong(), modules);
-        }
-
-        abonnementDirectionRepository.save(abo);
-        log.info("Licence sauvegardée/mise à jour avec succès pour la direction: {}", direction.getLibelleLong());
     }
 }

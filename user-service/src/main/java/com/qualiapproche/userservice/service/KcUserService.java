@@ -57,6 +57,7 @@ public class KcUserService {
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final StructureClient structureClient;
     private final SendMailService sendMailService;
+    private final PlafondDUtilisateurs plafondDUtilisateurs;
     @Value("${frontend.url}")
     private String frontendUrl;
 
@@ -160,6 +161,11 @@ public class KcUserService {
     }
 
     public KcUserDto createUser(KcUserDto kcUserDto) {
+        // Avant tout le reste : la licence borne le nombre de comptes actifs, et le dépassement
+        // se dit à l'utilisateur plutôt qu'après coup. Créer le compte puis le refuser laisserait
+        // un compte à demi formé dans Keycloak.
+        plafondDUtilisateurs.verifierAvantCreation();
+
         UserRepresentation user = new UserRepresentation();
         user.setUsername(kcUserDto.getUsername());
         user.setEmail(kcUserDto.getEmail());
@@ -244,6 +250,11 @@ public class KcUserService {
     }
 
     public void changeUserStatus(String userId, boolean enabled) {
+        if (enabled) {
+            // Réactiver reprend une place. Sans ce contrôle, le plafond se contournait en trois
+            // gestes : désactiver, créer, réactiver.
+            plafondDUtilisateurs.verifierAvantReactivation();
+        }
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
         user.setEnabled(enabled);
         keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).update(user);

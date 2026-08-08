@@ -28,15 +28,25 @@ import static com.qualiapproche.common.utils.ApiUrls.QUALI_APPROCHE_ROOT_URL;
  *
  * <p>Installer une licence ou démarrer un essai reste réservé à l'administration : ce sont des
  * décisions qui engagent l'organisation.</p>
+ *
+ * <p>Le droit s'accorde par la permission {@code licence-write}, attribuable depuis l'écran des
+ * rôles comme n'importe quelle autre — un administrateur fonctionnel peut donc renouveler sans
+ * détenir toute la configuration globale.</p>
+ *
+ * <p>{@code SUPER_ADMIN} y figure en plus, explicitement. Sur une installation neuve, il est le
+ * seul compte existant ; si le droit de poser une licence tenait à la seule permission, et
+ * qu'elle vienne à être retirée du rôle, l'installation deviendrait irrécupérable — plus
+ * personne ne pourrait ni renouveler ni démarrer d'essai.</p>
  */
 @RestController
 @RequestMapping(QUALI_APPROCHE_ROOT_URL + "/licence")
 @Tag(name = "Licence", description = "Licence de l'installation : état, installation, essai")
 @RequirePermissions(
-        create = {"config-global-write", "CONFIG_GLOBAL_MANAGE"},
-        update = {"config-global-write", "CONFIG_GLOBAL_MANAGE"},
-        read = {"config-global-read", "config-global-write", "CONFIG_READ", "CONFIG_GLOBAL_MANAGE"},
-        delete = {"config-global-write", "CONFIG_GLOBAL_MANAGE"}
+        create = {"SUPER_ADMIN", "licence-write", "config-global-write", "CONFIG_GLOBAL_MANAGE"},
+        update = {"SUPER_ADMIN", "licence-write", "config-global-write", "CONFIG_GLOBAL_MANAGE"},
+        read = {"licence-write", "config-global-read", "config-global-write", "CONFIG_READ",
+                "CONFIG_GLOBAL_MANAGE"},
+        delete = {"SUPER_ADMIN", "licence-write", "config-global-write", "CONFIG_GLOBAL_MANAGE"}
 )
 @RequiredArgsConstructor
 public class LicenceController {
@@ -53,7 +63,7 @@ public class LicenceController {
             description = "Le texte est vérifié avant d'être enregistré ; les modules s'ouvrent "
                     + "immédiatement, sans redémarrage.")
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('SUPER_ADMIN', 'CONFIG_GLOBAL_MANAGE', 'config-global-write')")
+    @PreAuthorize("@perm.canCreate(this)")
     public ResponseEntity<ApiResponse<EtatLicenceDto>> installer(@RequestBody Map<String, String> corps) {
         return ResponseEntity.ok(ApiResponse.success(service.installer(corps.get("licence"))));
     }
@@ -61,7 +71,7 @@ public class LicenceController {
     @Operation(summary = "Démarrer l'essai gratuit",
             description = "Une seule fois par installation, tous les modules ouverts.")
     @PostMapping("/essai")
-    @PreAuthorize("hasAnyAuthority('SUPER_ADMIN', 'CONFIG_GLOBAL_MANAGE', 'config-global-write')")
+    @PreAuthorize("@perm.canCreate(this)")
     public ResponseEntity<ApiResponse<EtatLicenceDto>> essai() {
         return ResponseEntity.ok(ApiResponse.success(service.demarrerEssai()));
     }

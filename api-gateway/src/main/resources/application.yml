@@ -118,11 +118,22 @@ gateway:
     # Chemins soustraits au contrôle, même en écriture : tout ce sans quoi une installation
     # expirée ne pourrait plus jamais être réactivée. Se connecter et poser une licence doivent
     # rester possibles, sinon le blocage se retourne contre nous.
+    #
+    # Reprendre la main sur son propre compte en fait partie. `initiate-reset-pwd` envoie le
+    # courriel, `reinitialize-pwd` pose le nouveau mot de passe : exempter la première sans la
+    # seconde laissait la réinitialisation à mi-chemin, le lien reçu menant à un refus. Et
+    # `update-pwd` sert le mot de passe temporaire de la première connexion — le refuser
+    # enfermerait dehors l'administrateur venu poser la licence.
+    #
+    # `/users/reset-password` n'y figure volontairement pas : un administrateur qui réinitialise
+    # le mot de passe d'un tiers administre des comptes, il ne récupère pas son accès.
     exemptions:
       - /user-service/api/v1/login
       - /user-service/api/v1/logout
       - /user-service/api/v1/refresh
       - /user-service/api/v1/initiate-reset-pwd
+      - /user-service/api/v1/reinitialize-pwd
+      - /user-service/api/v1/update-pwd
       - /referentiel-service/api/v1/licence
 
     # Module exigé selon le début du chemin ; le préfixe le plus long l'emporte. Les réclamations

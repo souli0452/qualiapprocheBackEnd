@@ -23,19 +23,20 @@ class VerificateurDeLicenceTest {
     private static final String CLE_PUBLIQUE =
             "MCowBQYDK2VwAyEAs2ajPoJ/faSW2FTtOV9tVXc/k3Fk2ZNc3SwQsyEJbxg";
 
-    /** Licence émise par l'outil pour « CHU d'Abidjan », offre Essentiel, 25 utilisateurs. */
+    /** Licence émise par l'outil pour « CHU du Burkina Faso », offre Essentiel, 25 utilisateurs. */
     private static final String LICENCE =
-            "QSL1.eyJyZWYiOiJMSUMtMjAyNi0wMDAxIiwiY2xpIjoiQ0hVLUFCSiIsIm5vbSI6IkNIVSBkQWJpZGphbiIs"
-            + "ImRlYiI6IjIwMjYtMDgtMDgiLCJmaW4iOiIyMDI3LTA4LTA4IiwibW9kIjpbIkRPQ1VNRU5UQUlSRSIsIk5P"
-            + "Tl9DT05GT1JNSVRFIl0sInVzciI6MjUsInR5cCI6IkNPTU1FUkNJQUxFIiwiZWR0IjoiRXNzZW50aWVsIn0."
-            + "bCHZIXCW84ID2UrYjYkN3ogzcGKWWYAATIqSwhgZ5F5lVHrw5VIgZMOKkl3-hYrxbQaP1z8rL-hngy0dF1U1BA";
+            "QSL1.eyJyZWYiOiJMSUMtMjAyNi0wMDAxIiwiY2xpIjoiQ0hVLUJGIiwibm9tIjoiQ0hVIGR1IEJ1cmtpbmEg"
+            + "RmFzbyIsImRlYiI6IjIwMjYtMDgtMDgiLCJmaW4iOiIyMDI3LTA4LTA4IiwibW9kIjpbIkRPQ1VNRU5UQUlS"
+            + "RSIsIk5PTl9DT05GT1JNSVRFIl0sInVzciI6MjUsInR5cCI6IkNPTU1FUkNJQUxFIiwiZWR0IjoiRXNzZW50"
+            + "aWVsIn0.qxeikzlSkbN-lngX2D89cFqYzyufZAGavgmvS3mcfJbu1l-UBlDdU76ahm9ZONZlaae-PCWuJPfd"
+            + "qrMoYLc0Dw";
 
     @Test
     @DisplayName("Une licence émise par l'outil est reconnue par le produit")
     void licenceReelle() {
         ContenuDeLicence contenu = VerificateurDeLicence.lire(LICENCE, CLE_PUBLIQUE);
 
-        assertThat(contenu.partenaireCode()).isEqualTo("CHU-ABJ");
+        assertThat(contenu.partenaireCode()).isEqualTo("CHU-BF");
         assertThat(contenu.modules()).contains("NON_CONFORMITE", "DOCUMENTAIRE");
         assertThat(contenu.utilisateursMax()).isEqualTo(25);
         assertThat(contenu.estUnEssai()).isFalse();
@@ -51,7 +52,7 @@ class VerificateurDeLicenceTest {
         // la charge utile change, la signature ne suit pas.
         String forgee = parties[0] + "."
                 + Base64.getUrlEncoder().withoutPadding().encodeToString(
-                        ("{\"ref\":\"LIC-2036-9999\",\"cli\":\"CHU-ABJ\",\"deb\":\"2026-08-08\","
+                        ("{\"ref\":\"LIC-2036-9999\",\"cli\":\"CHU-BF\",\"deb\":\"2026-08-08\","
                                 + "\"fin\":\"2036-12-31\"}").getBytes())
                 + "." + parties[2];
 
@@ -76,7 +77,7 @@ class VerificateurDeLicenceTest {
         String colle = "  " + LICENCE.substring(0, 60) + "\n   " + LICENCE.substring(60) + "\n";
 
         assertThat(VerificateurDeLicence.lire(colle, CLE_PUBLIQUE).partenaireCode())
-                .isEqualTo("CHU-ABJ");
+                .isEqualTo("CHU-BF");
     }
 
     @Test

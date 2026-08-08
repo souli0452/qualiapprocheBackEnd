@@ -53,15 +53,20 @@ public class LicenceFilter implements GlobalFilter, Ordered {
     /**
      * Chemins soustraits au contrôle, même en écriture.
      *
-     * <p>Se connecter, se déconnecter, rafraîchir sa session, installer une licence ou démarrer
-     * un essai : tout ce sans quoi une installation expirée ne pourrait plus jamais être
-     * réactivée.</p>
+     * <p>Se connecter, se déconnecter, rafraîchir sa session, reprendre la main sur son propre
+     * mot de passe, installer une licence ou démarrer un essai : tout ce sans quoi une
+     * installation expirée ne pourrait plus jamais être réactivée.</p>
+     *
+     * <p>Réinitialiser le mot de passe d'un tiers n'en fait pas partie : c'est de
+     * l'administration de comptes, et elle attend une licence valide comme le reste.</p>
      */
     private List<String> exemptions = List.of(
             "/user-service/api/v1/login",
             "/user-service/api/v1/logout",
             "/user-service/api/v1/refresh",
             "/user-service/api/v1/initiate-reset-pwd",
+            "/user-service/api/v1/reinitialize-pwd",
+            "/user-service/api/v1/update-pwd",
             "/referentiel-service/api/v1/licence");
 
     /**

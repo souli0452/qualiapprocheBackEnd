@@ -11,6 +11,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class RoleInitializer implements CommandLineRunner {
+
+    /** Permission qui commande l'installation d'une licence (cf. {@code LicenceController}). */
+    private static final String PERMISSION_LICENCE = "licence-write";
 
     private final AppRoleRepository appRoleRepository;
 
@@ -35,6 +39,7 @@ public class RoleInitializer implements CommandLineRunner {
         // créé. Le dictionnaire s'enrichissant à chaque module, penser à compléter ce rôle
         // depuis l'écran quand un module arrive.
         creerSiAbsent("SUPER_ADMIN", "Accès total à toutes les fonctionnalités", toutesLesPermissions());
+        garantirLePouvoirDePoserUneLicence();
 
         // 2. Rôles responsables des circuits de validation.
         //
@@ -127,6 +132,33 @@ public class RoleInitializer implements CommandLineRunner {
         ));
 
         log.info("Rôles standards : traitement terminé.");
+    }
+
+    /**
+     * La seule permission que {@code SUPER_ADMIN} ne peut pas perdre : poser une licence.
+     *
+     * <p>Unique dérogation à la règle du dessous — les dotations ne sont pas réappliquées, le
+     * rôle appartient à l'administrateur. Celle-ci l'est, parce que son absence ne se répare pas
+     * depuis l'application : sans {@code licence-write}, plus personne ne peut installer de
+     * licence ni démarrer d'essai, et une installation dont la licence a pris fin reste
+     * définitivement en lecture seule. C'est aussi ce qui dote les installations existantes, dont
+     * le rôle a été créé avant que cette permission n'entre au dictionnaire.</p>
+     *
+     * <p>Elle est <b>ajoutée</b>, jamais retirée : les autres permissions du rôle restent celles
+     * qu'un administrateur a décidées.</p>
+     */
+    private void garantirLePouvoirDePoserUneLicence() {
+        appRoleRepository.findByName("SUPER_ADMIN").ifPresent(role -> {
+            if (role.getPermissions().contains(PERMISSION_LICENCE)) {
+                return;
+            }
+            List<String> permissions = new ArrayList<>(role.getPermissions());
+            permissions.add(PERMISSION_LICENCE);
+            role.setPermissions(permissions);
+            appRoleRepository.save(role);
+            log.info("Permission « {} » rendue au rôle SUPER_ADMIN : sans elle, aucune licence "
+                    + "ne pouvait plus être installée sur cette instance.", PERMISSION_LICENCE);
+        });
     }
 
     /**
