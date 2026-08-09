@@ -79,6 +79,15 @@ spring:
           writetimeout: ${MAIL_TIMEOUT_MS:10000}
 
 workflow:
+  gabarits-courriel:
+    # Rétablit au démarrage les gabarits de courriel livrés avec la version, par-dessus ceux de la
+    # base. Sans cela, une refonte des gabarits n'atteint jamais une installation déjà démarrée :
+    # les corps vivent en base dès le premier lancement et l'initialisation ne fait qu'ajouter les
+    # manquants.
+    #
+    # À n'activer que le temps d'un redémarrage, puis à remettre à false : laissé actif, il efface
+    # à CHAQUE démarrage les gabarits retouchés depuis l'écran d'administration.
+    rafraichir-au-demarrage: ${WORKFLOW_GABARITS_RAFRAICHIR:false}
   notifications:
     # Racine du frontal : c'est elle qui rend les liens des courriels cliquables. Vide, les
     # courriels partent sans lien plutôt qu'avec un bouton mort.
