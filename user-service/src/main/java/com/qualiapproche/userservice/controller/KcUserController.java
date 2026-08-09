@@ -2,6 +2,7 @@ package com.qualiapproche.userservice.controller;
 
 import com.qualiapproche.common.dto.auth.KcLoginRequestDto;
 import com.qualiapproche.common.dto.auth.KcUserDto;
+import com.qualiapproche.common.dto.auth.ProfilPersonnelDto;
 import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.userservice.service.KcUserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -79,6 +80,28 @@ public class KcUserController {
     @GetMapping("/me")
     public ResponseEntity<java.util.Map<String, Object>> getMe(HttpServletRequest request) {
         return ResponseEntity.ok(kcUserService.getMe(request));
+    }
+
+    /**
+     * Libre-service : l'utilisateur change son nom, son prénom et son téléphone.
+     *
+     * <p>Distinct de {@code PUT /users/update}, qui sert l'administration des comptes et porte
+     * aussi l'activation, la structure et les rôles. Employé depuis un écran de profil, dont le
+     * formulaire ne porte aucun de ces champs, il désactiverait le compte de l'intéressé et
+     * effacerait ses rôles applicatifs — un {@code boolean} primitif absent du corps vaut
+     * {@code false}, et une liste de rôles absente vaut « aucun ».</p>
+     *
+     * <p>Aucune habilitation n'est exigée, et il n'en faut pas : l'identité écrite est celle du
+     * jeton, si bien qu'on ne peut modifier que son propre compte.</p>
+     */
+    @Operation(summary = "Modifier son propre profil",
+            description = "Met à jour le nom, le prénom et le téléphone de l'utilisateur connecté, "
+                    + "et retourne sa fiche relue. L'identité vient de l'access_token : ni rôle, ni "
+                    + "structure, ni activation ne peuvent être touchés par cette voie.")
+    @PutMapping("/me")
+    public ResponseEntity<java.util.Map<String, Object>> mettreAJourMonProfil(
+            HttpServletRequest request, @RequestBody ProfilPersonnelDto profil) {
+        return ResponseEntity.ok(kcUserService.mettreAJourMonProfil(request, profil));
     }
 
     /**

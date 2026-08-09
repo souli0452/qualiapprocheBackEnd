@@ -58,6 +58,7 @@ public class KcUserService {
     private final StructureClient structureClient;
     private final SendMailService sendMailService;
     private final PlafondDUtilisateurs plafondDUtilisateurs;
+    private final ProfilPersonnel profilPersonnel;
     @Value("${frontend.url}")
     private String frontendUrl;
 
@@ -430,6 +431,9 @@ public class KcUserService {
         result.put("emailVerified", user.isEmailVerified());
         result.put("structure", structureId);
         result.put("fonction", getAttributeValue(attributes, "fonction"));
+        // Le téléphone est écrit à la création du compte mais n'était rendu par aucune lecture :
+        // l'écran « mon profil » ne pouvait donc pas afficher le numéro qu'il propose de changer.
+        result.put("phoneNumber", getAttributeValue(attributes, "phoneNumber"));
         result.put("roles", appRoles);
         result.put("appRoles", appRoles);
         result.put("permissions", permissions);
@@ -445,11 +449,30 @@ public class KcUserService {
      * L'identité est extraite depuis l'access_token stocké dans le cookie HTTP-Only.
      */
     public Map<String, Object> getMe(HttpServletRequest request) {
+        return getUserById(monIdentifiant(request));
+    }
+
+    /**
+     * Met à jour le profil de l'utilisateur connecté, et rend sa fiche relue.
+     *
+     * <p>L'identifiant vient du jeton, jamais du corps de la requête : l'y lire laisserait chacun
+     * modifier le compte d'autrui en changeant un champ du formulaire. L'écriture elle-même est
+     * confiée à {@link ProfilPersonnel}, qui la borne à trois champs — {@code updateUser}, prévu
+     * pour l'administration, désactiverait ici le compte et effacerait les rôles.</p>
+     */
+    public Map<String, Object> mettreAJourMonProfil(HttpServletRequest request,
+                                                    com.qualiapproche.common.dto.auth.ProfilPersonnelDto profil) {
+        String userId = monIdentifiant(request);
+        profilPersonnel.mettreAJour(userId, profil);
+        return getUserById(userId);
+    }
+
+    /** L'identité portée par l'access_token du cookie HTTP-Only. */
+    private String monIdentifiant(HttpServletRequest request) {
         String accessToken = CookieUtils.getAccessToken(request)
                 .orElseThrow(() -> new RuntimeException("Aucun access_token trouvé dans les cookies. Veuillez vous connecter."));
 
-        String userId = extractSubFromJwt(accessToken);
-        return getUserById(userId);
+        return extractSubFromJwt(accessToken);
     }
 
     /**
