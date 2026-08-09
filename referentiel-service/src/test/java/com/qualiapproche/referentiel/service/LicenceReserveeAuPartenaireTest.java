@@ -65,10 +65,7 @@ class LicenceReserveeAuPartenaireTest {
         installation = new CodeDeLInstallation(structures);
         service = new LicenceInstalleeService(repository, installation);
         ReflectionTestUtils.setField(service, "clePublique", CLE_PUBLIQUE);
-        ReflectionTestUtils.setField(service, "joursDEssai", 7);
-        ReflectionTestUtils.setField(service, "modulesDEssai", "NON_CONFORMITE,DOCUMENTAIRE");
 
-        when(repository.existsByType("ESSAI")).thenReturn(false);
         when(repository.save(any(LicenceInstallee.class))).thenAnswer(appel -> appel.getArgument(0));
     }
 
@@ -283,10 +280,14 @@ class LicenceReserveeAuPartenaireTest {
     }
 
     @Test
-    @DisplayName("L'essai gratuit, qui n'a pas de destinataire, n'est pas écarté par le contrôle")
-    void lecture_essaiGratuit() {
+    @DisplayName("Une licence sans jeton n'échappe plus au contrôle : elle n'ouvre rien")
+    void lecture_licenceSansJeton() {
+        // Ce cas affirmait l'inverse : l'essai local, dépourvu de destinataire, était admis sans
+        // vérification. L'exemption ne visait que lui, mais elle portait sur l'absence de jeton —
+        // si bien qu'une ligne écrite à la main la réclamait tout aussi bien, et se voyait accorder
+        // ce qu'elle s'était elle-même inscrit. Un essai s'obtient désormais signé, comme le reste.
         declare("MINSANTE");
-        LicenceInstallee essai = LicenceInstallee.builder()
+        LicenceInstallee sansJeton = LicenceInstallee.builder()
                 .type("ESSAI")
                 .reference("ESSAI-" + LocalDate.now())
                 .partenaireNom("Essai gratuit")
@@ -296,11 +297,12 @@ class LicenceReserveeAuPartenaireTest {
                 .installeeLe(LocalDateTime.now())
                 .dernierJourVu(LocalDate.now())
                 .build();
-        when(repository.findTopByOrderByInstalleeLeDesc()).thenReturn(Optional.of(essai));
+        when(repository.findTopByOrderByInstalleeLeDesc()).thenReturn(Optional.of(sansJeton));
 
         EtatLicenceDto etat = service.etat();
 
-        assertThat(etat.getStatut()).isEqualTo("ACTIVE");
-        assertThat(etat.isActionsOuvertes()).isTrue();
+        assertThat(etat.getStatut()).isEqualTo("ABSENTE");
+        assertThat(etat.isActionsOuvertes()).isFalse();
+        assertThat(etat.getModules()).isEmpty();
     }
 }

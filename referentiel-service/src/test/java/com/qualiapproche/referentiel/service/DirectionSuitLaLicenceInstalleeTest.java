@@ -108,7 +108,6 @@ class DirectionSuitLaLicenceInstalleeTest {
         when(licenceInstalleeService.etat()).thenReturn(EtatLicenceDto.builder()
                 .statut("ABSENTE")
                 .actionsOuvertes(false)
-                .essaiDisponible(true)
                 .modules(List.of())
                 .build());
 

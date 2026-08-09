@@ -55,14 +55,6 @@ public class EtatLicenceDto {
     /** {@code 0} vaut « sans limite ». */
     private int utilisateursMax;
 
-    /**
-     * L'essai gratuit est-il encore proposable ?
-     *
-     * <p>Une seule fois par installation : sans cette limite, il suffirait d'en redemander un à
-     * chaque échéance, et l'essai remplacerait l'abonnement.</p>
-     */
-    private boolean essaiDisponible;
-
     /** Phrase à afficher telle quelle — c'est elle qui dit quoi faire. */
     private String message;
 }

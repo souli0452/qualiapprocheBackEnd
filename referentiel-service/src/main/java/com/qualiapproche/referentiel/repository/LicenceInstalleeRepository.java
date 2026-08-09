@@ -14,8 +14,5 @@ public interface LicenceInstalleeRepository extends JpaRepository<LicenceInstall
 
     List<LicenceInstallee> findAllByOrderByInstalleeLeDesc();
 
-    /** Un essai n'est accordé qu'une fois par installation. */
-    boolean existsByType(String type);
-
     boolean existsByReference(String reference);
 }

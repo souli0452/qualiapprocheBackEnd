@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * La licence de cette installation : la poser, la relire, dire ce qu'elle ouvre.
@@ -58,23 +57,6 @@ public class LicenceInstalleeService {
      */
     private final CodeDeLInstallation installation;
 
-    @Value("${qualisira.licence.essai-jours:7}")
-    private int joursDEssai;
-
-    /**
-     * Modules ouverts par l'essai gratuit.
-     *
-     * <p>En configuration, et non dérivés de {@link ModuleAbonnement} : l'essai fait découvrir ce
-     * qui est effectivement proposé à la vente, et l'énumération contient des modules encore à
-     * venir. Les ouvrir tous ferait juger l'application sur des écrans vides, puis vivre comme un
-     * retrait ce qui n'a jamais été acheté.</p>
-     *
-     * <p>Élargir l'essai est donc une décision commerciale, qui se prend sans livrer une
-     * version.</p>
-     */
-    @Value("${qualisira.licence.essai-modules:NON_CONFORMITE,DOCUMENTAIRE}")
-    private String modulesDEssai;
-
     // ---------------------------------------------------------------- lecture
 
     /**
@@ -87,27 +69,33 @@ public class LicenceInstalleeService {
     @Transactional
     public EtatLicenceDto etat() {
         LicenceInstallee installee = repository.findTopByOrderByInstalleeLeDesc().orElse(null);
-        boolean essaiDisponible = !repository.existsByType(ESSAI);
 
         if (installee == null) {
             return EtatLicenceDto.builder()
                     .statut("ABSENTE")
                     .actionsOuvertes(false)
-                    .essaiDisponible(essaiDisponible)
                     .modules(List.of())
                     .message("Cette installation n'a pas encore de licence. Collez celle que vous a "
-                            + "remise l'éditeur, ou démarrez un essai gratuit.")
+                            + "remise l'éditeur — licence d'essai comprise.")
                     .build();
         }
 
+        // Toute licence doit être signée, sans exception.
+        //
+        // Un jeton absent valait auparavant « essai local, rien à vérifier » : la signature ET le
+        // contrôle du code partenaire étaient alors sautés, et la validité lue directement dans les
+        // colonnes. Une seule ligne insérée à la main — type COMMERCIALE, jeton nul, fin en 2099,
+        // tous modules — passait donc pour une licence perpétuelle, sans rien connaître de la
+        // cryptographie. Le raccourci n'était vrai que tant que le produit était seul à créer des
+        // lignes sans jeton ; il ne l'est plus.
         ContenuDeLicence contenu = relire(installee);
-        if (contenu == null && installee.getJeton() != null) {
+        if (contenu == null) {
             return EtatLicenceDto.builder()
                     .statut("ABSENTE")
                     .actionsOuvertes(false)
-                    .essaiDisponible(essaiDisponible)
                     .modules(List.of())
-                    .message("La licence installée n'est plus vérifiable. Installez-en une nouvelle.")
+                    .message("La licence installée n'est pas vérifiable. Installez celle que vous a "
+                            + "remise l'éditeur.")
                     .build();
         }
 
@@ -115,14 +103,13 @@ public class LicenceInstalleeService {
         // restaurée depuis un autre client, ou une licence posée avant que le code ne soit
         // configuré, doit être écartée ici aussi. Sans quoi le contrôle de l'installation ne
         // vaudrait que le jour où quelqu'un a bien voulu passer par l'écran.
-        if (contenu != null && !installation.reconnait(contenu.partenaireCode())) {
+        if (!installation.reconnait(contenu.partenaireCode())) {
             log.error("La licence {} a été émise pour « {} » ({}) alors que cette installation "
                             + "déclare « {} » : elle est tenue pour absente.", installee.getReference(),
                     contenu.partenaireNom(), contenu.partenaireCode(), installation.attendu());
             return EtatLicenceDto.builder()
                     .statut("ABSENTE")
                     .actionsOuvertes(false)
-                    .essaiDisponible(essaiDisponible)
                     .modules(List.of())
                     .message("La licence installée a été émise pour « " + contenu.partenaireNom()
                             + " », qui n'est pas cette installation. Installez celle qui vous a "
@@ -146,7 +133,6 @@ public class LicenceInstalleeService {
                 .joursRestants(restants)
                 .modules(modulesDe(installee))
                 .utilisateursMax(installee.getUtilisateursMax())
-                .essaiDisponible(essaiDisponible && !valide)
                 .message(message(installee, valide, restants))
                 .build();
     }
@@ -229,81 +215,14 @@ public class LicenceInstalleeService {
         return etat();
     }
 
-    /**
-     * Démarre l'essai gratuit : quelques jours, sur les modules ouverts à l'essai.
-     *
-     * <p>Il n'est pas signé — personne ici ne détient la clé de l'éditeur — et c'est précisément
-     * pourquoi il est court. Un seul par installation : sans cette limite, il suffirait d'en
-     * redemander un à chaque échéance.</p>
-     */
-    @Transactional
-    public EtatLicenceDto demarrerEssai() {
-        if (repository.existsByType(ESSAI)) {
-            throw new BusinessException(
-                    "L'essai gratuit a déjà été utilisé sur cette installation. "
-                            + "Contactez l'éditeur pour obtenir une licence.",
-                    HttpStatus.CONFLICT);
-        }
-
-        LocalDate debut = LocalDate.now();
-        LicenceInstallee essai = LicenceInstallee.builder()
-                .type(ESSAI)
-                .reference("ESSAI-" + debut)
-                .partenaireNom("Essai gratuit")
-                .debut(debut)
-                .fin(debut.plusDays(joursDEssai))
-                .modules(String.join(",", modulesOuvertsALEssai()))
-                .utilisateursMax(0)
-                .installeeLe(LocalDateTime.now())
-                .installeePar(SecurityUtils.getCurrentUserFullName())
-                .dernierJourVu(debut)
-                .build();
-
-        repository.save(essai);
-        log.info("Essai gratuit de {} jours démarré, tous modules ouverts.", joursDEssai);
-        return etat();
-    }
-
     // ---------------------------------------------------------------- interne
-
-    /**
-     * Les modules du réglage, retenus seulement s'ils existent.
-     *
-     * <p>Un nom mal orthographié en configuration ne ferait rien remonter : il serait enregistré
-     * dans la licence d'essai, puis comparé à ceux que la passerelle exige — sans jamais
-     * correspondre. Le module resterait fermé pendant tout l'essai, sans un message. On écarte
-     * donc l'inconnu, et on le dit.</p>
-     */
-    private List<String> modulesOuvertsALEssai() {
-        List<String> retenus = Arrays.stream(modulesDEssai.split(","))
-                .map(String::trim)
-                .map(module -> module.toUpperCase(java.util.Locale.ROOT))
-                .filter(module -> !module.isEmpty())
-                .filter(module -> {
-                    boolean connu = Arrays.stream(ModuleAbonnement.values())
-                            .anyMatch(valeur -> valeur.name().equals(module));
-                    if (!connu) {
-                        log.error("Module « {} » inconnu dans qualisira.licence.essai-modules : "
-                                + "il est ignoré. Valeurs admises : {}", module,
-                                Arrays.stream(ModuleAbonnement.values()).map(Enum::name).toList());
-                    }
-                    return connu;
-                })
-                .distinct()
-                .collect(Collectors.toList());
-
-        if (retenus.isEmpty()) {
-            throw new BusinessException(
-                    "Aucun module n'est ouvert à l'essai sur cette installation. "
-                            + "Contactez l'éditeur pour obtenir une licence.",
-                    HttpStatus.CONFLICT);
-        }
-        return retenus;
-    }
 
     private ContenuDeLicence relire(LicenceInstallee installee) {
         if (installee.getJeton() == null || installee.getJeton().isBlank()) {
-            // Essai local : rien à vérifier, il n'a jamais été signé.
+            // Plus aucune licence n'est posée sans jeton : une ligne sans signature ne peut venir
+            // que d'une écriture directe en base, et n'ouvre donc rien.
+            log.error("Licence {} sans jeton signé : écriture directe en base, elle n'ouvre rien.",
+                    installee.getReference());
             return null;
         }
         try {

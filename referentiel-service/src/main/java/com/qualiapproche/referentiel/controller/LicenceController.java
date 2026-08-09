@@ -67,12 +67,4 @@ public class LicenceController {
     public ResponseEntity<ApiResponse<EtatLicenceDto>> installer(@RequestBody Map<String, String> corps) {
         return ResponseEntity.ok(ApiResponse.success(service.installer(corps.get("licence"))));
     }
-
-    @Operation(summary = "Démarrer l'essai gratuit",
-            description = "Une seule fois par installation, tous les modules ouverts.")
-    @PostMapping("/essai")
-    @PreAuthorize("@perm.canCreate(this)")
-    public ResponseEntity<ApiResponse<EtatLicenceDto>> essai() {
-        return ResponseEntity.ok(ApiResponse.success(service.demarrerEssai()));
-    }
 }
