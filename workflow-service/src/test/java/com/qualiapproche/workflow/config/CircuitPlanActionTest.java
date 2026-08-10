@@ -135,12 +135,14 @@ class CircuitPlanActionTest {
     }
 
     @Test
-    @DisplayName("Déclarer une action réalisée, c'est en rendre compte")
-    void realisation_recueilleLeCompteRendu() {
-        // Le compte rendu était saisi sur un écran et enregistré par un appel distinct de la
-        // décision : celle-ci partant la première, l'action quittait l'étape de réalisation et ce
-        // que le responsable avait écrit n'était plus accepté nulle part. Le pilote constatait alors
-        // une action dont il ne lisait ni cause ni solution.
+    @DisplayName("La réalisation permet d'affiner le compte rendu, sans le redemander")
+    void realisation_permetDAffinerLeCompteRendu() {
+        // La cause et la solution retenue sont posées à la proposition du plan, par la personne à
+        // qui la non-conformité est imputée : c'est elle qui recherche les causes, et son supérieur
+        // ne peut se prononcer que sur un plan entier. Les champs restent offerts ici — l'exécution
+        // révèle parfois que la cause n'était pas celle qu'on croyait, et le responsable de l'action
+        // est alors le mieux placé pour le dire — mais les exiger reviendrait à faire ressaisir ce
+        // que le dossier porte déjà, et à bloquer la décision tant que ce ne serait pas fait.
         WorkflowStep aRealiser = etape("NON_TRAITER");
 
         assertThat(aRealiser.getFields())
@@ -151,9 +153,10 @@ class CircuitPlanActionTest {
                 .filteredOn(f -> Set.of("causeIdentifiees", "solutionRetenues").contains(f.getFieldName()))
                 .allSatisfy(champ -> {
                     assertThat(champ.isRequired())
-                            .withFailMessage("Une action déclarée réalisée sans compte rendu ne peut "
-                                    + "être ni vérifiée ni jugée efficace.")
-                            .isTrue();
+                            .withFailMessage("Ce compte rendu est recueilli à la proposition du plan : "
+                                    + "l'exiger de nouveau ici bloquerait le responsable sur une "
+                                    + "saisie déjà faite.")
+                            .isFalse();
                     // Décliner une attribution n'oblige à rendre compte de rien : on n'a rien fait.
                     assertThat(champ.getDecision()).isEqualTo(StepDecision.APPROUVE);
                 });

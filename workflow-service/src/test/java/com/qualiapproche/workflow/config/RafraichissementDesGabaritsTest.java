@@ -44,8 +44,14 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RafraichissementDesGabaritsTest {
 
-    /** Nombre de modèles livrés avec la version. */
-    private static final int LIVRES = 15;
+    /**
+     * Nombre de modèles livrés avec la version.
+     *
+     * <p>Chaque étape des circuits de non-conformité et d'action corrective a le sien, plus les
+     * modèles antérieurs conservés pour les circuits recomposés à la main. Le compte a donc vocation
+     * à bouger : il est ici pour qu'un gabarit oublié se remarque, non pour figer un total.</p>
+     */
+    private static final int LIVRES = 28;
 
     /** Un code présent dans la liste livrée, et le fichier qui l'accompagne. */
     private static final String CODE = "validationRq";
@@ -68,7 +74,7 @@ class RafraichissementDesGabaritsTest {
     }
 
     @Test
-    @DisplayName("Base vierge : les quinze modèles livrés sont posés")
+    @DisplayName("Base vierge : tous les modèles livrés sont posés")
     void baseViergeLesModelesSontPoses() throws Exception {
         drapeau(false);
 

@@ -2,7 +2,10 @@ package com.qualiapproche.amelioration.service.impl;
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.entities.NonConformite;
+import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
+import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.common.utils.StatutEnum;
 import lombok.RequiredArgsConstructor;
@@ -51,7 +54,23 @@ public class PlansActionDeLaNonConformiteService {
      */
     public static final String FAIT_PLANS_ACTION_AFFECTES = "PLANS_ACTION_AFFECTES";
 
+    /**
+     * Fait exigé pour soumettre le traitement : chaque action proposée est complète.
+     *
+     * <p>La personne à qui la non-conformité est imputée recherche les causes et propose le plan ;
+     * son supérieur ne peut se prononcer que sur un plan entier. Il en manquait la moitié — cause et
+     * solution retenue n'étaient recueillies que bien plus tard, au moment où le responsable de
+     * l'action déclarait l'avoir menée — si bien que le pilote validait une intention, et non un
+     * plan.</p>
+     *
+     * <p>Un fait, et non un refus à l'enregistrement : un plan s'écrit progressivement, et refuser
+     * de sauvegarder une action à demi rédigée ferait perdre à son auteur ce qu'il vient d'écrire.
+     * La complétude se vérifie au moment où le plan quitte ses mains.</p>
+     */
+    public static final String FAIT_PLANS_ACTION_COMPLETS = "PLANS_ACTION_COMPLETS";
+
     private final PlanActionRepository planActionRepository;
+    private final NonConformiteRepository nonConformiteRepository;
     private final WorkflowClient workflowClient;
 
     /**
@@ -113,9 +132,53 @@ public class PlansActionDeLaNonConformiteService {
 
         boolean toutesAffectees = plans.stream().allMatch(plan -> plan.getResponsableId() != null);
         boolean toutesSoldees = plans.stream().allMatch(plan -> plan.getStatus() == StatutEnum.TRAITER);
+        // Un dossier sans aucune action ne peut pas non plus être soumis : le traitement consiste
+        // précisément à proposer un plan, et l'étape serait franchie sans que rien n'ait été proposé.
+        Circuit circuit = plans.isEmpty() ? null : circuitDu(nonConformiteId);
+        boolean toutesCompletes = !plans.isEmpty()
+                && plans.stream().allMatch(plan -> estComplet(plan, circuit));
 
         declarer(nonConformiteId, FAIT_PLANS_ACTION_AFFECTES, toutesAffectees);
         declarer(nonConformiteId, FAIT_PLANS_ACTION_SOLDES, toutesSoldees);
+        declarer(nonConformiteId, FAIT_PLANS_ACTION_COMPLETS, toutesCompletes);
+    }
+
+    /**
+     * Une action porte-t-elle toutes les colonnes que le dossier lui demande ?
+     *
+     * <p>Numéro, solution retenue, action proposée, échéance et critère d'efficacité valent pour
+     * tous. La <b>cause</b> dépend du circuit de traitement retenu par le responsable qualité : en
+     * correction, on remet en conformité ce qui ne l'était pas sans avoir à remonter à ce qui l'a
+     * produit — la colonne n'existe pas, et l'exiger ferait écrire n'importe quoi pour passer.</p>
+     *
+     * <p>Le responsable n'en fait pas partie : la personne imputée ne le connaît pas toujours, et
+     * c'est le pilote qui le désigne à la validation. Sa propre condition
+     * ({@link #FAIT_PLANS_ACTION_AFFECTES}) le réclame une étape plus loin.</p>
+     */
+    private boolean estComplet(PlanAction plan, Circuit circuit) {
+        return renseigne(plan.getNumeroOdre())
+                && renseigne(plan.getActionCorrective())
+                && renseigne(plan.getSolutionRetenues())
+                && renseigne(plan.getCritereEfficacite())
+                && plan.getDateEcheance() != null
+                && (circuit == Circuit.CORRECTION || renseigne(plan.getCauseIdentifiees()));
+    }
+
+    private boolean renseigne(String valeur) {
+        return valeur != null && !valeur.isBlank();
+    }
+
+    /**
+     * Circuit de traitement du dossier — action corrective ou correction.
+     *
+     * <p>Un dossier qui n'en porte pas encore est traité comme une action corrective, la plus
+     * exigeante des deux : mieux vaut demander la cause à tort que laisser passer un plan qui aurait
+     * dû la porter.</p>
+     */
+    private Circuit circuitDu(UUID nonConformiteId) {
+        return nonConformiteRepository.findById(nonConformiteId)
+                .map(NonConformite::getCircuit)
+                .orElse(Circuit.ACTION_CORRECTIVE);
     }
 
     private void declarer(UUID nonConformiteId, String fait, boolean etabli) {

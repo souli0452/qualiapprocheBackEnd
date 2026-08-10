@@ -57,6 +57,42 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
         // {numeroNc} dans l'objet : la même syntaxe {variable} que le corps, substituée à l'envoi.
         // Une référence absente s'efface avec son séparateur — l'objet reste propre.
         List<TemplateDef> definitions = List.of(
+            // Un gabarit par étape du circuit des non-conformités, et un par étape du circuit d'une
+            // action corrective. Une poignée de modèles génériques servait jusqu'ici l'ensemble du
+            // parcours, et disait donc à peu près n'importe quoi : l'agent dont la déclaration
+            // revenait pour correction recevait « Nouvelle non-conformité imputée ». Chacun dit
+            // maintenant à son destinataire ce qu'on attend précisément de lui, et ce qui vient de
+            // se passer.
+            new TemplateDef("ncRecue", "Nouvelle non-conformité soumise à votre processus – {numeroNc}",
+                    "Étape 1 — soumission par un agent, au pilote du processus concerné"),
+            new TemplateDef("ncAApprecier", "Non-conformité en attente de votre appréciation – {numeroNc}",
+                    "Étape 2 — validation du pilote, au responsable qualité"),
+            new TemplateDef("ncTransmise", "Non-conformité transmise à votre processus pour traitement – {numeroNc}",
+                    "Étape 3 — orientation par le responsable qualité, au processus destinataire"),
+            new TemplateDef("ncImputee", "Non-conformité qui vous est imputée – plan d'action attendu – {numeroNc}",
+                    "Étape 4 — imputation, à la personne chargée du traitement"),
+            new TemplateDef("ncPlanAValider", "Plan d'action soumis à votre validation – {numeroNc}",
+                    "Étape 5 — soumission du plan d'action, au supérieur hiérarchique"),
+            new TemplateDef("ncPlanAContresigner", "Plan d'action en attente de votre approbation – {numeroNc}",
+                    "Contre-validation qualité du plan d'action"),
+            new TemplateDef("ncAClore", "Actions réalisées et vérifiées – clôture à envisager – {numeroNc}",
+                    "Étape 8 — actions soldées, au responsable qualité"),
+            new TemplateDef("ncCloturee", "Non-conformité clôturée – {numeroNc}",
+                    "Étape 9 — clôture, au pilote du processus soumissionnaire"),
+            new TemplateDef("ncRenvoyeeAuDeclarant", "Non-conformité à corriger – {numeroNc}",
+                    "Dossier renvoyé à son auteur pour correction"),
+            new TemplateDef("actionAMener", "Action à mettre en œuvre – plan d'action validé – {numeroNc}",
+                    "Étape 6 — action confiée à son responsable"),
+            new TemplateDef("actionAVerifier", "Action mise en œuvre – vérification requise – {numeroNc}",
+                    "Étape 7 — réalisation à constater par le pilote"),
+            new TemplateDef("actionEfficaciteAMesurer", "Action réalisée – efficacité à mesurer – {numeroNc}",
+                    "Efficacité à confronter au critère fixé, par le responsable qualité"),
+            new TemplateDef("actionSoldee", "Action reconnue efficace et soldée – {numeroNc}",
+                    "Fin de parcours d'une action corrective"),
+
+            // Modèles antérieurs, conservés : les circuits recomposés à la main et les modules qui
+            // n'ont pas d'étape propre s'y réfèrent encore, et un gabarit retiré laisserait une
+            // notification partir sans corps.
             new TemplateDef("emailTemplate", "Nouvelle Non-Conformité imputée – {numeroNc}", "Attribution d'une NC à un utilisateur"),
             new TemplateDef("structureToStructure", "Non-Conformité transmise – {numeroNc}", "NC relevée par une structure envers une autre"),
             new TemplateDef("validationNonConformite", "Validation requise - Non-Conformité {numeroNc}", "Validation hiérarchique requise"),

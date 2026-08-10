@@ -25,6 +25,7 @@ import com.qualiapproche.common.dto.PlanActionDto;
 import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
+import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.mappers.NonConformiteMapper;
 import com.qualiapproche.amelioration.entities.mappers.PlanActionMapper;
@@ -93,6 +94,17 @@ public class NonConformiteServiceImpl implements NonConformiteService {
      * nommé.</p>
      */
     private static final String CHAMP_AGENT_IMPUTE = "userImputId";
+
+    /**
+     * Champ d'étape par lequel le responsable qualité qualifie l'écart : action corrective, ou
+     * correction.
+     *
+     * <p>Ce n'est pas une mention d'affichage : le circuit retenu commande les colonnes que le plan
+     * d'action devra porter — une correction remet en conformité sans qu'on ait à rechercher la
+     * cause, une action corrective ne vaut que par elle. Il arrive avec la décision qui oriente le
+     * dossier, au moment même où le responsable qualité désigne le processus destinataire.</p>
+     */
+    private static final String CHAMP_CIRCUIT_TRAITEMENT = "circuitTraitement";
 
     private final NonConformiteRepository nonConformiteRepository;
     private final PieceJointeRepository pieceJointeRepository;
@@ -252,6 +264,60 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         return populateAttachments(nonConformiteMapper.toDto(savedNonConformite));
     }
 
+    /**
+     * Soumet au pilote du processus une non-conformité déjà enregistrée.
+     *
+     * <p>L'agent décrivait son constat, quittait l'écran, puis devait retrouver son dossier dans une
+     * liste pour le soumettre — alors qu'il n'avait le plus souvent rien à y ajouter. Le brouillon
+     * reste possible, et utile à qui veut relire ou compléter sa description plus tard : il cesse
+     * seulement d'être un passage obligé.</p>
+     *
+     * <p>La décision passe par le moteur comme toutes les autres, sans quoi il n'y aurait ni
+     * historique, ni courriel au pilote, ni habilitation vérifiée. Elle est jouée sous le jeton de
+     * l'agent, et l'étape de soumission est réservée à l'auteur du dossier.</p>
+     *
+     * <p><b>Hors transaction, délibérément.</b> Le moteur, une fois sa propre décision committée,
+     * revient vers ce service par un appel HTTP pour lui dire quelle étape le dossier a atteinte.
+     * Cet appel ouvre sa propre transaction : appelée depuis celle qui vient d'écrire le dossier,
+     * elle n'y aurait pas trouvé de dossier du tout, et l'étape n'aurait été inscrite qu'à la
+     * prochaine reprise de l'ordonnanceur.</p>
+     *
+     * <p>Un échec n'annule pas l'enregistrement : le constat est écrit, il ne doit pas se perdre
+     * parce que le circuit n'a pas répondu. Le dossier reste alors en brouillon, là où l'agent le
+     * retrouvera, et le journal dit pourquoi.</p>
+     */
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public NonConformiteDto soumettre(UUID id) {
+        NonConformite nc = nonConformiteRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Non conformité introuvable"));
+
+        if (nc.getWorkflowId() == null) {
+            log.warn("Non-conformité {} enregistrée sans circuit : elle ne peut pas être soumise "
+                    + "immédiatement et reste en brouillon.", id);
+            return populateAttachments(nonConformiteMapper.toDto(nc));
+        }
+
+        try {
+            WorkflowValidationRequestDto soumission = new WorkflowValidationRequestDto();
+            // Toute décision porte un commentaire, et l'historique le montre. Celle-ci n'en a pas
+            // de saisi : dire d'où elle vient vaut mieux qu'une ligne muette dans le fil du dossier.
+            soumission.setComments("Soumise par son auteur au moment de l'enregistrement.");
+            workflowClient.validateStep(id, null, soumission);
+            log.info("Non-conformité {} soumise dès son enregistrement.", id);
+        } catch (Exception e) {
+            log.error("Non-conformité {} enregistrée, mais non soumise : {}. Elle reste en brouillon.",
+                    id, e.getMessage());
+        }
+
+        // Relue plutôt que rendue de mémoire : le moteur vient d'inscrire sur le dossier l'étape
+        // atteinte, et l'objet que nous tenions date d'avant — l'écran aurait annoncé un brouillon
+        // là où le dossier est parti chez le pilote.
+        return populateAttachments(nonConformiteMapper.toDto(
+                nonConformiteRepository.findById(id).orElse(nc)));
+    }
+
     @Override
     public NonConformiteDto updateNonConformite(UUID id, NonConformiteDto dto) throws IOException {
         // Vérifier si la non-conformité existe
@@ -271,6 +337,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         existingNonConformite.setUserImputId(dto.getUserImputId());
         existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
+        appliquerLesParticipants(existingNonConformite, dto);
         // Mettre à jour les fichiers s'ils sont fournis
         ncFichierService.synchroniser(dto.getFichiers(), id);
         // Les plans d'action ne se sauvegardent plus avec la fiche. Ils étaient recomposés en bloc
@@ -283,6 +350,28 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         NonConformite updatedNonConformite = nonConformiteRepository.save(existingNonConformite);
         // Retour DTO
         return populateAttachments(nonConformiteMapper.toDto(updatedNonConformite));
+    }
+
+    /**
+     * Inscrit sur le dossier les personnes ayant pris part à l'analyse.
+     *
+     * <p>Le champ existait en base et s'affichait sur la fiche, mais aucun point d'entrée ne
+     * l'écrivait : il était donc vide partout, et la rubrique « Participants » restait invisible sur
+     * tous les dossiers. C'est pourtant ce qui dit qui a cherché les causes — une non-conformité
+     * s'analyse rarement seul, et la traçabilité de l'analyse en fait partie.</p>
+     *
+     * <p><b>Absent n'est pas vide.</b> Tous les écrans qui enregistrent la fiche ne montrent pas les
+     * participants : {@code null} laisse en place ceux qui y sont, une liste vide les retire — c'est
+     * une saisie, pas une omission. Même règle que pour les pièces jointes, et pour la même raison.</p>
+     */
+    private void appliquerLesParticipants(NonConformite nc, NonConformiteDto dto) {
+        if (dto.getParticipants() == null) {
+            return;
+        }
+        if (nc.getParticipants() == null) {
+            nc.setParticipants(new com.qualiapproche.common.base.Participants());
+        }
+        nc.getParticipants().setFullNames(new java.util.HashSet<>(dto.getParticipants()));
     }
 
     @Override
@@ -1085,7 +1174,40 @@ public class NonConformiteServiceImpl implements NonConformiteService {
 
         appliquerDocumentDeRejet(nc, champs.get(CHAMP_DOC_REJET));
         appliquerStructureDestinataire(nc, champs);
+        appliquerCircuitDeTraitement(nc, champs.get(CHAMP_CIRCUIT_TRAITEMENT));
         appliquerAgentImpute(nc, champs.get(CHAMP_AGENT_IMPUTE));
+    }
+
+    /**
+     * Inscrit sur la non-conformité le circuit de traitement que le responsable qualité a retenu.
+     *
+     * <p>De ce choix dépend ce que le plan d'action devra porter : en <b>correction</b>, la cause
+     * n'a pas à être recherchée et la colonne correspondante disparaît ; en <b>action
+     * corrective</b>, le plan est complet. Sans cette reprise, la décision aurait été prise et
+     * enregistrée par le moteur, et le module qui contrôle les plans d'action n'en aurait rien
+     * su.</p>
+     *
+     * <p>Une valeur que l'énumération ne reconnaît pas laisse le dossier sur le circuit qu'il
+     * portait : la décision est déjà jouée, la refuser ici la ferait rejouer sans fin.</p>
+     */
+    private void appliquerCircuitDeTraitement(NonConformite nc, String valeur) {
+        String choix = valeurRenseignee(valeur);
+        if (choix == null) {
+            return;
+        }
+
+        Circuit circuit = Circuit.depuisValeur(choix);
+        if (circuit == null) {
+            log.warn("Non-conformité {} : circuit de traitement « {} » inconnu ; le dossier garde « {} ».",
+                    nc.getId(), choix, nc.getCircuit());
+            return;
+        }
+        if (circuit == nc.getCircuit()) {
+            return;
+        }
+
+        nc.setCircuit(circuit);
+        log.info("Non-conformité {} traitée au titre du circuit « {} »", nc.getId(), circuit.getLibelle());
     }
 
     /**

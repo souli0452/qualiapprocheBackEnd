@@ -180,22 +180,46 @@ class PlanActionGardeFousTest {
     }
 
     @Test
-    @DisplayName("Désigner un responsable ne réécrit pas l'analyse de l'agent")
-    void designation_neTouchePasALAnalyse() {
+    @DisplayName("Tant que l'action est une proposition, son analyse se corrige")
+    void propositionCorrigee_analyseComprise() {
         plan.setCauseIdentifiees("Procédure absente");
         plan.setSolutionRetenues("Procédure rédigée");
         plan.setActionCorrective("Rédiger la procédure");
 
         PlanActionDto dto = correctionAvecResponsable(UUID.randomUUID());
-        dto.setCauseIdentifiees("Autre chose");
-        dto.setSolutionRetenues("Autre chose");
+        dto.setCauseIdentifiees("Contrôle non tracé");
+        dto.setSolutionRetenues("Fiche de contrôle instaurée");
 
         service.corriger(dto);
 
-        // Le pilote désigne, il ne réécrit pas : tant que l'action est une proposition, les causes
-        // et la solution ne sont pas encore de saison — elles se constatent au traitement.
+        // Tant que l'action est une proposition, tout s'y corrige, l'analyse comprise : c'est la
+        // personne imputée qui recherche la cause et arrête la solution, et son plan doit être
+        // entier avant d'être soumis. Elles n'étaient modifiables qu'une fois l'action engagée, si
+        // bien qu'un plan encore en discussion ne pouvait pas être repris sur ce qu'il a de plus
+        // substantiel.
+        assertThat(plan.getCauseIdentifiees()).isEqualTo("Contrôle non tracé");
+        assertThat(plan.getSolutionRetenues()).isEqualTo("Fiche de contrôle instaurée");
+    }
+
+    @Test
+    @DisplayName("Une action engagée n'est plus redéfinie par la fiche")
+    void actionEngagee_analyseFigee() {
+        plan.setWorkflowId(UUID.randomUUID());
+        plan.setStatus(StatutEnum.EN_VERIFICATION);
+        plan.setCauseIdentifiees("Procédure absente");
+        plan.setActionCorrective("Rédiger la procédure");
+
+        PlanActionDto dto = new PlanActionDto();
+        dto.setId(plan.getId());
+        dto.setCauseIdentifiees("Autre chose");
+        dto.setActionCorrective("Autre chose");
+
+        service.corriger(dto);
+
+        // Ce que le responsable a rapporté est ce sur quoi le pilote puis le responsable qualité se
+        // prononcent : le laisser réécrire après coup viderait leur avis de son sens.
         assertThat(plan.getCauseIdentifiees()).isEqualTo("Procédure absente");
-        assertThat(plan.getSolutionRetenues()).isEqualTo("Procédure rédigée");
+        assertThat(plan.getActionCorrective()).isEqualTo("Rédiger la procédure");
     }
 
     @Test

@@ -62,6 +62,55 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             "TRAITEMENT", List.of("actionPreventive", "delaisMiseOeuvre", "actionDsc"),
             "VALIDATION", List.of("pertinancePilote", "justificationPilote"));
 
+    /**
+     * Champs qu'une étape exigeait et n'exige plus, par code d'étape.
+     *
+     * <p>Différent d'un abandon : le champ reste offert, il cesse seulement d'être obligatoire. La
+     * cause et la solution retenue sont désormais posées à la <b>proposition</b> du plan d'action,
+     * par la personne imputée ; les redemander au responsable qui réalise l'action reviendrait à
+     * faire ressaisir ce que le dossier porte déjà, et — les champs étant obligatoires — à bloquer
+     * sa décision tant qu'il ne l'aurait pas fait.</p>
+     *
+     * <p>Un rattrapage qui ne complète que ce qui manque ne pouvait pas produire cet effet : le
+     * champ existe en base, avec son ancienne exigence, et rien ne serait venu la lever.</p>
+     */
+    private static final Map<String, List<String>> CHAMPS_DEVENUS_FACULTATIFS = Map.of(
+            "NON_TRAITER", List.of("causeIdentifiees", "solutionRetenues"));
+
+    /**
+     * Gabarits de courriel livrés avant que chaque étape n'ait le sien.
+     *
+     * <p>Une poignée de modèles génériques servait à toutes les étapes : celle de la soumission
+     * annonçait « Nouvelle non-conformité imputée », celle de la clôture « Non-conformité transmise
+     * ». Chaque étape a maintenant son message, qui dit à son destinataire ce qu'on attend
+     * précisément de lui.</p>
+     *
+     * <p>Le remplacement ne vise que ces anciens codes : un gabarit choisi par un administrateur
+     * n'en fait pas partie et n'est jamais touché. Sans cette liste, il aurait fallu ou bien tout
+     * écraser — y compris son travail — ou bien ne rien reprendre, et les installations en service
+     * auraient gardé les messages génériques que le client demande justement de remplacer.</p>
+     */
+    private static final java.util.Set<String> ANCIENS_GABARITS = java.util.Set.of(
+            "emailTemplate", "structureToStructure", "validationNonConformite", "validationRq",
+            "emailPlanAction", "validationPlanRequise", "emailRqPlan", "validationAfterPlan",
+            "succesTraitementNonformite", "traitementReussi", "rejectNonConformite");
+
+    /**
+     * Actions dont le circuit livré a changé le code, par code d'étape puis ancien code.
+     *
+     * <p>Une action n'avait pas de nom propre tant qu'une étape n'en offrait que deux : son code
+     * valait celui de sa décision, et {@code RattrapageDesActionsDEtape} a nommé « APPROUVE »
+     * celles des bases en service. Dès qu'une étape en offre deux qui approuvent, il leur faut
+     * chacune un nom.</p>
+     *
+     * <p>Le renommage doit précéder l'ajout des actions manquantes, et c'est tout son intérêt :
+     * sans lui, l'action livrée sous son nouveau nom serait vue comme absente et <b>ajoutée</b>, le
+     * dossier se retrouvant avec deux boutons menant au même endroit, dont un seul réclamerait les
+     * saisies attendues.</p>
+     */
+    private static final Map<String, Map<String, String>> ACTIONS_RENOMMEES = Map.of(
+            "VALIDATION_RQ", Map.of("APPROUVE", "VALIDER_ET_ORIENTER"));
+
     private final WorkflowRepository workflowRepository;
 
     @Override
@@ -87,10 +136,14 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 continue;
             }
 
-            int ajouts = ajouterLesEtapesManquantes(circuit, reference, etapesDeReference)
+            int ajouts = renommerLesActions(circuit)
+                    + ajouterLesEtapesManquantes(circuit, reference, etapesDeReference)
                     + ajouterLesTransitionsManquantes(circuit, etapesDeReference)
                     + ajouterLesChampsManquants(circuit, etapesDeReference)
                     + retirerLesChampsAbandonnes(circuit)
+                    + libererLesChampsDevenusFacultatifs(circuit)
+                    + rattacherLesChampsALeurAction(circuit, etapesDeReference)
+                    + adresserLesCourriels(circuit, etapesDeReference)
                     + reserverAuTitulaire(circuit, etapesDeReference);
             if (ajouts > 0) {
                 workflowRepository.save(circuit);
@@ -246,6 +299,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                         .type(champ.getType())
                         .options(champ.getOptions())
                         .decision(champ.getDecision())
+                        .actionCode(champ.getActionCode())
                         .isRequired(champ.isRequired())
                         .build());
                 ajoutes++;
@@ -286,6 +340,152 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
             }
         }
         return retires;
+    }
+
+    /**
+     * Donne leur nom propre aux actions que le circuit livré a renommées.
+     *
+     * <p>Premier geste du rattrapage, et il conditionne tous les suivants : une action est
+     * reconnue par son code, et une action renommée passerait sinon pour absente — donc ajoutée en
+     * double, à côté de celle qu'elle était censée devenir.</p>
+     *
+     * <p>Seul le code change. Le libellé, l'icône, la couleur et la destination restent ceux que
+     * l'administrateur a posés : ce n'est pas un alignement sur le circuit livré, c'est une mise à
+     * jour d'identifiant.</p>
+     */
+    private int renommerLesActions(Workflow circuit) {
+        int renommees = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            Map<String, String> renommages = ACTIONS_RENOMMEES.getOrDefault(step.getCode(), Map.of());
+            if (renommages.isEmpty()) {
+                continue;
+            }
+            for (WorkflowTransition transition : step.getTransitions()) {
+                String nouveauCode = renommages.get(transition.codeEffectif());
+                if (nouveauCode == null || emetDeja(step, nouveauCode)) {
+                    continue;
+                }
+                transition.setCode(nouveauCode);
+                renommees++;
+                log.info("Circuit « {} » : l'action « {} » de l'étape « {} » s'appelle désormais « {} ».",
+                        circuit.getNom(), transition.getLabel(), step.getCode(), nouveauCode);
+            }
+        }
+        return renommees;
+    }
+
+    /**
+     * Lève l'obligation sur les champs que le circuit livré n'exige plus.
+     *
+     * <p>Le champ reste en place : ce n'est pas un abandon, c'est un déplacement du moment où on le
+     * demande. La cause et la solution retenue se saisissent désormais à la proposition du plan
+     * d'action ; laissées obligatoires à l'étape de réalisation, elles auraient empêché le
+     * responsable de déclarer son action faite tant qu'il n'aurait pas recopié ce que le dossier
+     * portait déjà.</p>
+     */
+    private int libererLesChampsDevenusFacultatifs(Workflow circuit) {
+        int liberes = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            List<String> facultatifs = CHAMPS_DEVENUS_FACULTATIFS.getOrDefault(step.getCode(), List.of());
+            for (WorkflowStepField champ : step.getFields()) {
+                if (!facultatifs.contains(champ.getFieldName()) || !champ.isRequired()) {
+                    continue;
+                }
+                champ.setRequired(false);
+                liberes++;
+                log.info("Circuit « {} » : le champ « {} » de l'étape « {} » n'est plus obligatoire.",
+                        circuit.getNom(), champ.getFieldName(), step.getCode());
+            }
+        }
+        return liberes;
+    }
+
+    /**
+     * Rattache à leur action les champs que le circuit livré ne demande qu'à l'une des issues.
+     *
+     * <p>Ce n'est pas une préférence de configuration mais une condition pour que l'étape reste
+     * franchissable. La validation qualité offre désormais deux issues qui approuvent — orienter le
+     * dossier, ou le clore sans suite ; un champ obligatoire sans portée, comme le processus
+     * destinataire, serait exigé des <b>deux</b>, et il deviendrait impossible de clore sans
+     * désigner à qui l'on transmet un dossier qu'on vient de décider de ne transmettre à personne.
+     * Un champ qui porte déjà une action n'est pas touché.</p>
+     */
+    private int rattacherLesChampsALeurAction(Workflow circuit, Map<String, WorkflowStep> etapesDeReference) {
+        int rattaches = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            WorkflowStep modele = etapesDeReference.get(step.getCode());
+            if (modele == null) {
+                continue;
+            }
+            for (WorkflowStepField champ : step.getFields()) {
+                if (champ.getActionCode() != null && !champ.getActionCode().isBlank()) {
+                    continue;
+                }
+                String actionDeReference = modele.getFields().stream()
+                        .filter(reference -> reference.getFieldName().equals(champ.getFieldName()))
+                        .map(WorkflowStepField::getActionCode)
+                        .filter(Objects::nonNull)
+                        .findFirst().orElse(null);
+                if (actionDeReference == null) {
+                    continue;
+                }
+                champ.setActionCode(actionDeReference);
+                rattaches++;
+                log.info("Circuit « {} » : le champ « {} » de l'étape « {} » n'est plus demandé qu'à "
+                        + "l'action « {} ».", circuit.getNom(), champ.getFieldName(), step.getCode(),
+                        actionDeReference);
+            }
+        }
+        return rattaches;
+    }
+
+    /**
+     * Donne aux étapes le gabarit de courriel que le circuit livré leur associe, et son destinataire.
+     *
+     * <p>Une poignée de modèles génériques servait à toutes les étapes, et disait donc à peu près
+     * n'importe quoi : l'agent dont la déclaration revenait pour correction recevait « Nouvelle
+     * non-conformité imputée ». Chaque étape a maintenant son message. Le remplacement ne vise que
+     * les anciens codes livrés — un gabarit qu'un administrateur a choisi lui-même n'en fait pas
+     * partie, et reste en place.</p>
+     *
+     * <p>La désignation du destinataire suit la même logique, et elle n'est jamais défaite : sans
+     * elle, la clôture d'une non-conformité serait annoncée au responsable qualité qui vient de la
+     * prononcer, et non au pilote du processus qui avait signalé l'écart et qui attend d'apprendre
+     * ce qu'il est devenu.</p>
+     */
+    private int adresserLesCourriels(Workflow circuit, Map<String, WorkflowStep> etapesDeReference) {
+        int adressees = 0;
+
+        for (WorkflowStep step : circuit.getSteps()) {
+            WorkflowStep modele = etapesDeReference.get(step.getCode());
+            if (modele == null) {
+                continue;
+            }
+
+            String gabaritLivre = modele.getEmailTemplateCode();
+            String gabaritEnPlace = step.getEmailTemplateCode();
+            boolean aRemplacer = gabaritLivre != null && !gabaritLivre.equals(gabaritEnPlace)
+                    && (gabaritEnPlace == null || gabaritEnPlace.isBlank()
+                            || ANCIENS_GABARITS.contains(gabaritEnPlace));
+            if (aRemplacer) {
+                step.setEmailTemplateCode(gabaritLivre);
+                adressees++;
+                log.info("Circuit « {} » : l'étape « {} » annonce désormais son franchissement par le "
+                        + "gabarit « {} » et non « {} ».", circuit.getNom(), step.getCode(),
+                        gabaritLivre, gabaritEnPlace);
+            }
+
+            if (modele.getDestinataireCourriel() != null && step.getDestinataireCourriel() == null) {
+                step.setDestinataireCourriel(modele.getDestinataireCourriel());
+                adressees++;
+                log.info("Circuit « {} » : le courriel de l'étape « {} » s'adresse désormais à « {} ».",
+                        circuit.getNom(), step.getCode(), modele.getDestinataireCourriel());
+            }
+        }
+        return adressees;
     }
 
     /**
@@ -379,6 +579,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 .description(modele.getDescription())
                 .responsableRole(modele.getResponsableRole())
                 .emailTemplateCode(modele.getEmailTemplateCode())
+                .destinataireCourriel(modele.getDestinataireCourriel())
                 .champTitulaire(modele.getChampTitulaire())
                 .build();
 
@@ -389,6 +590,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 .type(champ.getType())
                 .options(champ.getOptions())
                 .decision(champ.getDecision())
+                .actionCode(champ.getActionCode())
                 .isRequired(champ.isRequired())
                 .build()));
         return copie;
@@ -406,6 +608,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 .severity(modele.getSeverity())
                 .requiredRole(modele.getRequiredRole())
                 .conditionRequise(modele.getConditionRequise())
+                .conditionLibelle(modele.getConditionLibelle())
                 .terminal(modele.isTerminal())
                 .build();
     }

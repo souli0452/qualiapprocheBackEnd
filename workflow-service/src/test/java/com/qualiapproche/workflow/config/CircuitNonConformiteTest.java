@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.config;
 
+import com.qualiapproche.workflow.model.DestinataireCourriel;
+import com.qualiapproche.workflow.model.SourceDeChoix;
 import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.Workflow;
 import com.qualiapproche.workflow.model.WorkflowStep;
@@ -171,9 +173,100 @@ class CircuitNonConformiteTest {
                 .satisfies(t -> assertThat(t.getToStep().getCode()).isEqualTo("VALIDATION_RQ"));
 
         assertThat(etape("VALIDATION_RQ").getTransitions())
-                .filteredOn(t -> t.getDecision() == StepDecision.APPROUVE)
+                .filteredOn(t -> WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER
+                        .equals(t.codeEffectif()))
                 .singleElement()
                 .satisfies(t -> assertThat(t.getToStep().getCode()).isEqualTo("IMPUTATION"));
+    }
+
+    @Test
+    @DisplayName("Le responsable qualité peut clore dès la validation, en disant pourquoi")
+    void validationRq_offreLaClotureSansSuite() {
+        // Tout signalement n'appelle pas un traitement. Sans cette issue, il fallait faire parcourir
+        // au dossier les six étapes restantes — un pilote, un agent imputé, un plan d'action — pour
+        // le conduire là où le responsable qualité savait d'emblée qu'il devait aller.
+        WorkflowStep validationRq = etape("VALIDATION_RQ");
+
+        assertThat(validationRq.getTransitions())
+                .filteredOn(t -> WorkflowDataInitializer.ACTION_CLOTURER_SANS_SUITE
+                        .equals(t.codeEffectif()))
+                .singleElement()
+                .satisfies(t -> {
+                    assertThat(t.getDecision()).isEqualTo(StepDecision.APPROUVE);
+                    assertThat(t.getToStep().getCode()).isEqualTo("CLOTURE");
+                });
+
+        // Arrêter un dossier est la décision la plus lourde du circuit : elle ne doit pas se prendre
+        // en silence. Le motif n'est exigé que d'elle — orienter le dossier n'a rien à justifier de
+        // tel, et un champ sans portée aurait été réclamé des deux.
+        assertThat(validationRq.getFields())
+                .filteredOn(champ -> WorkflowDataInitializer.CHAMP_MOTIF_CLOTURE_DIRECTE
+                        .equals(champ.getFieldName()))
+                .singleElement()
+                .satisfies(champ -> {
+                    assertThat(champ.isRequired()).isTrue();
+                    assertThat(champ.getActionCode())
+                            .isEqualTo(WorkflowDataInitializer.ACTION_CLOTURER_SANS_SUITE);
+                });
+    }
+
+    @Test
+    @DisplayName("Orienter le dossier, c'est dire à quel processus et à quel titre")
+    void validationRq_recueilleLeCircuitDeTraitement() {
+        // Le circuit retenu commande les colonnes du plan d'action : sans lui, la personne imputée
+        // ne saurait pas si l'on attend d'elle qu'elle remonte à la cause de l'écart ou qu'elle
+        // remette simplement en conformité.
+        assertThat(etape("VALIDATION_RQ").getFields())
+                .filteredOn(champ -> WorkflowDataInitializer.CHAMP_CIRCUIT_TRAITEMENT
+                        .equals(champ.getFieldName()))
+                .singleElement()
+                .satisfies(champ -> {
+                    assertThat(champ.isRequired()).isTrue();
+                    assertThat(champ.getOptions())
+                            .isEqualTo(SourceDeChoix.CIRCUITS_TRAITEMENT.getCle());
+                    // Comme le processus destinataire : demandé à l'orientation, et à elle seule.
+                    assertThat(champ.getActionCode())
+                            .isEqualTo(WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER);
+                });
+
+        assertThat(etape("VALIDATION_RQ").getFields())
+                .filteredOn(champ -> WorkflowDataInitializer.CHAMP_STRUCTURE_DESTINATAIRE_ID
+                        .equals(champ.getFieldName()))
+                .singleElement()
+                .satisfies(champ -> assertThat(champ.getActionCode())
+                        .isEqualTo(WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER));
+    }
+
+    @Test
+    @DisplayName("La clôture s'annonce au processus qui a signalé l'écart")
+    void cloture_previentLeProcessusEmetteur() {
+        // Seule étape dont le courriel ne s'adresse pas à qui doit y agir : la clôture est prononcée
+        // par le responsable qualité, mais c'est le pilote du processus soumissionnaire qui attend
+        // d'apprendre ce qu'est devenu son signalement — et le dossier a changé de structure six
+        // étapes plus tôt.
+        DestinataireCourriel destinataire =
+                DestinataireCourriel.lire(etape("CLOTURE").getDestinataireCourriel());
+
+        assertThat(destinataire).isNotNull();
+        assertThat(destinataire.role()).isEqualTo("PILOTE");
+        assertThat(destinataire.portee()).isEqualTo(DestinataireCourriel.Portee.STRUCTURE_EMETTRICE);
+    }
+
+    @Test
+    @DisplayName("Chaque étape annonce son franchissement par son propre message")
+    void chaqueEtape_aSonGabaritDeCourriel() {
+        // Une poignée de modèles génériques servait tout le parcours : l'agent dont la déclaration
+        // revenait pour correction recevait « Nouvelle non-conformité imputée ». Un gabarit partagé
+        // par deux étapes dit forcément faux pour l'une des deux.
+        assertThat(circuit.getSteps())
+                .allSatisfy(step -> assertThat(step.getEmailTemplateCode())
+                        .withFailMessage("L'étape « %s » n'annonce son franchissement par aucun "
+                                + "message.", step.getCode())
+                        .isNotBlank());
+
+        assertThat(circuit.getSteps())
+                .extracting(WorkflowStep::getEmailTemplateCode)
+                .doesNotHaveDuplicates();
     }
 
     @Test

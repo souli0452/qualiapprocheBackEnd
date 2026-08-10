@@ -25,6 +25,13 @@ public class WorkflowStepDto {
     private String description;
     private String etatTraitement;
     private String emailTemplateCode;
+
+    /**
+     * Destinataire du courriel d'étape sous la forme {@code RÔLE@PORTÉE}, quand ce n'est pas celui
+     * qui doit agir à l'étape. Vide, le courriel suit la règle : le rôle de l'étape, dans la
+     * structure du dossier.
+     */
+    private String destinataireCourriel;
     /**
      * Modèle du catalogue d'étapes ayant servi à pré-remplir l'étape. Champ obligatoire côté écran
      * de configuration, il n'existait pas ici : la valeur transmise était silencieusement écartée

@@ -44,6 +44,23 @@ class EditionDuCircuitTest {
     }
 
     @Test
+    @DisplayName("Le destinataire désigné du courriel survit à un enregistrement")
+    void destinataireDuCourriel_conserve() {
+        WorkflowStep etape = WorkflowStep.builder()
+                .id(9L).code("CLOTURE").nomEtape("Clôture").stepOrder(9)
+                .responsableRole("RESPONSABLE_QUALITE")
+                .emailTemplateCode("ncCloturee")
+                .destinataireCourriel("PILOTE@STRUCTURE_EMETTRICE")
+                .build();
+
+        WorkflowStepDto relu = mapper.toDto(etape);
+
+        // Perdu, la clôture serait annoncée au responsable qualité qui vient de la prononcer, et
+        // non au pilote du processus qui avait signalé l'écart.
+        assertThat(relu.getDestinataireCourriel()).isEqualTo("PILOTE@STRUCTURE_EMETTRICE");
+    }
+
+    @Test
     @DisplayName("La portée d'un champ survit à un enregistrement")
     void porteeDuChamp_conservee() {
         WorkflowStepField champ = WorkflowStepField.builder()

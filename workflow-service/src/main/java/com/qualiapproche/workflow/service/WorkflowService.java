@@ -398,6 +398,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             step.setDescription(stepDto.getDescription());
             step.setEtatTraitement(stepDto.getEtatTraitement());
             step.setEmailTemplateCode(stepDto.getEmailTemplateCode());
+            step.setDestinataireCourriel(stepDto.getDestinataireCourriel());
             step.setStepTemplateId(stepDto.getStepTemplateId());
             // Absent du DTO, il était remis à zéro à chaque enregistrement : l'étape d'imputation
             // cessait de nommer le titulaire, et les étapes qui lui sont réservées devenaient
@@ -1401,6 +1402,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                     HttpStatus.CONFLICT);
         }
 
+        // La structure du déclarant, capturée pendant que la requête est encore la sienne : les
+        // notifications partent plus tard, d'un fil asynchrone où plus aucun jeton ne dit d'où
+        // venait le dossier. Le jeton d'abord, user-service à défaut — le royaume Keycloak ne
+        // mappe pas l'attribut structure en claim.
+        String structureDuDeclarant = structureUtilisateurService.structureDeLUtilisateurCourant();
+
         WorkflowValidationInstance instance = WorkflowValidationInstance.builder()
                 .resourceId(resourceId.toString())
                 .resourceType(resourceType)
@@ -1412,11 +1419,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 // dépôt ou sa demande. Inscrit ici une fois pour toutes — aucune étape ne le
                 // réécrira, à la différence du titulaire.
                 .createurId(SecurityUtils.getCurrentUserId())
-                // La structure du déclarant, capturée pendant que la requête est encore la
-                // sienne : les notifications partent plus tard, d'un fil asynchrone où plus aucun
-                // jeton ne dit d'où venait le dossier. Le jeton d'abord, user-service à défaut —
-                // le royaume Keycloak ne mappe pas l'attribut structure en claim.
-                .structureId(structureUtilisateurService.structureDeLUtilisateurCourant())
+                // Où le dossier se trouve : une étape d'orientation le déplacera.
+                .structureId(structureDuDeclarant)
+                // D'où il part : rien ne déplace celle-ci, et c'est à elle qu'on rendra compte de
+                // la clôture, longtemps après que le dossier aura changé de mains.
+                .structureEmettriceId(structureDuDeclarant)
                 .referenceLisible(referenceNettoyee(reference))
                 .build();
 

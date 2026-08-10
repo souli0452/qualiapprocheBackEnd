@@ -262,4 +262,137 @@ class RattrapageDesCircuitsLivresTest {
         assertThat(rejete.getChampTitulaire()).isEqualTo(champ);
         assertThat(rejete.getFields()).extracting(f -> f.getFieldName()).contains(champ);
     }
+
+    /**
+     * Le circuit tel qu'il était avant que la validation qualité n'offre deux issues : une seule
+     * action pour approuver, nommée d'après sa décision par {@code RattrapageDesActionsDEtape}.
+     */
+    private Workflow circuitAvantLaClotureDirecte() {
+        Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
+        WorkflowStep validationRq = etape(circuit, "VALIDATION_RQ");
+
+        validationRq.getTransitions().removeIf(t -> WorkflowDataInitializer.ACTION_CLOTURER_SANS_SUITE
+                .equals(t.getCode()));
+        validationRq.getTransitions().stream()
+                .filter(t -> WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER.equals(t.getCode()))
+                .forEach(t -> t.setCode("APPROUVE"));
+        validationRq.getFields().removeIf(champ ->
+                WorkflowDataInitializer.CHAMP_CIRCUIT_TRAITEMENT.equals(champ.getFieldName())
+                        || WorkflowDataInitializer.CHAMP_MOTIF_CLOTURE_DIRECTE.equals(champ.getFieldName()));
+        validationRq.getFields().forEach(champ -> champ.setActionCode(null));
+        return circuit;
+    }
+
+    @Test
+    @DisplayName("Une action renommée est renommée, non dupliquée")
+    void actionRenommee_pasDeDoublon() {
+        Workflow circuit = circuitAvantLaClotureDirecte();
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        // Une action est reconnue par son code. Sans renommage préalable, l'action livrée sous son
+        // nouveau nom passerait pour absente et serait ajoutée : le dossier offrirait deux boutons
+        // menant à l'imputation, dont un seul réclamerait les saisies attendues.
+        assertThat(etape(circuit, "VALIDATION_RQ").getTransitions())
+                .filteredOn(t -> t.getToStep() != null && "IMPUTATION".equals(t.getToStep().getCode()))
+                .singleElement()
+                .satisfies(t -> assertThat(t.getCode())
+                        .isEqualTo(WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER));
+    }
+
+    @Test
+    @DisplayName("La clôture sans suite et ses champs arrivent sur un circuit en service")
+    void clotureDirecte_ajoutee() {
+        Workflow circuit = circuitAvantLaClotureDirecte();
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        WorkflowStep validationRq = etape(circuit, "VALIDATION_RQ");
+        assertThat(validationRq.getTransitions())
+                .filteredOn(t -> WorkflowDataInitializer.ACTION_CLOTURER_SANS_SUITE.equals(t.getCode()))
+                .singleElement()
+                .satisfies(t -> assertThat(t.getToStep().getCode()).isEqualTo("CLOTURE"));
+
+        assertThat(validationRq.getFields()).extracting(WorkflowStepField::getFieldName)
+                .contains(WorkflowDataInitializer.CHAMP_CIRCUIT_TRAITEMENT,
+                        WorkflowDataInitializer.CHAMP_MOTIF_CLOTURE_DIRECTE);
+    }
+
+    @Test
+    @DisplayName("Les champs de l'orientation cessent d'être exigés de la clôture sans suite")
+    void champsExistants_rattachesALeurAction() {
+        Workflow circuit = circuitAvantLaClotureDirecte();
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        // Sans portée, le processus destinataire — obligatoire — aurait été réclamé des deux
+        // actions : il serait devenu impossible de clore sans désigner à qui l'on transmet un
+        // dossier qu'on vient de décider de ne transmettre à personne.
+        assertThat(etape(circuit, "VALIDATION_RQ").getFields())
+                .filteredOn(champ -> WorkflowDataInitializer.CHAMP_STRUCTURE_DESTINATAIRE_ID
+                        .equals(champ.getFieldName()))
+                .singleElement()
+                .satisfies(champ -> assertThat(champ.getActionCode())
+                        .isEqualTo(WorkflowDataInitializer.ACTION_VALIDER_ET_ORIENTER));
+    }
+
+    @Test
+    @DisplayName("Un compte rendu devenu facultatif cesse d'être exigé")
+    void champDevenuFacultatif_libere() {
+        Workflow circuit = WorkflowDataInitializer.circuitPlanActionParDefaut();
+        WorkflowStep aRealiser = etape(circuit, "NON_TRAITER");
+        aRealiser.getFields().forEach(champ -> champ.setRequired(true));
+        enBase("PLAN_ACTION", circuit);
+
+        rattrapage.run();
+
+        // La cause et la solution retenue sont désormais posées à la proposition du plan. Laissées
+        // obligatoires ici, elles empêchaient le responsable de déclarer son action réalisée tant
+        // qu'il n'aurait pas recopié ce que le dossier portait déjà.
+        assertThat(aRealiser.getFields())
+                .filteredOn(champ -> List.of("causeIdentifiees", "solutionRetenues")
+                        .contains(champ.getFieldName()))
+                .isNotEmpty()
+                .allSatisfy(champ -> assertThat(champ.isRequired()).isFalse());
+    }
+
+    @Test
+    @DisplayName("Les étapes reçoivent leur propre message, sauf celui qu'un administrateur a choisi")
+    void gabarits_alignesSaufChoixExplicite() {
+        Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
+        // Ce que porte une base en service : les modèles génériques d'avant.
+        etape(circuit, "SOUMISSION").setEmailTemplateCode("emailTemplate");
+        etape(circuit, "RECEPTION").setEmailTemplateCode("structureToStructure");
+        // Et un gabarit rédigé sur place, qui n'appartient pas au circuit livré.
+        etape(circuit, "IMPUTATION").setEmailTemplateCode("monGabaritMaison");
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        assertThat(etape(circuit, "SOUMISSION").getEmailTemplateCode())
+                .isEqualTo("ncRenvoyeeAuDeclarant");
+        assertThat(etape(circuit, "RECEPTION").getEmailTemplateCode()).isEqualTo("ncRecue");
+        assertThat(etape(circuit, "IMPUTATION").getEmailTemplateCode())
+                .as("un gabarit choisi par un administrateur n'est pas défait par un rattrapage")
+                .isEqualTo("monGabaritMaison");
+    }
+
+    @Test
+    @DisplayName("La clôture apprend à qui elle doit s'adresser")
+    void destinataireDeLaCloture_ajoute() {
+        Workflow circuit = WorkflowDataInitializer.circuitNonConformiteParDefaut();
+        WorkflowStep cloture = etape(circuit, "CLOTURE");
+        cloture.setDestinataireCourriel(null);
+        enBase("NON_CONFORMITE", circuit);
+
+        rattrapage.run();
+
+        // Sans elle, la clôture était annoncée au responsable qualité qui venait de la prononcer, et
+        // non au pilote du processus qui avait signalé l'écart et attendait d'apprendre ce qu'il
+        // était devenu.
+        assertThat(cloture.getDestinataireCourriel()).isEqualTo("PILOTE@STRUCTURE_EMETTRICE");
+    }
 }

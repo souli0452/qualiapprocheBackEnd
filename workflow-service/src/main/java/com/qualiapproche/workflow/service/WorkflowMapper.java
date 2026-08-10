@@ -53,6 +53,7 @@ public class WorkflowMapper {
                 .description(entity.getDescription())
                 .etatTraitement(entity.getEtatTraitement())
                 .emailTemplateCode(entity.getEmailTemplateCode())
+                .destinataireCourriel(entity.getDestinataireCourriel())
                 .stepTemplateId(entity.getStepTemplateId())
                 .champTitulaire(entity.getChampTitulaire())
                 .transitions(entity.getTransitions() != null ? entity.getTransitions().stream().map(this::toDto).collect(Collectors.toList()) : null)
@@ -136,7 +137,12 @@ public class WorkflowMapper {
                 .description(dto.getDescription())
                 .etatTraitement(dto.getEtatTraitement())
                 .emailTemplateCode(dto.getEmailTemplateCode())
+                .destinataireCourriel(dto.getDestinataireCourriel())
                 .stepTemplateId(dto.getStepTemplateId())
+                // Absent de cette conversion, il l'était depuis toujours : un circuit créé de toutes
+                // pièces depuis l'éditeur perdait la désignation du titulaire, et ses étapes
+                // réservées devenaient indécidables dès le premier dossier.
+                .champTitulaire(dto.getChampTitulaire())
                 .build();
 
         if (dto.getTransitions() != null) {

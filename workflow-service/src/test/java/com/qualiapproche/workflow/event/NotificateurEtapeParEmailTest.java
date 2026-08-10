@@ -238,6 +238,96 @@ class NotificateurEtapeParEmailTest {
     }
 
     @Test
+    @DisplayName("Une étape peut annoncer son franchissement à la structure d'où vient le dossier")
+    void destinataireDesigne_structureEmettrice() {
+        // La clôture d'une non-conformité s'annonce au pilote du processus qui a signalé l'écart :
+        // ni le rôle de l'étape — le responsable qualité, qui vient de la prononcer — ni la
+        // structure du dossier, qui a changé six étapes plus tôt quand il a été confié au processus
+        // destinataire.
+        etape.setDestinataireCourriel("PILOTE@STRUCTURE_EMETTRICE");
+
+        UUID instanceId = UUID.randomUUID();
+        WorkflowValidationInstance instance = WorkflowValidationInstance.builder()
+                .resourceId("42").resourceType("NON_CONFORMITE")
+                .structureId("structure-destinataire")
+                .structureEmettriceId("structure-emettrice")
+                .build();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(instance));
+        when(destinatairesEtapeService.destinatairesDuRole("PILOTE", "structure-emettrice"))
+                .thenReturn(List.of(destinataire("pilote@exemple.fr", "Awa Traoré")));
+
+        notificateur.notifier(etape, new TransitionFranchieEvent(
+                WorkflowValidationInstance.class.getName(), instanceId.toString(),
+                "circuit", "42", "8", "9", "responsable-qualite", "dossier clos"));
+
+        verify(destinatairesEtapeService).destinatairesDuRole("PILOTE", "structure-emettrice");
+        verify(destinatairesEtapeService, never())
+                .destinatairesDuRole(eq("VERIFICATEUR"), any());
+    }
+
+    @Test
+    @DisplayName("Un dossier sans structure d'origine retombe sur celle où il se trouve")
+    void structureEmettriceAbsente_repliSurLaCourante() {
+        // Les dossiers ouverts avant la colonne n'en portent pas. Ne prévenir personne serait pire
+        // que de prévenir la structure courante, qui est la même tant que rien n'a été orienté.
+        etape.setDestinataireCourriel("PILOTE@STRUCTURE_EMETTRICE");
+
+        UUID instanceId = UUID.randomUUID();
+        WorkflowValidationInstance instance = WorkflowValidationInstance.builder()
+                .resourceId("42").resourceType("NON_CONFORMITE")
+                .structureId("structure-courante")
+                .build();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(instance));
+        when(destinatairesEtapeService.destinatairesDuRole("PILOTE", "structure-courante"))
+                .thenReturn(List.of(destinataire("pilote@exemple.fr", "Awa Traoré")));
+
+        notificateur.notifier(etape, new TransitionFranchieEvent(
+                WorkflowValidationInstance.class.getName(), instanceId.toString(),
+                "circuit", "42", "8", "9", "responsable-qualite", "dossier clos"));
+
+        verify(destinatairesEtapeService).destinatairesDuRole("PILOTE", "structure-courante");
+    }
+
+    @Test
+    @DisplayName("Le gabarit peut nommer l'auteur de la décision")
+    void variables_portentLAuteur() {
+        // Les messages livrés disent « soumise par X », « mise en œuvre par Y » : sans ce nom, ils
+        // décrivaient une action dont l'auteur restait anonyme, et le destinataire devait ouvrir le
+        // dossier rien que pour savoir à qui répondre.
+        destinataires(destinataire("claire@exemple.fr", "Claire Martin"));
+        when(destinatairesEtapeService.destinataire("agent-qualite"))
+                .thenReturn(List.of(destinataire("moussa@exemple.fr", "Moussa Kanté")));
+
+        notificateur.notifier(etape, evenement());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
+        verify(notificationService).enregistrerCourriel(
+                nullable(String.class), nullable(String.class),
+                anyString(), anyString(), anyString(), aVariables.capture());
+
+        assertThat(aVariables.getValue()).containsEntry("auteur", "Moussa Kanté");
+    }
+
+    @Test
+    @DisplayName("Un auteur introuvable laisse le nom vide, jamais un identifiant technique")
+    void auteurIntrouvable_nomVide() {
+        destinataires(destinataire("claire@exemple.fr", "Claire Martin"));
+        when(destinatairesEtapeService.destinataire(anyString())).thenReturn(List.of());
+
+        notificateur.notifier(etape, evenement());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
+        verify(notificationService).enregistrerCourriel(
+                nullable(String.class), nullable(String.class),
+                anyString(), anyString(), anyString(), aVariables.capture());
+
+        // « soumise par 8f3c-… » ne dit rien à personne ; la phrase se lit encore sans le nom.
+        assertThat(aVariables.getValue()).containsEntry("auteur", "");
+    }
+
+    @Test
     @DisplayName("Une étape sans modèle d'e-mail n'entraîne aucune résolution ni envoi")
     void etapeSansModele_rien() {
         etape.setEmailTemplateCode(null);

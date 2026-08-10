@@ -2,6 +2,7 @@ package com.qualiapproche.amelioration.service;
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.service.impl.PlansActionDeLaNonConformiteService;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
@@ -40,6 +41,8 @@ import static org.mockito.Mockito.when;
 class EngagementDesPlansTest {
 
     @Mock private PlanActionRepository planActionRepository;
+    /** Le dossier porte le circuit de traitement, dont dépendent les colonnes exigées du plan. */
+    @Mock private NonConformiteRepository nonConformiteRepository;
     @Mock private WorkflowClient workflowClient;
 
     @InjectMocks private PlansActionDeLaNonConformiteService service;

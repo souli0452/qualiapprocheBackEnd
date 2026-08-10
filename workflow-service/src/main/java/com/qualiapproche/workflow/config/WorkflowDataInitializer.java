@@ -1,6 +1,7 @@
 package com.qualiapproche.workflow.config;
 
 import com.qualiapproche.common.utils.RolesPlateforme;
+import com.qualiapproche.workflow.model.DestinataireCourriel;
 import com.qualiapproche.workflow.model.SeveriteAction;
 import com.qualiapproche.workflow.model.SourceDeChoix;
 import com.qualiapproche.workflow.model.StepDecision;
@@ -17,6 +18,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.core.annotation.Order;
 
 /**
@@ -97,6 +100,17 @@ public class WorkflowDataInitializer implements CommandLineRunner {
     static final String FAIT_PLANS_ACTION_SOLDES = "PLANS_ACTION_SOLDES";
 
     /**
+     * Fait exigé pour soumettre le traitement : le dossier porte au moins une action, et chacune est
+     * complète.
+     *
+     * <p>La personne imputée propose le plan ; son supérieur ne peut se prononcer que sur un plan
+     * entier — numéro, cause (sauf en correction), solution retenue, action proposée, échéance et
+     * critère d'efficacité. Sans cette condition, le pilote validait une intention, et découvrait à
+     * la mise en œuvre que l'action n'avait ni échéance ni critère auquel la confronter.</p>
+     */
+    static final String FAIT_PLANS_ACTION_COMPLETS = "PLANS_ACTION_COMPLETS";
+
+    /**
      * Habilitation réservant une transition au titulaire du dossier.
      *
      * <p>Reconnue par {@code WorkflowConditionAdapter}. Le préfixe la distingue d'un nom de rôle,
@@ -116,6 +130,38 @@ public class WorkflowDataInitializer implements CommandLineRunner {
      * du moteur dit alors qui a transféré, quand, et vers qui.</p>
      */
     static final String CHAMP_STRUCTURE_DESTINATAIRE_ID = "structureDestinataireId";
+
+    /**
+     * Circuit de traitement retenu par le responsable qualité : action corrective, ou correction.
+     *
+     * <p>Il commande ce que le plan d'action devra porter — une correction remet en conformité sans
+     * qu'on ait à rechercher la cause, une action corrective s'attaque précisément à celle-ci. Le
+     * choix se prend au même moment que l'orientation vers le processus destinataire, et pour la
+     * même raison : c'est là que le responsable qualité qualifie l'écart.</p>
+     */
+    static final String CHAMP_CIRCUIT_TRAITEMENT = "circuitTraitement";
+
+    /**
+     * Motif d'une clôture prononcée dès la validation qualité, sans traitement.
+     *
+     * <p>Classer un signalement sans suite est la décision la plus lourde du circuit : elle arrête
+     * le dossier là où toutes les autres l'avancent, et personne ne rendra plus compte de rien.
+     * Le motif est donc exigé, et rattaché à cette action seule — la validation ordinaire, qui
+     * envoie le dossier au traitement, n'a rien à justifier de tel.</p>
+     */
+    static final String CHAMP_MOTIF_CLOTURE_DIRECTE = "motifClotureDirecte";
+
+    /**
+     * Action par laquelle le responsable qualité valide le signalement et l'oriente.
+     *
+     * <p>Son étape en offre désormais deux qui approuvent — orienter, ou clore sans suite — et la
+     * nature de la décision ne suffit donc plus à les distinguer : c'est ce code qui dit laquelle
+     * a été jouée, et quels champs elle réclame.</p>
+     */
+    static final String ACTION_VALIDER_ET_ORIENTER = "VALIDER_ET_ORIENTER";
+
+    /** Action par laquelle le responsable qualité clôt le dossier dès la validation. */
+    static final String ACTION_CLOTURER_SANS_SUITE = "CLOTURER_SANS_SUITE";
 
     private final WorkflowRepository workflowRepository;
 
@@ -291,6 +337,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
      * écrites dans le circuit, elles en sont issues. Une structure créée après le circuit y figure
      * donc sans qu'on ait à le remanier.</p>
      *
+     * <p>Rattaché à l'action qui oriente le dossier, et non à l'étape : celle-ci offre aussi de
+     * clore sans suite, et l'on demandait alors à quel processus transmettre un dossier qu'on
+     * venait justement de décider de ne transmettre à personne.</p>
+     *
      * @param designationExigee vrai là où l'affectation <b>est</b> la décision — la validation du
      *                          responsable qualité. Approuver sans désigner laisserait le dossier à
      *                          une étape d'imputation que le pilote d'aucune structure ne se
@@ -300,13 +350,45 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         return WorkflowStepField.builder()
                 .step(step)
                 .fieldName(CHAMP_STRUCTURE_DESTINATAIRE_ID)
-                .fieldLabel("Structure destinataire")
+                .fieldLabel("Processus destinataire")
                 .type(FieldType.SELECT)
                 .options(SourceDeChoix.STRUCTURES.getCle())
                 .isRequired(designationExigee)
+                .actionCode(designationExigee ? ACTION_VALIDER_ET_ORIENTER : null)
                 .build();
     }
 
+    /**
+     * Champ par lequel le responsable qualité qualifie l'écart : correction, ou action corrective.
+     *
+     * <p>Ce n'est pas une préférence d'affichage : le circuit retenu commande les colonnes que le
+     * plan d'action devra porter — une correction n'oblige pas à rechercher la cause, une action
+     * corrective ne vaut que par elle. Le choix se prend au moment où le dossier est orienté, donc
+     * rattaché à cette action seule.</p>
+     *
+     * <p>Source de choix plutôt que liste littérale : la valeur retenue est le nom de la constante,
+     * que le module métier reconnaît, et non le libellé, qu'un administrateur pourrait reformuler
+     * sans savoir qu'il romprait le lien.</p>
+     */
+    static WorkflowStepField champCircuitTraitement(WorkflowStep step) {
+        return WorkflowStepField.builder()
+                .step(step)
+                .fieldName(CHAMP_CIRCUIT_TRAITEMENT)
+                .fieldLabel("Circuit de traitement")
+                .type(FieldType.SELECT)
+                .options(SourceDeChoix.CIRCUITS_TRAITEMENT.getCle())
+                .isRequired(true)
+                .actionCode(ACTION_VALIDER_ET_ORIENTER)
+                .build();
+    }
+
+    /**
+     * Circuit livré des non-conformités : neuf étapes, de la déclaration à la clôture.
+     *
+     * <p>Écrit en deux temps — les étapes, puis les routes qui les relient — parce que les secondes
+     * désignent les premières et qu'il faut donc que toutes existent avant qu'aucune ne soit
+     * enchaînée.</p>
+     */
     static Workflow circuitNonConformiteParDefaut() {
         Workflow workflow = Workflow.builder()
                 .nom("Workflow Défaut Non-Conformité")
@@ -314,6 +396,20 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .resourceType("NON_CONFORMITE")
                 .build();
 
+        List<WorkflowStep> etapes = etapesDeLaNonConformite();
+        enchainerLaNonConformite(etapes);
+        etapes.forEach(workflow::addStep);
+
+        return workflow;
+    }
+
+    /**
+     * Les neuf étapes du circuit, sans leurs routes.
+     *
+     * <p>Chacune porte ce qu'elle attend en saisie et le gabarit du courriel qui annonce son
+     * franchissement — un par étape, chacun disant à son destinataire ce qu'on attend de lui.</p>
+     */
+    private static List<WorkflowStep> etapesDeLaNonConformite() {
         // 1. SOUMISSION — l'émetteur déclare.
         WorkflowStep soumission = WorkflowStep.builder()
                 .code("SOUMISSION")
@@ -325,7 +421,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 // la transition « Soumettre la NC » le dit. Un rôle est collectif, soumettre sa
                 // déclaration ne l'est pas, et le dossier revient ici quand on le renvoie.
                 .responsableRole(HABILITATION_CREATEUR)
-                .emailTemplateCode("emailTemplate")
+                .emailTemplateCode("ncRenvoyeeAuDeclarant")
                 .build();
 
         // 2. RECEPTION — prise en charge du signalement.
@@ -336,24 +432,40 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("RECEPTION")
                 .description("Réception et prise en charge")
                 .responsableRole("PILOTE")
-                .emailTemplateCode("structureToStructure")
+                .emailTemplateCode("ncRecue")
                 .build();
         reception.getFields().add(champDocumentRejet(reception));
 
-        // 3. VALIDATION_RQ — le responsable qualité valide et désigne la structure en charge.
+        // 3. VALIDATION_RQ — le responsable qualité apprécie le signalement.
         //
-        // La désignation est obligatoire : approuver sans dire à qui laisserait le dossier à une
-        // étape d'imputation que le pilote d'aucune structure ne se reconnaîtrait tenu de traiter.
+        // Deux issues s'ouvrent à lui, et non une seule : clore le dossier dès ici — tout
+        // signalement n'appelle pas un traitement —, ou le valider en disant du même geste
+        // *comment* il sera traité (action corrective ou correction) et *par qui* (le processus
+        // destinataire). Ces deux choix sont indissociables de la validation : approuver sans
+        // désigner laisserait le dossier à une étape d'imputation que le pilote d'aucune structure
+        // ne se reconnaîtrait tenu de traiter, et sans qualifier l'écart, le plan d'action ne
+        // saurait pas quelles colonnes il doit porter.
         WorkflowStep validationRq = WorkflowStep.builder()
                 .code("VALIDATION_RQ")
                 .nomEtape("Validation RQ")
                 .stepOrder(3)
                 .etatTraitement("VALIDATION_RQ")
-                .description("Validation par le responsable qualité et affectation à une structure")
+                .description("Appréciation du responsable qualité : clôture, ou orientation vers "
+                        + "un processus destinataire au titre d'un circuit de traitement")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("structureToStructure")
+                .emailTemplateCode("ncAApprecier")
                 .build();
         validationRq.getFields().add(champStructureDestinataire(validationRq, true));
+        validationRq.getFields().add(champCircuitTraitement(validationRq));
+        // Classer un signalement sans suite arrête le dossier là où toute autre décision l'avance :
+        // plus personne n'en rendra compte, et le motif est la seule chose qui restera lisible.
+        validationRq.getFields().add(WorkflowStepField.builder().step(validationRq)
+                .fieldName(CHAMP_MOTIF_CLOTURE_DIRECTE)
+                .fieldLabel("Motif de la clôture")
+                .type(FieldType.TEXT)
+                .isRequired(true)
+                .actionCode(ACTION_CLOTURER_SANS_SUITE)
+                .build());
         validationRq.getFields().add(champDocumentRejet(validationRq));
 
         // 4. IMPUTATION — le pilote de la structure désignée nomme le traitant.
@@ -364,7 +476,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("IMPUTATION")
                 .description("Imputation à un agent traitant")
                 .responsableRole("PILOTE")
-                .emailTemplateCode("emailTemplate")
+                .emailTemplateCode("ncTransmise")
                 // Imputer, c'est nommer : la valeur saisie ici devient le titulaire du dossier, et
                 // c'est elle — non un rôle — qui ouvrira l'étape de traitement.
                 .champTitulaire(CHAMP_AGENT_IMPUTE)
@@ -390,7 +502,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 // par l'étape et non par ses seules transitions, pour que le modèle d'étape
                 // publié au catalogue dise la même chose.
                 .responsableRole(HABILITATION_TITULAIRE)
-                .emailTemplateCode("emailPlanAction")
+                .emailTemplateCode("ncImputee")
                 .build();
         // Le traitement ne demande rien en saisie libre : ce qui est décidé à cette étape s'écrit
         // dans les plans d'action (action corrective, échéance, critère d'efficacité), où le circuit
@@ -406,7 +518,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("VALIDATION")
                 .description("Validation de la pertinence des actions")
                 .responsableRole("PILOTE")
-                .emailTemplateCode("validationNonConformite")
+                .emailTemplateCode("ncPlanAValider")
                 .build();
         // La pertinence et sa justification étaient demandées en texte alors que le pilote se
         // prononce déjà par sa décision : approuver, c'est juger l'action pertinente, et tout
@@ -421,7 +533,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("VALIDATION_RS")
                 .description("Validation RQ des actions")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("validationRq")
+                .emailTemplateCode("ncPlanAContresigner")
                 .build();
         validationRs.getFields().add(WorkflowStepField.builder().step(validationRs).fieldName("pertinanceRs")
                 .fieldLabel("Pertinence de l'action (RS)").type(FieldType.TEXT).isRequired(true).build());
@@ -437,7 +549,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("SUIVI_RQ")
                 .description("Suivi de l'efficacité et clôture")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("validationAfterPlan")
+                .emailTemplateCode("ncAClore")
                 .build();
         suiviRq.getFields().add(WorkflowStepField.builder().step(suiviRq).fieldName("efficaciteId")
                 .fieldLabel("Efficacité (ID)").type(FieldType.TEXT).isRequired(true).build());
@@ -445,7 +557,13 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .fieldLabel("Observations finales (RQ)").type(FieldType.TEXT).isRequired(true).build());
         suiviRq.getFields().add(champDocumentRejet(suiviRq));
 
-        // 9. CLOTURE
+        // 9. CLOTURE — fin de parcours, et compte rendu à celui qui a signalé l'écart.
+        //
+        // Seule étape dont le courriel ne s'adresse pas à qui doit y agir : la clôture est
+        // prononcée par le responsable qualité, mais c'est le pilote du processus **soumissionnaire**
+        // qui attend d'apprendre ce qu'est devenu son signalement. Ni son rôle ni sa structure ne
+        // sont ceux de l'étape — le dossier a été confié au processus destinataire six étapes plus
+        // tôt — d'où la désignation explicite.
         WorkflowStep cloture = WorkflowStep.builder()
                 .code("CLOTURE")
                 .nomEtape("Clôture")
@@ -453,10 +571,34 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("CLOTURE")
                 .description("Clôture finale de la NC")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("traitementReussi")
+                .emailTemplateCode("ncCloturee")
+                .destinataireCourriel(new DestinataireCourriel(
+                        "PILOTE", DestinataireCourriel.Portee.STRUCTURE_EMETTRICE).ecrire())
                 .build();
 
-        // --- Enchaînement, et les issues de rejet qui l'accompagnent -------------------------
+        return List.of(soumission, reception, validationRq, imputation, traitement,
+                validation, validationRs, suiviRq, cloture);
+    }
+
+    /**
+     * Les routes du circuit des non-conformités, et les issues de rejet qui les accompagnent.
+     *
+     * <p>Les étapes sont retrouvées par leur code : les enchaîner de position en position aurait
+     * fait dépendre le circuit de l'ordre où elles sont écrites, qu'un ajout suffit à changer.</p>
+     */
+    private static void enchainerLaNonConformite(List<WorkflowStep> etapes) {
+        Map<String, WorkflowStep> parCode = etapes.stream()
+                .collect(Collectors.toMap(WorkflowStep::getCode, etape -> etape));
+        WorkflowStep soumission = parCode.get("SOUMISSION");
+        WorkflowStep reception = parCode.get("RECEPTION");
+        WorkflowStep validationRq = parCode.get("VALIDATION_RQ");
+        WorkflowStep imputation = parCode.get("IMPUTATION");
+        WorkflowStep traitement = parCode.get("TRAITEMENT");
+        WorkflowStep validation = parCode.get("VALIDATION");
+        WorkflowStep validationRs = parCode.get("VALIDATION_RS");
+        WorkflowStep suiviRq = parCode.get("SUIVI_RQ");
+        WorkflowStep cloture = parCode.get("CLOTURE");
+
 
         // Déclaration : pas de rejet, rien n'a encore été examiné.
         soumission.getTransitions().add(WorkflowTransition.builder()
@@ -472,11 +614,23 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .fromStep(reception).toStep(soumission).decision(StepDecision.REJETE).label("Renvoyer au déclarant")
                 .icon("pi pi-undo").severity(SeveriteAction.WARN).build());
 
-        // Validation RQ : valider en désignant la structure, ou renvoyer à la réception.
+        // Validation RQ : trois suites, dont deux approuvent — d'où des codes d'action, la seule
+        // nature de la décision ne les distinguant plus.
+        //
+        // Clore ici n'est pas un raccourci : tout signalement n'appelle pas un traitement, et
+        // faire parcourir à un dossier sans suite les six étapes restantes pour l'y conduire de
+        // toute façon aurait mobilisé un pilote, un agent imputé et un plan d'action pour rien.
+        // La décision reste tracée comme les autres, et son motif est exigé.
         validationRq.getTransitions().add(WorkflowTransition.builder()
                 .fromStep(validationRq).toStep(imputation).decision(StepDecision.APPROUVE)
-                .label("Valider et affecter à la structure")
+                .code(ACTION_VALIDER_ET_ORIENTER)
+                .label("Valider et transmettre au processus destinataire")
                 .icon("pi pi-check").severity(SeveriteAction.SUCCESS).build());
+        validationRq.getTransitions().add(WorkflowTransition.builder()
+                .fromStep(validationRq).toStep(cloture).decision(StepDecision.APPROUVE)
+                .code(ACTION_CLOTURER_SANS_SUITE)
+                .label("Clôturer sans suite")
+                .icon("pi pi-lock").severity(SeveriteAction.INFO).build());
         validationRq.getTransitions().add(WorkflowTransition.builder()
                 .fromStep(validationRq).toStep(reception).decision(StepDecision.REJETE)
                 .label("Renvoyer à la réception")
@@ -496,6 +650,12 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         traitement.getTransitions().add(WorkflowTransition.builder()
                 .fromStep(traitement).toStep(validation).decision(StepDecision.APPROUVE).label("Soumettre le traitement")
                 .requiredRole(HABILITATION_TITULAIRE)
+                // Traiter, c'est proposer un plan — et un plan se soumet entier. Sans cette
+                // condition, le dossier pouvait partir chez le pilote sans aucune action, ou avec
+                // des actions sans échéance ni critère auquel confronter le résultat.
+                .conditionRequise(FAIT_PLANS_ACTION_COMPLETS)
+                .conditionLibelle("le dossier porte au moins une action, et chacune est complète "
+                        + "(cause, solution retenue, action proposée, échéance, critère d'efficacité)")
                 .icon("pi pi-send").severity(SeveriteAction.INFO).build());
         traitement.getTransitions().add(WorkflowTransition.builder()
                 .fromStep(traitement).toStep(imputation).decision(StepDecision.REJETE).label("Rendre l'imputation")
@@ -535,17 +695,6 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .label("Efficacité insuffisante : reprendre")
                 .icon("pi pi-replay").severity(SeveriteAction.WARN).build());
 
-        workflow.addStep(soumission);
-        workflow.addStep(reception);
-        workflow.addStep(validationRq);
-        workflow.addStep(imputation);
-        workflow.addStep(traitement);
-        workflow.addStep(validation);
-        workflow.addStep(validationRs);
-        workflow.addStep(suiviRq);
-        workflow.addStep(cloture);
-
-        return workflow;
     }
 
     /**
@@ -593,24 +742,26 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 // depuis le responsable inscrit sur le plan. Un rôle l'aurait ouverte à tout agent,
                 // sur toute action — c'est l'écueil qu'« agent imputé » nous avait déjà valu.
                 .responsableRole(HABILITATION_TITULAIRE)
-                .emailTemplateCode("emailPlanAction")
+                .emailTemplateCode("actionAMener")
                 .build();
-        // Déclarer une action réalisée, c'est en rendre compte : la cause qu'on a identifiée et ce
-        // qu'on a mis en œuvre. Sans ces champs, l'étape ne recueillait rien — le compte rendu était
-        // saisi sur un écran et enregistré par un appel séparé, qui n'arrivait qu'après la décision
-        // et retombait sur un plan déjà passé à la vérification, où plus rien ne l'accepte. Les deux
-        // ne sont demandés qu'à l'approbation : décliner une attribution n'oblige à rendre compte de
-        // rien.
+        // La cause et la solution retenue sont désormais posées à la <b>proposition</b> du plan, par
+        // la personne imputée : c'est elle qui recherche les causes, et le plan qu'elle soumet à son
+        // supérieur doit être complet pour qu'il ait quelque chose à valider. Elles restent offertes
+        // ici — l'exécution révèle parfois que la cause n'était pas celle qu'on croyait, et c'est
+        // alors le responsable de l'action qui est le mieux placé pour le dire — mais ne sont plus
+        // <b>exigées</b> : elles le sont en amont, et les redemander reviendrait à faire ressaisir
+        // ce que le dossier porte déjà. Rattachées à l'approbation : décliner une attribution
+        // n'oblige à rendre compte de rien.
         step1.getFields().add(WorkflowStepField.builder().step(step1).fieldName(CHAMP_CAUSES_IDENTIFIEES)
                 .fieldLabel("Causes identifiées")
                 .type(FieldType.TEXT)
                 .decision(StepDecision.APPROUVE)
-                .isRequired(true).build());
+                .isRequired(false).build());
         step1.getFields().add(WorkflowStepField.builder().step(step1).fieldName(CHAMP_SOLUTIONS_RETENUES)
                 .fieldLabel("Solutions retenues")
                 .type(FieldType.TEXT)
                 .decision(StepDecision.APPROUVE)
-                .isRequired(true).build());
+                .isRequired(false).build());
 
         // 2. EN_VERIFICATION — ce que le responsable annonce, un autre le constate.
         WorkflowStep step2 = WorkflowStep.builder()
@@ -620,7 +771,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("EN_VERIFICATION")
                 .description("Le responsable déclare l'action réalisée ; le pilote doit le constater")
                 .responsableRole("PILOTE")
-                .emailTemplateCode("emailRqPlan")
+                .emailTemplateCode("actionAVerifier")
                 .build();
 
         // 3. EFFICACITE_A_MESURER — l'action a été faite ; a-t-elle produit l'effet attendu ?
@@ -631,7 +782,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("EFFICACITE_A_MESURER")
                 .description("Le responsable qualité confronte le résultat au critère d'efficacité fixé")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("emailRqPlan")
+                .emailTemplateCode("actionEfficaciteAMesurer")
                 .build();
         // Le critère d'efficacité était recueilli à la définition de l'action et n'était jamais
         // confronté à rien. Ce constat est ce qui distingue une action close d'une action efficace.
@@ -649,7 +800,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("TRAITER")
                 .description("Action réalisée et reconnue efficace : elle ne retient plus la clôture du dossier")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("emailRqPlan")
+                .emailTemplateCode("actionSoldee")
                 .build();
 
         // 5. REJECTED — l'attribution a été déclinée, l'action attend un autre responsable.

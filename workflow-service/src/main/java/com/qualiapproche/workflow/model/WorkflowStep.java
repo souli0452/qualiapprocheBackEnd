@@ -75,6 +75,18 @@ public class WorkflowStep {
     private String emailTemplateCode;
 
     /**
+     * Destinataire du courriel d'étape, quand ce n'est pas celui qui doit y agir.
+     *
+     * <p>Écrit sous la forme {@code RÔLE@PORTÉE} — voir {@link DestinataireCourriel}. Vide, le
+     * courriel part vers les porteurs du rôle responsable de l'étape, dans la structure du
+     * dossier ; c'est le cas de presque toutes. La clôture d'une non-conformité fait exception :
+     * elle s'annonce au pilote du processus qui a signalé l'écart, lequel n'est ni le rôle de
+     * cette étape ni, à ce stade, la structure du dossier.</p>
+     */
+    @Column(name = "destinataire_courriel", length = 80)
+    private String destinataireCourriel;
+
+    /**
      * Champ de cette étape dont la valeur désigne la personne à qui le dossier est confié.
      *
      * <p>L'imputation d'une non-conformité y inscrit {@code userImputId} : la décision prise à

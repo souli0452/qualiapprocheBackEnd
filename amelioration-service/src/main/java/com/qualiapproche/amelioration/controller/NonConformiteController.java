@@ -56,18 +56,46 @@ public class NonConformiteController {
     private final WorkflowClient workflowClient;
 
     /**
-     * Endpoint pour créer une non-conformité
+     * Enregistre une non-conformité, et la soumet au pilote si l'agent le demande.
      *
-     * @param dto Objet contenant les informations de la non-conformité
-     * @return NonConformiteDto contenant les informations de la non-conformité
-     *         créée
+     * <p>Enregistrer et soumettre étaient deux visites séparées : l'agent décrivait son constat,
+     * quittait l'écran, puis devait retrouver son dossier dans une liste pour le soumettre — alors
+     * même que, neuf fois sur dix, il n'avait rien à y ajouter. Le brouillon garde tout son sens
+     * pour qui veut relire ou compléter sa description plus tard ; il ne doit simplement plus être
+     * un passage obligé.</p>
+     *
+     * @param soumettre {@code true} pour soumettre dans la foulée au pilote du processus
      */
-    @Operation(summary = "Créer une non-conformité", description = "Initialise une nouvelle non-conformité dans le système")
+    @Operation(summary = "Créer une non-conformité",
+            description = "Initialise une nouvelle non-conformité, en brouillon ou soumise d'emblée")
     @PreAuthorize("@perm.canCreate(this)")
     @PostMapping("/create")
-    public ResponseEntity<NonConformiteDto> createNonConformite(@RequestBody NonConformiteDto dto) throws IOException {
+    public ResponseEntity<NonConformiteDto> createNonConformite(
+            @RequestBody NonConformiteDto dto,
+            @RequestParam(value = "soumettre", defaultValue = "false") boolean soumettre) throws IOException {
         NonConformiteDto createdNonConformite = nonConformiteService.createNonConformite(dto);
+        if (soumettre) {
+            // Deux gestes, et non un seul : l'enregistrement doit être committé avant que le circuit
+            // ne soit franchi, faute de quoi le moteur reviendrait interroger ce service à propos
+            // d'un dossier que sa transaction n'a pas encore rendu visible.
+            return ResponseEntity.ok(nonConformiteService.soumettre(createdNonConformite.getId()));
+        }
         return ResponseEntity.ok(createdNonConformite);
+    }
+
+    /**
+     * Soumet au pilote du processus une déclaration restée en brouillon.
+     *
+     * <p>Pendant de l'option de soumission immédiate, pour l'agent qui a préféré relire son constat
+     * avant de l'envoyer : c'est le même geste, joué plus tard. La décision passe par le moteur,
+     * qui vérifie que l'appelant est bien l'auteur du dossier.</p>
+     */
+    @Operation(summary = "Soumettre une non-conformité",
+            description = "Fait franchir au brouillon l'étape de soumission, vers le pilote du processus")
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PostMapping("/{id}/soumettre")
+    public ResponseEntity<NonConformiteDto> soumettre(@PathVariable UUID id) {
+        return ResponseEntity.ok(nonConformiteService.soumettre(id));
     }
 
     /*-----------------------------------------------------------------------/

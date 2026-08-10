@@ -21,6 +21,14 @@ import org.springframework.data.domain.Pageable;
 public interface NonConformiteService {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
 
+    /**
+     * Soumet au pilote du processus une non-conformité enregistrée, sans attendre une seconde visite
+     * de son auteur.
+     *
+     * @return le dossier tel qu'il est une fois l'étape franchie
+     */
+    NonConformiteDto soumettre(UUID id);
+
     void deleteMultiple(List<NonConformiteDto> nonConformiteDtos);
 
     List<NcStats> getNcStats(String structureSoumissionId);

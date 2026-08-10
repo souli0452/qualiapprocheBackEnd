@@ -2,6 +2,7 @@ package com.qualiapproche.workflow.event;
 
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.utils.RolesPlateforme;
+import com.qualiapproche.workflow.model.DestinataireCourriel;
 import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
@@ -113,6 +114,16 @@ public class NotificateurEtapeParEmail {
      * courriel qu'il a un dossier à traiter.</p>
      */
     private List<DestinataireDto> destinatairesDe(WorkflowStep step, TransitionFranchieEvent event) {
+        // Une étape peut désigner un autre destinataire que celui qui doit y agir : la clôture d'une
+        // non-conformité s'annonce au pilote du processus qui l'a signalée, lequel n'est ni le rôle
+        // de l'étape — le responsable qualité — ni, à ce stade, la structure du dossier, qui a été
+        // confié au processus destinataire six étapes plus tôt.
+        DestinataireCourriel designation = DestinataireCourriel.lire(step.getDestinataireCourriel());
+        if (designation != null) {
+            return destinatairesEtapeService.destinatairesDuRole(
+                    designation.role(), structurePour(designation.portee(), event));
+        }
+
         String habilitation = step.getResponsableRole() == null ? "" : step.getResponsableRole().trim();
 
         if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(habilitation)) {
@@ -130,6 +141,23 @@ public class NotificateurEtapeParEmail {
         // chaque structure recevait les soumissions de toutes les autres.
         return destinatairesEtapeService.destinatairesDuRole(step.getResponsableRole(),
                 structureDuDossier(event));
+    }
+
+    /**
+     * Structure désignée par une portée : celle où le dossier se trouve, ou celle d'où il vient.
+     *
+     * <p>Un dossier antérieur à la colonne n'a pas de structure d'origine enregistrée. Retomber sur
+     * la structure courante vaut mieux que de ne prévenir personne : c'est la même tant que le
+     * dossier n'a pas été orienté ailleurs, et c'est de toute façon la seule connue.</p>
+     */
+    private String structurePour(DestinataireCourriel.Portee portee, TransitionFranchieEvent event) {
+        if (portee == DestinataireCourriel.Portee.STRUCTURE_EMETTRICE) {
+            String emettrice = surLInstance(event, WorkflowValidationInstance::getStructureEmettriceId);
+            if (emettrice != null && !emettrice.isBlank()) {
+                return emettrice;
+            }
+        }
+        return structureDuDossier(event);
     }
 
     /**
@@ -206,6 +234,11 @@ public class NotificateurEtapeParEmail {
         variables.put("numeroNc", reference);
         variables.put("reference", reference);
 
+        // Qui vient de décider. Les gabarits livrés le nomment — « soumise par X », « mise en œuvre
+        // par Y » : sans lui, chaque message décrivait une action dont l'auteur restait anonyme, et
+        // le destinataire devait ouvrir le dossier rien que pour savoir à qui répondre.
+        variables.put("auteur", nomDeLAuteur(event));
+
         // Contexte du franchissement, pour les gabarits propres au workflow.
         variables.put("etape", step.getNomEtape());
         variables.put("resourceId", event.getResourceId());
@@ -219,6 +252,18 @@ public class NotificateurEtapeParEmail {
         variables.put("auteurId", event.getAuteurId());
         variables.put("commentaire", event.getCommentaire());
         return variables;
+    }
+
+    /**
+     * Nom de la personne qui vient de décider, lu chez user-service.
+     *
+     * <p>Une chaîne vide plutôt que l'identifiant technique quand il est introuvable : « soumise par
+     * 8f3c-… » ne dit rien à personne, et le gabarit se lit encore sans le nom.</p>
+     */
+    private String nomDeLAuteur(TransitionFranchieEvent event) {
+        List<DestinataireDto> auteur = destinatairesEtapeService.destinataire(event.getAuteurId());
+        return auteur.isEmpty() || auteur.get(0).getNomComplet() == null
+                ? "" : auteur.get(0).getNomComplet();
     }
 
     /** Adresse du dossier dans le frontal — vide plutôt qu'un lien mort. */

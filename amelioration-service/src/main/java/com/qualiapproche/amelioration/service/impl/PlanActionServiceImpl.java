@@ -125,6 +125,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         if (planAction.getStatus() == null) {
             planAction.setStatus(StatutEnum.INACTIF);
         }
+
         planAction = planActionRepository.save(planAction);
 
         // Un plan de plus, non soldé : la clôture de la non-conformité doit se refermer.
@@ -293,6 +294,12 @@ public class PlanActionServiceImpl implements PlanActionService {
         if (plan.getWorkflowId() == null) {
             plan.setActionCorrective(valeurRetenue(dto.getActionCorrective(), plan.getActionCorrective()));
             plan.setCritereEfficacite(valeurRetenue(dto.getCritereEfficacite(), plan.getCritereEfficacite()));
+            // La cause et la solution retenue appartiennent maintenant à la proposition : c'est la
+            // personne imputée qui recherche l'une et arrête l'autre, avant de soumettre le plan.
+            // Elles n'étaient modifiables qu'une fois l'action engagée, si bien qu'un plan encore en
+            // discussion ne pouvait pas être corrigé sur ce qu'il a de plus substantiel.
+            plan.setCauseIdentifiees(valeurRetenue(dto.getCauseIdentifiees(), plan.getCauseIdentifiees()));
+            plan.setSolutionRetenues(valeurRetenue(dto.getSolutionRetenues(), plan.getSolutionRetenues()));
             if (dto.getDateEcheance() != null) {
                 plan.setDateEcheance(dto.getDateEcheance());
             }

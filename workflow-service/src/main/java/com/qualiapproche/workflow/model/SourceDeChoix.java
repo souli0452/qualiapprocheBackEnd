@@ -34,7 +34,18 @@ public enum SourceDeChoix {
      * <p>La structure n'est pas inscrite dans le circuit : elle est celle de l'appelant, résolue à
      * l'affichage. Le même circuit sert donc toutes les structures.</p>
      */
-    UTILISATEURS_DE_MA_STRUCTURE("@UTILISATEURS_MA_STRUCTURE");
+    UTILISATEURS_DE_MA_STRUCTURE("@UTILISATEURS_MA_STRUCTURE"),
+
+    /**
+     * Circuits de traitement d'une non-conformité — action corrective ou correction.
+     *
+     * <p>Une source plutôt qu'une liste littérale, bien que ces deux valeurs ne changent jamais :
+     * une liste écrite dans le circuit aurait fait retenir le <b>libellé</b> comme valeur, et le
+     * module métier aurait eu à reconnaître « Action corrective » pour en tirer une constante.
+     * Corriger l'orthographe du libellé dans l'éditeur aurait alors suffi à faire perdre le
+     * choix.</p>
+     */
+    CIRCUITS_TRAITEMENT("@CIRCUITS_TRAITEMENT");
 
     private final String cle;
 

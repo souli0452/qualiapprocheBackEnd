@@ -109,6 +109,18 @@ public class WorkflowValidationInstance implements IWorkflowData {
     private String structureId;
 
     /**
+     * Structure qui a ouvert le dossier — celle d'où il vient, et qui ne change jamais.
+     *
+     * <p>{@link #structureId} dit où le dossier <b>est</b> ; celle-ci dit d'où il <b>part</b>. Les
+     * deux coïncident à l'ouverture puis divergent dès qu'une étape l'oriente ailleurs, et l'on
+     * avait alors perdu la première : rien ne permettait plus d'annoncer la clôture au processus qui
+     * avait signalé l'écart, puisque le dossier appartenait désormais à celui qui l'avait traité.
+     * Non modifiable, comme le créateur, et pour la même raison — c'est un fait de naissance.</p>
+     */
+    @Column(name = "structure_emettrice_id", updatable = false)
+    private String structureEmettriceId;
+
+    /**
      * Faits établis sur ce dossier, séparés par des virgules.
      *
      * <p>Le module métier les déclare — « les plans d'action sont tous soldés », « l'efficacité est
