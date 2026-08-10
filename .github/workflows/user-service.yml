@@ -7,6 +7,10 @@ on:
 
     paths:
       - 'user-service/**'
+      # Les DTO, énumérations et gabarits partagés vivent dans common : une modification du
+      # module commun doit redéployer le service, faute de quoi il continue de tourner sur
+      # l'ancienne version du contrat.
+      - 'common/**'
 
 jobs:
   deploy:

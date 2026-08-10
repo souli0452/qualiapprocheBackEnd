@@ -1,4 +1,4 @@
-name: Deploy Evaluation service
+name: Deploy Workflow Service
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - develop
 
     paths:
-      - 'evaluation-service/**'
+      - 'workflow-service/**'
       # Les DTO, énumérations et gabarits partagés vivent dans common : une modification du
       # module commun doit redéployer le service, faute de quoi il continue de tourner sur
-      # l'ancienne version du contrat.
+      # l'ancienne version du contrat. Ici, ce sont les gabarits des courriels d'étape.
       - 'common/**'
 
 jobs:
@@ -26,12 +26,12 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          
+
       - name: Vérifier le style de code (Checkstyle)
         run: mvn -B checkstyle:check
 
-      - name: Build evaluation-service
-        run: mvn clean install -pl evaluation-service -am -DskipTests -Dcheckstyle.skip=true
+      - name: Build workflow-service
+        run: mvn clean install -pl workflow-service -am -DskipTests -Dcheckstyle.skip=true
 
       - name: Trigger Coolify Deployment
         run: |
@@ -39,7 +39,7 @@ jobs:
 
           # Ajout du header Authorization avec le token
           response=$(curl -s -o response.txt -w "%{http_code}" \
-          -X GET "${{ secrets.EVALUATION_WEBHOOK }}" \
+          -X GET "${{ secrets.WORKFLOW_WEBHOOK }}" \
           -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")
           echo "HTTP Status: $response"
           echo "Response:"
