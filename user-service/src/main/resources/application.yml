@@ -86,3 +86,5 @@ keycloak:
   tokenUri: ${KC_TOKEN_URI:http://localhost:8080/realms/quali/protocol/openid-connect/token}
   adminUsername: ${KC_ADMIN_USERNAME:admin}
   adminPassword: ${KC_ADMIN_PASSWORD:admin}
+
+# Test du declenchement de deploiement automatique
