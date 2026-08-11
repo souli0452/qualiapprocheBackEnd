@@ -3,7 +3,7 @@ name: Deploy Realisation Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'realisation-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl realisation-service -am
 
       - name: Build realisation-service
         run: mvn clean install -pl realisation-service -am -DskipTests -Dcheckstyle.skip=true

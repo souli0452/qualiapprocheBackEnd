@@ -3,7 +3,7 @@ name: Deploy Referentiel Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'referentiel-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl referentiel-service -am
 
       - name: Build referentiel-service
         run: mvn clean install -pl referentiel-service -am -DskipTests -Dcheckstyle.skip=true

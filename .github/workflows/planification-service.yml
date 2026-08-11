@@ -3,7 +3,7 @@ name: Deploy Planification Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'planification-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
           
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl planification-service -am
 
       - name: Build planification-service
         run: mvn clean install -pl planification-service -am -DskipTests -Dcheckstyle.skip=true

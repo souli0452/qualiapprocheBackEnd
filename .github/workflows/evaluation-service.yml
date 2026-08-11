@@ -3,7 +3,7 @@ name: Deploy Evaluation service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'evaluation-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
           
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl evaluation-service -am
 
       - name: Build evaluation-service
         run: mvn clean install -pl evaluation-service -am -DskipTests -Dcheckstyle.skip=true

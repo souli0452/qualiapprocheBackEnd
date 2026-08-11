@@ -3,7 +3,7 @@ name: Deploy Contexte Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'contexte-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl contexte-service -am
 
       - name: Build contexte-service
         run: mvn clean install -pl contexte-service -am -DskipTests -Dcheckstyle.skip=true

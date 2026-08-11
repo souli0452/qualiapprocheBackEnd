@@ -3,7 +3,7 @@ name: Deploy Workflow Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'workflow-service/**'
@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl workflow-service -am
 
       - name: Build workflow-service
         run: mvn clean install -pl workflow-service -am -DskipTests -Dcheckstyle.skip=true

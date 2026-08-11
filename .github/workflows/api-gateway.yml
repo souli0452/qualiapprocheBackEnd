@@ -3,7 +3,7 @@ name: Deploy API Gateway
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'api-gateway/**'
@@ -24,7 +24,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl api-gateway -am
 
       - name: Build api-gateway
         run: mvn clean install -pl api-gateway -am -DskipTests -Dcheckstyle.skip=true

@@ -3,7 +3,7 @@ name: Deploy Amelioration Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'amelioration-service/**'
@@ -31,7 +31,7 @@ jobs:
           java-version: '21'
 
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl amelioration-service -am
 
       - name: Build amelioration-service
         run: mvn clean install -pl amelioration-service -am -DskipTests -Dcheckstyle.skip=true

@@ -3,7 +3,7 @@ name: Deploy Discovery
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'discovery/**'
@@ -24,7 +24,7 @@ jobs:
           java-version: '21'
           
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl discovery -am
 
       - name: Build discovery
         run: mvn clean install -pl discovery -am -DskipTests -Dcheckstyle.skip=true

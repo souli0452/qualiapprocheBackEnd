@@ -3,7 +3,7 @@ name: Deploy Support Service
 on:
   push:
     branches:
-      - develop
+      - test
 
     paths:
       - 'support-service/**'
@@ -31,7 +31,7 @@ jobs:
           java-version: '21'
           
       - name: Vérifier le style de code (Checkstyle)
-        run: mvn -B checkstyle:check
+        run: mvn -B checkstyle:check -pl support-service -am
 
       - name: Build support-service
         run: mvn clean install -pl support-service -am -DskipTests -Dcheckstyle.skip=true
