@@ -98,6 +98,31 @@ springdoc:
       - name: workflow-service
         url: /workflow-service/v3/api-docs
 
+qualisira:
+  cors:
+    # Origines autorisées à appeler la passerelle depuis un navigateur. Elles étaient écrites en
+    # dur dans CorsConfig : changer le domaine du frontal imposait de reconstruire l'image, et
+    # jusque-là la connexion échouait sur une erreur qui parle de CORS sans nommer l'origine
+    # attendue.
+    #
+    # Vide par défaut : c'est le motif ci-dessous qui ouvre. À renseigner pour n'admettre que des
+    # origines nommées — et alors vider « motifs-origines ».
+    origines: ${QUALISIRA_CORS_ORIGINES:}
+
+    # « * » : toutes les origines. Le frontal change de domaine au gré des environnements, et rien
+    # ne sert de le nommer tant qu'ils ne sont pas arrêtés.
+    #
+    # Un motif, et non « origines: * » : la norme refuse le joker comme origine dès que la requête
+    # porte des identifiants — et la nôtre en porte, l'authentification passant par un cookie. Le
+    # motif fait renvoyer à la place l'origine réellement appelante, ce que la norme accepte.
+    #
+    # CE QUE CELA COÛTE, puisque cela ne se voit pas : n'importe quel site visité par un
+    # utilisateur connecté peut appeler cette API avec ses cookies de session, et donc agir en son
+    # nom. Rien d'autre ne s'y oppose ici — la protection CSRF est désactivée et le cookie est
+    # SameSite=None. Avant une mise en production, nommer le frontal dans « origines » ci-dessus et
+    # vider cette ligne ; ou, à défaut, la restreindre à « https://*.qualisira.com ».
+    motifs-origines: ${QUALISIRA_CORS_MOTIFS_ORIGINES:*}
+
 eureka:
   client:
     service-url:
