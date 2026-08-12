@@ -101,8 +101,17 @@ qualisira:
   licence:
     # Clé publique de l'éditeur : elle permet de VÉRIFIER une licence, jamais d'en signer une.
     # Sa présence dans le produit livré ne donne donc aucun moyen d'en fabriquer. Elle est
-    # fournie par l'outil d'émission (écran « Clé de vérification »).
-    cle-publique: ${QUALISIRA_CLE_PUBLIQUE:MCowBQYDK2VwAyEAs2ajPoJ/faSW2FTtOV9tVXc/k3Fk2ZNc3SwQsyEJbxg}
+    # fournie par l'outil d'émission (écran « Clé de vérification », ou /actuator/info).
+    #
+    # SANS VALEUR PAR DÉFAUT, ET C'EST VOULU. Une clé écrite ici valait pour toute installation
+    # bâtie depuis ce dépôt : celle du poste de développement partait en production, et si
+    # QUALISIRA_CLE_PUBLIQUE y était oubliée, le service démarrait normalement puis refusait
+    # TOUTES les licences réelles pour « signature invalide » — une panne qui ne se voit qu'au
+    # moment de poser la licence chez le client, et que rien ne relie à sa cause.
+    #
+    # Vide, le démarrage s'arrête en disant ce qui manque (voir LicenceInstalleeService). Un
+    # démarrage qui échoue se remarque dans la minute ; une clé qui ne correspond pas, jamais.
+    cle-publique: ${QUALISIRA_CLE_PUBLIQUE:}
     # Durée de l'essai gratuit, accordé une seule fois par installation.
     essai-jours: ${QUALISIRA_ESSAI_JOURS:7}
     # Modules ouverts pendant l'essai : ce qui est effectivement proposé à la vente, et non toute

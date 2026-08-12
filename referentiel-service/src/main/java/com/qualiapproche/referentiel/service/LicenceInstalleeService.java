@@ -9,6 +9,7 @@ import com.qualiapproche.common.licence.VerificateurDeLicence;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.referentiel.entities.LicenceInstallee;
 import com.qualiapproche.referentiel.repository.LicenceInstalleeRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +50,43 @@ public class LicenceInstalleeService {
      */
     @Value("${qualisira.licence.cle-publique:}")
     private String clePublique;
+
+    /**
+     * Refuse de démarrer sans clé de vérification.
+     *
+     * <p>Une clé par défaut vivait dans {@code application.yml} : celle d'un poste de
+     * développement, versionnée, donc embarquée dans toute installation bâtie depuis ce dépôt. Si
+     * {@code QUALISIRA_CLE_PUBLIQUE} était oubliée à la livraison, rien ne le signalait — le
+     * service démarrait, l'écran s'ouvrait, et c'est seulement en collant la licence du client
+     * qu'apparaissait « signature invalide », des jours plus tard, sans que personne ne fasse le
+     * lien avec une variable manquante.</p>
+     *
+     * <p>Sans clé, ce service ne peut authentifier aucune licence : il ne rendrait qu'une
+     * installation où toute écriture est suspendue. Autant le dire au démarrage.</p>
+     */
+    @PostConstruct
+    void verifierLaCleDeVerification() {
+        if (clePublique == null || clePublique.isBlank()) {
+            throw new IllegalStateException("""
+
+                    ════════════════════════════════════════════════════════════════════
+                      AUCUNE CLÉ DE VÉRIFICATION — le service ne démarre pas.
+
+                      QUALISIRA_CLE_PUBLIQUE n'est pas posée. Sans elle, aucune licence
+                      ne peut être authentifiée : toute licence collée serait refusée
+                      pour « signature invalide », y compris la bonne.
+
+                      Relevez la clé publique de l'éditeur sur l'outil d'émission
+                      (écran « Clé de vérification », ou /actuator/info) et posez-la :
+
+                          QUALISIRA_CLE_PUBLIQUE=<la clé, en Base64>
+
+                      Elle vérifie une licence et n'en signe aucune : la porter dans la
+                      configuration du produit livré ne divulgue rien.
+                    ════════════════════════════════════════════════════════════════════
+                    """);
+        }
+    }
 
     /**
      * À qui cette installation appartient — le repère auquel toute licence est confrontée.
