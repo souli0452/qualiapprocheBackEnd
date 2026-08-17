@@ -295,6 +295,15 @@ public class WorkflowController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/cloture/{resourceId}")
+    public ResponseEntity<Void> clotureStep(
+            @PathVariable UUID resourceId,
+            @RequestBody(required = false) WorkflowValidationRequestDto request) {
+
+        workflowService.clotureStep(resourceId, request);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/execute/{resourceId}")
     public ResponseEntity<Void> executeTransition(
             @PathVariable UUID resourceId,

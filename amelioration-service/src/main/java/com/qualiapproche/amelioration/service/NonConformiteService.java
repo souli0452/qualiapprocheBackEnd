@@ -116,8 +116,8 @@ public interface NonConformiteService {
     /**
      * Reporte sur la non-conformité l'issue d'une transition franchie.
      *
-     * @param issue       ce que le moteur a établi : {@code EN_COURS}, {@code APPROVED} ou
-     *                    {@code REJECTED}. C'est lui qui fait foi.
+     * @param issue       ce que le moteur a établi : {@code EN_COURS}, {@code APPROVED},
+     *                    {@code REJECTED} ou {@code CLOSED}. C'est lui qui fait foi.
      * @param nomEtape    libellé de l'étape atteinte, conservé pour l'affichage seulement
      * @param etatCode    état de traitement métier porté par l'étape ({@code VALIDATION_RS},
      *                    {@code CLOTURE}…), nul sur une fin de circuit

@@ -229,4 +229,29 @@ class WorkflowEventListenerTest {
         // Aucune étape ne correspond à un état terminal synthétique.
         verify(stepRepository, never()).findById(any());
     }
+
+    @Test
+    @DisplayName("Une fin de circuit par clôture publie CLOSED, et non REJECTED")
+    void etatTerminalCloture_publieClosed() {
+        WorkflowValidationInstance aInstance = WorkflowValidationInstance.builder()
+                .id(instanceId).resourceId(UUID.randomUUID().toString()).resourceType("DOCUMENT")
+                .etatCode("TERMINATED_CLOTURE").status(ValidationStatus.TERMINE).build();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(aInstance));
+        when(notificationService.enregistrer(anyString(), anyString(), any()))
+                .thenReturn(WorkflowNotification.builder().id(notificationId).build());
+
+        TransitionFranchieEvent aEvenement = new TransitionFranchieEvent(
+                WorkflowValidationInstance.class.getName(), instanceId.toString(), "circuit", "42",
+                "1", "TERMINATED_CLOTURE", "agent", null);
+
+        listener.enregistrerNotification(aEvenement);
+
+        @SuppressWarnings("unchecked")
+        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
+        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
+        // Le rejet servait d'issue par défaut à tout terminal non approuvé : la clôture ne doit
+        // pas en hériter.
+        assertThat(aCharge.getValue()).containsEntry("status", "CLOSED");
+        assertThat(aCharge.getValue()).containsEntry("statusName", "CLOTURE");
+    }
 }

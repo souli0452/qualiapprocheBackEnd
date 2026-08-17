@@ -62,8 +62,8 @@ public class WorkflowTransition {
     private String code;
 
     /**
-     * Nature de l'action : elle fait avancer le dossier ({@code APPROUVE}) ou le renvoie en arrière
-     * ({@code REJETE}).
+     * Nature de l'action : elle fait avancer le dossier ({@code APPROUVE}), le renvoie en arrière
+     * ({@code REJETE}) ou le met en clôture ({@code CLOTURE}).
      *
      * <p>Ce n'est plus l'identité de l'action — voir {@link #code} — mais elle reste ce qui donne
      * son sens à un franchissement : la couleur du bouton par défaut, l'issue publiée aux modules

@@ -1337,7 +1337,9 @@ public class NonConformiteServiceImpl implements NonConformiteService {
      *
      * <p>Une seule règle métier s'y ajoute : atteindre l'étape de clôture publie la
      * non-conformité. Elle porte sur l'état de traitement — une valeur du circuit — et non sur le
-     * libellé de l'étape, qui n'engage personne.</p>
+     * libellé de l'étape, qui n'engage personne. L'issue {@code CLOSED} — une décision de nature
+     * {@code CLOTURE} qui termine le circuit — emprunte la même règle : clore par une décision ou
+     * en atteignant l'étape de clôture, c'est le même geste.</p>
      */
     private Status statutDepuisLIssue(String issue, Etat etat, Status ancienStatut) {
         if (etat == Etat.CLOTURE) {
@@ -1349,6 +1351,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
         return switch (issue.trim().toUpperCase()) {
             case "APPROVED" -> Status.APPROVED;
             case "REJECTED" -> Status.REJECTED;
+            case "CLOSED" -> Status.PUBLISHED;
             case "EN_COURS" -> Status.IN_PROGRESS;
             default -> ancienStatut;
         };

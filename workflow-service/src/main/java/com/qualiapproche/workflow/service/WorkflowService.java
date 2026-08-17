@@ -1473,6 +1473,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         processStepDecision(resourceId, request, StepDecision.REJETE);
     }
 
+    @Transactional
+    public void clotureStep(UUID resourceId, WorkflowValidationRequestDto request) {
+        processStepDecision(resourceId, request, StepDecision.CLOTURE);
+    }
+
     /**
      * Prend la même décision sur plusieurs dossiers, chacun jugé pour lui-même.
      *

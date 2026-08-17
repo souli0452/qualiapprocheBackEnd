@@ -34,7 +34,8 @@ import java.util.stream.Collectors;
  *
  * <p>Le contrat de charge utile est unique et explicite :</p>
  * <ul>
- *   <li>{@code status} — valeur machine : {@code EN_COURS}, {@code APPROVED} ou {@code REJECTED} ;</li>
+ *   <li>{@code status} — valeur machine : {@code EN_COURS}, {@code APPROVED}, {@code REJECTED}
+ *       ou {@code CLOSED} ;</li>
  *   <li>{@code statusName} — étape atteinte, lisible par un humain (ou la décision si terminal) ;</li>
  *   <li>{@code etatCode} — état de traitement métier de l'étape ({@code VALIDATION_RS}, {@code CLOTURE}…) ;</li>
  *   <li>{@code comments} — commentaire saisi lors de la décision ;</li>
@@ -151,9 +152,9 @@ public class WorkflowEventListener {
         String etatApres = event.getEtatApres();
 
         if (estTerminal(etatApres)) {
-            // Etat terminal : le suffixe porte la décision finale (APPROUVE / REJETE).
+            // Etat terminal : le suffixe porte la décision finale (APPROUVE / REJETE / CLOTURE).
             String decision = etatApres.substring(PREFIXE_ETAT_TERMINAL.length());
-            payload.put("status", "APPROUVE".equalsIgnoreCase(decision) ? "APPROVED" : "REJECTED");
+            payload.put("status", issueFinale(decision));
             payload.put("statusName", decision);
             payload.put("etatCode", null);
         } else if (etapeAtteinte.isPresent()) {
@@ -201,6 +202,23 @@ public class WorkflowEventListener {
 
     private boolean estTerminal(String etatApres) {
         return etatApres != null && etatApres.startsWith(PREFIXE_ETAT_TERMINAL);
+    }
+
+    /**
+     * Issue publiée quand le circuit se termine, déduite de la nature de la décision finale.
+     *
+     * <p>Le rejet servait de valeur par défaut : tout suffixe qui n'était pas {@code APPROUVE}
+     * devenait {@code REJECTED}. L'arrivée de la clôture rend cette économie fausse — un dossier
+     * mis en clôture n'est pas un dossier rejeté — et chaque nature nomme donc son issue.</p>
+     */
+    private String issueFinale(String decision) {
+        if ("APPROUVE".equalsIgnoreCase(decision)) {
+            return "APPROVED";
+        }
+        if ("CLOTURE".equalsIgnoreCase(decision)) {
+            return "CLOSED";
+        }
+        return "REJECTED";
     }
 
 }
