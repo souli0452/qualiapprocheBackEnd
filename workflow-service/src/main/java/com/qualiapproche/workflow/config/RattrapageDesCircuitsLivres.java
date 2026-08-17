@@ -187,6 +187,13 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                     step.setStepOrder(modele.getStepOrder());
                 }
             });
+            // Les étapes neuves doivent être enregistrées avant qu'une route ne les vise. Sans ce
+            // flush, l'enregistrement du circuit passait par un merge qui persistait des copies des
+            // étapes, tandis que les transitions gardaient la main sur les originales, jamais
+            // enregistrées : le démarrage échouait en TransientPropertyValueException sur toute
+            // base dont le circuit avait des étapes en retard — et, la transaction n'aboutissant
+            // jamais, échouait à l'identique à chaque redémarrage.
+            workflowRepository.flush();
             ajoutees += alignerLesDestinations(circuit, etapesDeReference);
         }
         return ajoutees;
