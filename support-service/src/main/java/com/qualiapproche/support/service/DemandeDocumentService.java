@@ -78,6 +78,7 @@ public class DemandeDocumentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "L'objectif de la demande est obligatoire : c'est lui qu'instruira le responsable qualité.");
         }
+        exigerUnDocumentEnVigueur(document, type);
 
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
 
@@ -122,6 +123,30 @@ public class DemandeDocumentService {
                 "Demande déposée par " + demande.getDemandeurNom() + " — objectif : " + objectif);
 
         return demandeRepository.save(demande);
+    }
+
+    /**
+     * Une modification se demande sur un document <b>en vigueur</b>, et sur lui seul.
+     *
+     * <p>Demander la modification d'un document encore en rédaction n'a pas de sens : il se corrige
+     * en déposant une version, sans instruction ni décision — la demande instruirait le changement
+     * d'un texte que rien n'a encore approuvé. Un document obsolète, lui, ne se modifie plus : il se
+     * remplace. Sans ce contrôle, la demande aboutissait, et le remplaçant déposé faisait passer au
+     * rang suivant un document qui n'avait jamais atteint le premier.</p>
+     *
+     * <p>La suppression n'y est pas soumise : c'est précisément un brouillon abandonné ou un
+     * document devenu obsolète qu'on demande à retirer.</p>
+     */
+    private void exigerUnDocumentEnVigueur(DocumentQms document, TypeDemande type) {
+        if (type != TypeDemande.MODIFICATION || document.isEsTraiter()) {
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Une demande de modification ne porte que sur un document en vigueur. « "
+                        + document.getDocumentNumber() + " » "
+                        + (document.isObsolete()
+                        ? "est obsolète : il se remplace par un nouveau document, il ne se modifie plus."
+                        : "n'a pas encore été validé : déposez-en directement une nouvelle version."));
     }
 
     /** Circuit actif de la famille des demandes ; sans lui, aucune demande ne peut être instruite. */

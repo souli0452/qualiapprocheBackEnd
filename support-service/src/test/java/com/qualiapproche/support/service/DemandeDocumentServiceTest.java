@@ -121,6 +121,22 @@ class DemandeDocumentServiceTest {
         return demande;
     }
 
+    /** Circuit des demandes, tel que le moteur le rend à la création. */
+    private static final UUID CIRCUIT_DEMANDES = UUID.fromString("33333333-3333-4333-8333-333333333333");
+
+    /** Un document dans l'état qui compte ici : en vigueur ou non, obsolète ou non. */
+    private DocumentQms document(boolean enVigueur, boolean obsolete) {
+        DocumentQms document = DocumentQms.builder()
+                .documentNumber("PRO-DSI-2026-001")
+                .titre("Procédure d'achat")
+                .serviceId(STRUCTURE)
+                .esTraiter(enVigueur)
+                .obsolete(obsolete)
+                .build();
+        document.setId(DOCUMENT);
+        return document;
+    }
+
     private void profil(String structureId, String... roles) {
         when(profilService.profilCourant())
                 .thenReturn(new ProfilUtilisateurService.Profil(structureId, java.util.Set.of(roles)));
@@ -239,6 +255,50 @@ class DemandeDocumentServiceTest {
     }
 
     @Test
+    @DisplayName("Une modification ne se demande pas sur un document qui n'est pas en vigueur")
+    void modificationSurDocumentNonValide_estRefusee() {
+        DocumentQms brouillon = document(false, false);
+        when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(brouillon));
+        when(documentService.peutVoirLeSuiviInterne(brouillon)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.creer(DOCUMENT, TypeDemande.MODIFICATION,
+                "Revoir le chapitre 4", null, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409")
+                .hasMessageContaining("en vigueur");
+
+        verify(demandeRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Une suppression se demande sur n'importe quel document, brouillon compris")
+    void suppressionSurDocumentNonValide_estAcceptee() {
+        DocumentQms brouillon = document(false, false);
+        when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(brouillon));
+        when(documentService.peutVoirLeSuiviInterne(brouillon)).thenReturn(true);
+        when(workflowClient.getActiveWorkflowByType("DEMANDE_DOCUMENT"))
+                .thenReturn(new WorkflowSummaryDto(CIRCUIT_DEMANDES, "Circuit des demandes",
+                        "DEMANDE_DOCUMENT", true, null));
+
+        // C'est justement un brouillon abandonné qu'on demande à retirer.
+        assertThat(service.creer(DOCUMENT, TypeDemande.SUPPRESSION, "Doublon", null, null)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Une modification se demande sur un document en vigueur")
+    void modificationSurDocumentEnVigueur_estAcceptee() {
+        DocumentQms enVigueur = document(true, false);
+        when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(enVigueur));
+        when(documentService.peutVoirLeSuiviInterne(enVigueur)).thenReturn(true);
+        when(workflowClient.getActiveWorkflowByType("DEMANDE_DOCUMENT"))
+                .thenReturn(new WorkflowSummaryDto(CIRCUIT_DEMANDES, "Circuit des demandes",
+                        "DEMANDE_DOCUMENT", true, null));
+
+        assertThat(service.creer(DOCUMENT, TypeDemande.MODIFICATION, "Revoir le chapitre 4", null, null))
+                .isNotNull();
+    }
+
+    @Test
     @DisplayName("Le remplaçant déposé publie une révision : rang suivant et retour en validation")
     void remplacantDepose_publieUneRevision() throws Exception {
         when(demandeRepository.findById(DEMANDE))
@@ -290,9 +350,9 @@ class DemandeDocumentServiceTest {
     @Test
     @DisplayName("Sans circuit configuré pour les demandes, le dépôt est refusé et expliqué")
     void sansCircuit_depotRefuse() {
-        DocumentQms document = new DocumentQms();
-        document.setId(DOCUMENT);
-        document.setDocumentNumber("PRO-DSI-2026-001");
+        // En vigueur : ce test porte sur le circuit manquant, pas sur l'état du document — une
+        // modification ne se demande que sur un document validé.
+        DocumentQms document = document(true, false);
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
         when(documentService.peutVoirLeSuiviInterne(document)).thenReturn(true);
         when(profilService.profilCourant())
@@ -380,10 +440,8 @@ class DemandeDocumentServiceTest {
     @Test
     @DisplayName("Un circuit ouvert renseigne l'étape courante de la demande")
     void creation_ouvreLeCircuit() {
-        DocumentQms document = new DocumentQms();
-        document.setId(DOCUMENT);
-        document.setDocumentNumber("PRO-DSI-2026-001");
-        document.setServiceId("structure-1");
+        // En vigueur : ce test porte sur l'ouverture du circuit, pas sur l'état du document.
+        DocumentQms document = document(true, false);
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
         when(documentService.peutVoirLeSuiviInterne(document)).thenReturn(true);
         when(profilService.profilCourant())
