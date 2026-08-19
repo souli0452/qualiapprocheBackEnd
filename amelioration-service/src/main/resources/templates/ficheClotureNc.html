@@ -311,7 +311,10 @@
     <tr>
         <td class="etiquette">Processus concerné</td>
         <td th:text="${processus}">—</td>
-        <td class="etiquette">Type</td>
+        <!-- L'écran de création étiquette « Origine de la non-conformité » le sélecteur qui
+             alimente ce champ : c'est lui que l'utilisateur choisit, pas originNonConformite,
+             qu'aucun écran n'écrit. -->
+        <td class="etiquette">Origine</td>
         <td th:text="${typeNonConformite}">—</td>
     </tr>
     <tr>
