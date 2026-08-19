@@ -94,3 +94,11 @@ minio:
 
 frontend:
   url: ${FRONTEND_URL:http://localhost:4200}
+
+amelioration:
+  fiche-cloture:
+    # Adresse de consultation du dossier dans le frontal, portée par le QR code de la fiche de
+    # clôture. C'est le même écran que visent les courriels d'étape (workflow-service) ; {id} est
+    # substitué par l'identifiant du dossier. Vide, la fiche part sans QR code plutôt qu'avec un
+    # code qui ne mène nulle part.
+    lien-dossier: ${frontend.url}/non-conformite/suivi?ncId={id}

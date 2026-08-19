@@ -4,6 +4,7 @@ import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
+import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.service.impl.FicheClotureNonConformiteService;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.common.config.ThymeleafConfig;
@@ -25,6 +26,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +40,7 @@ class FicheClotureNonConformiteTest {
     private static final UUID DOSSIER = UUID.fromString("77777777-0000-4000-8000-000000000077");
 
     private NonConformiteRepository nonConformiteRepository;
+    private PlanActionRepository planActionRepository;
     private WorkflowClient workflowClient;
     private ReglagesOrganisation reglages;
     private FicheClotureNonConformiteService service;
@@ -45,12 +48,28 @@ class FicheClotureNonConformiteTest {
     @BeforeEach
     void setUp() {
         nonConformiteRepository = mock(NonConformiteRepository.class);
+        planActionRepository = mock(PlanActionRepository.class);
         workflowClient = mock(WorkflowClient.class);
         reglages = mock(ReglagesOrganisation.class);
         // Le moteur de gabarits réel, celui-là même que le service emploie en production : le test
         // vaut aussi preuve que le gabarit se rend sans erreur.
-        service = new FicheClotureNonConformiteService(
-                nonConformiteRepository, workflowClient, reglages, ThymeleafConfig.getTemplateEngine());
+        service = new FicheClotureNonConformiteService(nonConformiteRepository, planActionRepository,
+                workflowClient, reglages, ThymeleafConfig.getTemplateEngine(),
+                "https://qualisira.exemple.org/non-conformite/suivi?ncId={id}");
+
+        // Les plans sont rattachés par leur colonne nonConformeId, qui fait foi — la collection de
+        // la fiche (table de jointure) reste vide pour les plans créés par le chemin normal. La
+        // fiche doit donc les lire au dépôt, pas sur l'entité.
+        lenient().when(planActionRepository.findPlanActionsByNonConformeId(DOSSIER)).thenReturn(List.of(
+                PlanAction.builder()
+                        .numeroOdre("1")
+                        .actionCorrective("Mettre à jour la procédure d'achat")
+                        .causeIdentifiees("Procédure obsolète")
+                        .solutionRetenues("Révision de la procédure et diffusion")
+                        .responsableNomComplet("Idrissa Ouédraogo")
+                        .dateEcheance(LocalDate.of(2026, 5, 15))
+                        .status(StatutEnum.TRAITER)
+                        .build()));
     }
 
     private NonConformite dossierCloture() {
@@ -66,16 +85,6 @@ class FicheClotureNonConformiteTest {
                 .userImputFullName("Awa Traoré")
                 .createdAt(LocalDateTime.of(2026, 3, 2, 9, 30))
                 .build();
-        nc.setPlanActions(List.of(
-                PlanAction.builder()
-                        .numeroOdre("1")
-                        .actionCorrective("Mettre à jour la procédure d'achat")
-                        .causeIdentifiees("Procédure obsolète")
-                        .solutionRetenues("Révision de la procédure et diffusion")
-                        .responsableNomComplet("Idrissa Ouédraogo")
-                        .dateEcheance(LocalDate.of(2026, 5, 15))
-                        .status(StatutEnum.TRAITER)
-                        .build()));
         return nc;
     }
 

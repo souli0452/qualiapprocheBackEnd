@@ -1,18 +1,24 @@
 package com.qualiapproche.amelioration.service.impl;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
+import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.common.dto.ValidationHistoryDto;
 import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.utils.ClesReglages;
 import com.qualiapproche.common.utils.StatutEnum;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -44,7 +50,6 @@ import java.util.UUID;
  * compilé, sans source dans le dépôt.</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class FicheClotureNonConformiteService {
 
@@ -56,9 +61,26 @@ public class FicheClotureNonConformiteService {
     private static final int DELAI_LOGO_MS = 5000;
 
     private final NonConformiteRepository nonConformiteRepository;
+    private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
     private final ReglagesOrganisation reglages;
     private final TemplateEngine templateEngine;
+    private final String motifLienDossier;
+
+    public FicheClotureNonConformiteService(
+            NonConformiteRepository nonConformiteRepository,
+            PlanActionRepository planActionRepository,
+            WorkflowClient workflowClient,
+            ReglagesOrganisation reglages,
+            TemplateEngine templateEngine,
+            @Value("${amelioration.fiche-cloture.lien-dossier:}") String motifLienDossier) {
+        this.nonConformiteRepository = nonConformiteRepository;
+        this.planActionRepository = planActionRepository;
+        this.workflowClient = workflowClient;
+        this.reglages = reglages;
+        this.templateEngine = templateEngine;
+        this.motifLienDossier = motifLienDossier;
+    }
 
     /** Fiche prête à servir : le contenu PDF et le nom sous lequel le proposer au téléchargement. */
     public record FicheEditee(String nomDeFichier, byte[] contenu) {
@@ -112,6 +134,7 @@ public class FicheClotureNonConformiteService {
 
         contexte.setVariable("organisation", valeurOuVide(reglages.valeur(ClesReglages.ORGANISATION_NOM)));
         contexte.setVariable("logo", logoEnDataUri());
+        contexte.setVariable("qrcode", qrCodeVersLeDossier(nc));
 
         contexte.setVariable("numero", valeurOuTiret(nc.getNumeroReference()));
         contexte.setVariable("version", valeurOuTiret(nc.getVersion()));
@@ -140,12 +163,15 @@ public class FicheClotureNonConformiteService {
         // Un circuit « Correction » remet en conformité sans rechercher la cause : la colonne
         // n'existe pas sur ses plans, la fiche ne l'imprime donc pas non plus.
         contexte.setVariable("avecCause", nc.getCircuit() != Circuit.CORRECTION);
-        contexte.setVariable("plans", nc.getPlanActions() == null ? List.of()
-                : nc.getPlanActions().stream()
-                        .sorted(Comparator.comparing(PlanAction::getNumeroOdre,
-                                Comparator.nullsLast(FicheClotureNonConformiteService::comparerRangs)))
-                        .map(this::lignePlan)
-                        .toList());
+        // Les plans se lisent par leur colonne de rattachement, qui fait foi : la collection de la
+        // fiche (table de jointure) reste vide pour les plans créés par le chemin normal, et la
+        // fiche partait sans son tableau d'actions.
+        contexte.setVariable("plans", planActionRepository.findPlanActionsByNonConformeId(nc.getId())
+                .stream()
+                .sorted(Comparator.comparing(PlanAction::getNumeroOdre,
+                        Comparator.nullsLast(FicheClotureNonConformiteService::comparerRangs)))
+                .map(this::lignePlan)
+                .toList());
 
         contexte.setVariable("visas", visas.stream().map(this::ligneVisa).toList());
         contexte.setVariable("dateCloture", visas.stream()
@@ -229,6 +255,31 @@ public class FicheClotureNonConformiteService {
             return "data:" + type + ";base64," + Base64.getEncoder().encodeToString(octets);
         } catch (Exception e) {
             log.warn("Logo de l'organisation illisible ({}) : la fiche est éditée sans lui.", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * QR code qui mène au dossier dans le frontal — le même écran que visent les courriels
+     * d'étape. La fiche imprimée retrouve ainsi son original d'un geste, sans ressaisir le numéro.
+     * Sans adresse de frontal configurée, la fiche part sans QR plutôt qu'avec un code qui ne
+     * mène nulle part ; et un échec d'encodage ne retient jamais l'édition.
+     */
+    private String qrCodeVersLeDossier(NonConformite nc) {
+        if (motifLienDossier == null || motifLienDossier.isBlank()
+                || !motifLienDossier.trim().toLowerCase(Locale.ROOT).startsWith("http")) {
+            return null;
+        }
+        String lien = motifLienDossier.trim().replace("{id}", nc.getId().toString());
+        try {
+            BitMatrix matrice = new QRCodeWriter().encode(lien, BarcodeFormat.QR_CODE, 240, 240,
+                    java.util.Map.of(EncodeHintType.MARGIN, 1));
+            ByteArrayOutputStream png = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(matrice, "PNG", png);
+            return "data:image/png;base64," + Base64.getEncoder().encodeToString(png.toByteArray());
+        } catch (Exception e) {
+            log.warn("QR code de la fiche impossible à produire ({}) : la fiche est éditée sans lui.",
+                    e.getMessage());
             return null;
         }
     }
