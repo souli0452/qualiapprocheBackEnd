@@ -17,7 +17,11 @@ import com.qualiapproche.common.enumeration.Status;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +40,8 @@ import com.qualiapproche.amelioration.service.NonConformiteService;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
 import com.qualiapproche.amelioration.client.WorkflowClient;
+import com.qualiapproche.amelioration.service.impl.FicheClotureNonConformiteService;
+import com.qualiapproche.amelioration.utils.EnTeteFichier;
 import com.qualiapproche.common.dto.PlanActionDto;
 import com.qualiapproche.common.dto.WorkflowStateDto;
 
@@ -54,6 +60,27 @@ import com.qualiapproche.common.dto.WorkflowStateDto;
 public class NonConformiteController {
     private final NonConformiteService nonConformiteService;
     private final WorkflowClient workflowClient;
+    private final FicheClotureNonConformiteService ficheClotureService;
+
+    /**
+     * Édite la fiche récapitulative d'une non-conformité clôturée, en PDF.
+     *
+     * <p>Identification du dossier, constat, tableau des plans d'action et visas de chaque niveau
+     * du circuit avec leur appréciation. Refusée en 409 tant que le dossier n'est pas clôturé :
+     * avant la fin du circuit, le document mentirait dès la décision suivante.</p>
+     */
+    @Operation(summary = "Éditer la fiche de clôture",
+            description = "Rend la fiche PDF d'une non-conformité clôturée : identification, constat, "
+                    + "plans d'action et visas du circuit. 409 si le dossier n'est pas clôturé.")
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/{id}/fiche-cloture")
+    public ResponseEntity<Resource> editerFicheCloture(@PathVariable UUID id) {
+        FicheClotureNonConformiteService.FicheEditee fiche = ficheClotureService.editer(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(fiche.nomDeFichier()))
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(new ByteArrayResource(fiche.contenu()));
+    }
 
     /**
      * Enregistre une non-conformité, et la soumet au pilote si l'agent le demande.

@@ -61,6 +61,16 @@ public interface WorkflowClient {
     WorkflowStateDto getWorkflowState(@PathVariable("resourceId") UUID resourceId);
 
     /**
+     * Décisions successives du circuit d'un dossier : étape, décision, auteur, date, commentaire.
+     *
+     * <p>C'est la matière des visas de la fiche de clôture : chaque niveau y appose sa date et son
+     * appréciation, et seul le moteur en détient la trace faisant foi.</p>
+     */
+    @GetMapping("/api/v1/workflows/instances/{resourceId}/history")
+    java.util.List<com.qualiapproche.common.dto.ValidationHistoryDto> historiqueDesDecisions(
+            @PathVariable("resourceId") UUID resourceId);
+
+    /**
      * Ressources sur lesquelles l'appelant a une décision ouverte.
      *
      * <p>C'est le circuit qui sait qui peut agir : le déduire ici de l'état de traitement du

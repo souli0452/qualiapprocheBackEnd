@@ -67,6 +67,13 @@
             <groupId>jakarta.validation</groupId>
             <artifactId>jakarta.validation-api</artifactId>
         </dependency>
+        <!-- Fiche de clôture d'une non-conformité : gabarit Thymeleaf rendu en PDF. Le gabarit
+             Jasper historique est un binaire sans source, sa maquette ne peut plus évoluer. -->
+        <dependency>
+            <groupId>com.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.0.10</version>
+        </dependency>
         <!-- Dépôt des fichiers sur le serveur d'objets, partagé avec les autres modules -->
         <dependency>
             <groupId>com.qualiapproche</groupId>

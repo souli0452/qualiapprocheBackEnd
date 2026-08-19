@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Fiche de non-conformité</title>
+    <style>
+        /* Fiche d'enregistrement qualité, éditée en PDF (A4, portrait, multi-pages).
+           L'en-tête et le pied sont répétés sur chaque feuille par le moteur de mise en page. */
+        @page {
+            size: A4;
+            margin: 150px 42px 70px 42px;
+
+            @top-center {
+                content: element(entete);
+            }
+            @bottom-center {
+                content: element(pied);
+            }
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 9.5pt;
+            color: #3d4759;
+            margin: 0;
+        }
+
+        /* ---------------------------------------------------------------- en-tête normalisé */
+        #entete {
+            position: running(entete);
+        }
+
+        table.cartouche {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        table.cartouche td {
+            border: 1px solid #16223a;
+            vertical-align: middle;
+            padding: 6px 8px;
+        }
+
+        td.case-logo {
+            width: 26%;
+            text-align: center;
+        }
+
+        td.case-logo img {
+            max-height: 58px;
+            max-width: 100%;
+        }
+
+        .nom-organisation {
+            font-size: 8.5pt;
+            font-weight: bold;
+            color: #16223a;
+            text-transform: uppercase;
+        }
+
+        td.case-titre {
+            width: 48%;
+            text-align: center;
+        }
+
+        .titre-document {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #0f2a52;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .sous-titre-document {
+            font-size: 8pt;
+            color: #1f7a4d;
+            text-transform: uppercase;
+            letter-spacing: 1.4px;
+            padding-top: 3px;
+        }
+
+        td.case-reperes {
+            width: 26%;
+            padding: 0;
+        }
+
+        table.reperes {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 7.5pt;
+        }
+
+        table.reperes td {
+            border: none;
+            border-bottom: 1px solid #16223a;
+            padding: 3px 6px;
+        }
+
+        table.reperes tr:last-child td {
+            border-bottom: none;
+        }
+
+        table.reperes td.libelle {
+            width: 45%;
+            color: #16223a;
+            font-weight: bold;
+        }
+
+        .numero-page:after {
+            content: counter(page) " / " counter(pages);
+        }
+
+        /* ---------------------------------------------------------------- pied de page */
+        #pied {
+            position: running(pied);
+            font-size: 7.5pt;
+            color: #6a7385;
+            border-top: 1px solid #dde3ec;
+            padding-top: 5px;
+        }
+
+        #pied table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #pied td.droite {
+            text-align: right;
+        }
+
+        /* ---------------------------------------------------------------- sections */
+        h2.section {
+            background-color: #0f2a52;
+            color: #ffffff;
+            font-size: 9.5pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 5px 9px;
+            margin: 16px 0 0 0;
+            page-break-after: avoid;
+        }
+
+        table.donnees {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            -fs-table-paginate: paginate;
+        }
+
+        table.donnees th,
+        table.donnees td {
+            border: 1px solid #b9c2d2;
+            padding: 5px 7px;
+            vertical-align: top;
+            word-wrap: break-word;
+        }
+
+        table.donnees th {
+            background-color: #eef1f6;
+            color: #16223a;
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            text-align: left;
+        }
+
+        table.donnees tr {
+            page-break-inside: avoid;
+        }
+
+        td.etiquette {
+            width: 22%;
+            background-color: #eef1f6;
+            color: #16223a;
+            font-weight: bold;
+            font-size: 8.5pt;
+        }
+
+        .bloc-texte {
+            border: 1px solid #b9c2d2;
+            border-top: none;
+            padding: 8px 9px;
+            text-align: justify;
+        }
+
+        table.plans {
+            font-size: 8.5pt;
+        }
+
+        table.visas {
+            font-size: 8.5pt;
+        }
+
+        table.plans th,
+        table.visas th {
+            font-size: 7.5pt;
+            letter-spacing: 0;
+        }
+
+        td.sans-repli {
+            white-space: nowrap;
+        }
+
+        .mention-cloture {
+            margin-top: 14px;
+            border: 1px solid #1f7a4d;
+            background-color: #f2f8f4;
+            color: #1f7a4d;
+            font-weight: bold;
+            padding: 7px 9px;
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+
+<!-- En-tête répété sur chaque feuille : identification normalisée du document. -->
+<div id="entete">
+    <table class="cartouche">
+        <tr>
+            <td class="case-logo">
+                <img th:if="${logo != null}" th:src="${logo}" alt="Logo"/>
+                <div class="nom-organisation" th:text="${organisation}">Organisation</div>
+            </td>
+            <td class="case-titre">
+                <div class="titre-document">Fiche de non-conformité</div>
+                <div class="sous-titre-document">Enregistrement du traitement et de la clôture</div>
+            </td>
+            <td class="case-reperes">
+                <table class="reperes">
+                    <tr>
+                        <td class="libelle">Numéro</td>
+                        <td th:text="${numero}">NC-0000</td>
+                    </tr>
+                    <tr>
+                        <td class="libelle">Version</td>
+                        <td th:text="${version}">1.0</td>
+                    </tr>
+                    <tr>
+                        <td class="libelle">Édité le</td>
+                        <td th:text="${dateEdition}">01/01/2026</td>
+                    </tr>
+                    <tr>
+                        <td class="libelle">Page</td>
+                        <td><span class="numero-page"></span></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Pied répété sur chaque feuille. -->
+<div id="pied">
+    <table>
+        <tr>
+            <td th:text="${organisation} + ' — Système de management de la qualité'">Organisation</td>
+            <td class="droite">
+                <span th:text="'Fiche ' + ${numero} + ' — page '">Fiche —</span><span class="numero-page"></span>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- 1. Identification -->
+<h2 class="section">1. Identification de la non-conformité</h2>
+<table class="donnees">
+    <tr>
+        <td class="etiquette">Numéro</td>
+        <td th:text="${numero}">—</td>
+        <td class="etiquette">Version</td>
+        <td th:text="${version}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Date de soumission</td>
+        <td th:text="${dateSoumission}">—</td>
+        <td class="etiquette">Date de clôture</td>
+        <td th:text="${dateCloture}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Émetteur</td>
+        <td th:text="${fonctionEmetteur != '' ? emetteur + ' (' + fonctionEmetteur + ')' : emetteur}">—</td>
+        <td class="etiquette">Structure émettrice</td>
+        <td th:text="${structureEmettrice}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Processus concerné</td>
+        <td th:text="${processus}">—</td>
+        <td class="etiquette">Origine</td>
+        <td th:text="${origine}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Type</td>
+        <td th:text="${typeNonConformite}">—</td>
+        <td class="etiquette">Niveau</td>
+        <td th:text="${niveau}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Circuit de traitement</td>
+        <td th:text="${circuitTraitement}">—</td>
+        <td class="etiquette">Agent chargé du traitement</td>
+        <td th:text="${agentImpute}">—</td>
+    </tr>
+    <tr>
+        <td class="etiquette">Participants</td>
+        <td colspan="3" th:text="${participants}">—</td>
+    </tr>
+</table>
+
+<!-- 2. Constat -->
+<h2 class="section">2. Description de la non-conformité</h2>
+<div class="bloc-texte" th:text="${description}">—</div>
+
+<!-- 3. Plans d'action -->
+<h2 class="section">3. Plan d'action</h2>
+<table class="donnees plans">
+    <thead>
+    <tr>
+        <th style="width: 5%;">N°</th>
+        <th>Action</th>
+        <th th:if="${avecCause}">Cause identifiée</th>
+        <th>Solution retenue</th>
+        <th style="width: 14%;">Responsable</th>
+        <th style="width: 11%; white-space: nowrap;">Échéance</th>
+        <th style="width: 10%;">Statut</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="plan : ${plans}">
+        <td th:text="${plan.numero}">1</td>
+        <td th:text="${plan.actionCorrective}">—</td>
+        <td th:if="${avecCause}" th:text="${plan.cause}">—</td>
+        <td th:text="${plan.solution}">—</td>
+        <td th:text="${plan.responsable}">—</td>
+        <td class="sans-repli" th:text="${plan.echeance}">—</td>
+        <td th:text="${plan.statut}">—</td>
+    </tr>
+    <tr th:if="${#lists.isEmpty(plans)}">
+        <td th:colspan="${avecCause ? 7 : 6}">Aucun plan d'action n'a été ouvert sur ce dossier.</td>
+    </tr>
+    </tbody>
+</table>
+
+<!-- 4. Visas -->
+<h2 class="section">4. Visas du circuit de validation</h2>
+<table class="donnees visas">
+    <thead>
+    <tr>
+        <th style="width: 18%;">Niveau / Étape</th>
+        <th style="width: 15%;">Décision</th>
+        <th style="width: 18%;">Nom et prénom</th>
+        <th style="width: 15%;">Date du visa</th>
+        <th>Appréciation</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="visa : ${visas}">
+        <td th:text="${visa.etape}">—</td>
+        <td th:text="${visa.decision}">—</td>
+        <td th:text="${visa.auteur}">—</td>
+        <td class="sans-repli" th:text="${visa.date}">—</td>
+        <td th:text="${visa.appreciation}">—</td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="mention-cloture">
+    Non-conformité clôturée le <span th:text="${dateCloture}">—</span>. Ce document est édité par le
+    système de management de la qualité et restitue l'intégralité du traitement du dossier.
+</div>
+
+</body>
+</html>

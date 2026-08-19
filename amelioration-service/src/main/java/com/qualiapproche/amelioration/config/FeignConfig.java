@@ -40,12 +40,17 @@ public class FeignConfig {
      * titulaire. Ils sont appelés depuis des requêtes utilisateur — solder un plan déclare le fait
      * dans la foulée — mais l'acte est celui du <b>module</b>, pas de la personne : le jeton du
      * service part donc toujours, sans quoi le moteur refuserait l'appel.
+     *
+     * <p>La lecture de l'historique en fait partie : le module la fait pour composer la fiche de
+     * clôture, dont le droit d'accès est celui de la non-conformité elle-même. Propager le jeton
+     * de l'utilisateur exigerait de lui, en plus, une habilitation de lecture du moteur — et la
+     * fiche s'éditerait ou non selon qui la demande.</p>
      */
     private boolean estUnAppelTechnique(String url) {
         if (!url.contains("/instances/")) {
             return false;
         }
-        return url.contains("/faits/") || url.contains("/titulaire");
+        return url.contains("/faits/") || url.contains("/titulaire") || url.contains("/history");
     }
 
     @Bean

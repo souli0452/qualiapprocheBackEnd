@@ -67,6 +67,26 @@ class ContratDesChampsPartagesTest {
     }
 
     @Test
+    @DisplayName("Toute propriété d'une entrée d'historique publiée par le moteur existe côté common")
+    void historique_contratsAlignes() throws IntrospectionException {
+        Set<String> cotesMoteur = proprietesDe(ValidationHistoryDto.class);
+        Set<String> coteCommun = proprietesDe(com.qualiapproche.common.dto.ValidationHistoryDto.class);
+
+        // L'historique alimente la fiche de clôture d'une non-conformité : une propriété perdue
+        // ferait imprimer un visa amputé — sans erreur, donc sans que personne ne s'en aperçoive.
+        assertThat(coteCommun).containsAll(cotesMoteur);
+    }
+
+    @Test
+    @DisplayName("Toute propriété d'une valeur saisie de l'historique existe côté common")
+    void valeurSaisieDHistorique_contratsAlignes() throws IntrospectionException {
+        Set<String> cotesMoteur = proprietesDe(ValidationHistoryDto.FieldValueDto.class);
+        Set<String> coteCommun = proprietesDe(com.qualiapproche.common.dto.ValidationHistoryDto.FieldValueDto.class);
+
+        assertThat(coteCommun).containsAll(cotesMoteur);
+    }
+
+    @Test
     @DisplayName("Toute propriété d'une action offerte existe côté common")
     void actionOfferte_contratsAlignes() throws IntrospectionException {
         Set<String> cotesMoteur = proprietesDe(WorkflowStateDto.WorkflowActionDto.class);
