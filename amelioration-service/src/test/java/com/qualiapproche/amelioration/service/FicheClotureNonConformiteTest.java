@@ -54,7 +54,8 @@ class FicheClotureNonConformiteTest {
         // Le moteur de gabarits réel, celui-là même que le service emploie en production : le test
         // vaut aussi preuve que le gabarit se rend sans erreur.
         service = new FicheClotureNonConformiteService(nonConformiteRepository, planActionRepository,
-                workflowClient, reglages, ThymeleafConfig.getTemplateEngine(),
+                workflowClient, mock(com.qualiapproche.amelioration.client.UtilisateurClient.class),
+                reglages, ThymeleafConfig.getTemplateEngine(),
                 "https://qualisira.exemple.org/non-conformite/suivi?ncId={id}");
 
         // Les plans sont rattachés par leur colonne nonConformeId, qui fait foi — la collection de

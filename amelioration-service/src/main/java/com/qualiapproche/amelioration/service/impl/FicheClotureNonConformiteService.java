@@ -6,6 +6,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import com.qualiapproche.amelioration.client.UtilisateurClient;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
@@ -64,6 +65,7 @@ public class FicheClotureNonConformiteService {
     private final NonConformiteRepository nonConformiteRepository;
     private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
+    private final UtilisateurClient utilisateurClient;
     private final ReglagesOrganisation reglages;
     private final TemplateEngine templateEngine;
     private final String motifLienDossier;
@@ -72,15 +74,62 @@ public class FicheClotureNonConformiteService {
             NonConformiteRepository nonConformiteRepository,
             PlanActionRepository planActionRepository,
             WorkflowClient workflowClient,
+            UtilisateurClient utilisateurClient,
             ReglagesOrganisation reglages,
             TemplateEngine templateEngine,
             @Value("${amelioration.fiche-cloture.lien-dossier:}") String motifLienDossier) {
         this.nonConformiteRepository = nonConformiteRepository;
         this.planActionRepository = planActionRepository;
         this.workflowClient = workflowClient;
+        this.utilisateurClient = utilisateurClient;
         this.reglages = reglages;
         this.templateEngine = templateEngine;
         this.motifLienDossier = motifLienDossier;
+    }
+
+    /**
+     * Nom de la personne désignée par un identifiant, lu chez user-service.
+     *
+     * <p>Le circuit ne transporte que des identifiants : l'imputation inscrit
+     * {@code userImputId} sans jamais résoudre le nom, et un plan ré-attribué garde parfois celui
+     * de son responsable précédent. Un identifiant technique sur une fiche imprimée ne désigne
+     * personne — le nom se lit donc ici, à l'édition, et à défaut la case reste vide plutôt que de
+     * porter un UUID.</p>
+     */
+    private String nomDe(String userId, String nomConnu) {
+        String enPlace = valeurRenseignee(nomConnu);
+        if (enPlace != null) {
+            return enPlace;
+        }
+        String identifiant = valeurRenseignee(userId);
+        if (identifiant == null) {
+            return null;
+        }
+        try {
+            java.util.Map<String, Object> utilisateur = utilisateurClient.getUserById(identifiant);
+            if (utilisateur == null) {
+                return null;
+            }
+            Object nomComplet = utilisateur.get("fullName");
+            if (nomComplet == null) {
+                String prenom = texte(utilisateur.get("firstName"));
+                String nom = texte(utilisateur.get("lastName"));
+                String compose = (prenom + " " + nom).trim();
+                return compose.isBlank() ? texte(utilisateur.get("email")) : compose;
+            }
+            return texte(nomComplet);
+        } catch (Exception e) {
+            log.warn("Nom de l'utilisateur {} illisible pour la fiche : {}", identifiant, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String texte(Object valeur) {
+        return valeur == null ? "" : valeur.toString().trim();
+    }
+
+    private static String valeurRenseignee(String valeur) {
+        return valeur != null && !valeur.isBlank() ? valeur.trim() : null;
     }
 
     /** Fiche prête à servir : le contenu PDF et le nom sous lequel le proposer au téléchargement. */
@@ -157,8 +206,8 @@ public class FicheClotureNonConformiteService {
         contexte.setVariable("niveau", valeurOuTiret(nc.getNiveauNonConformiteLibelle()));
         // Le nom de l'agent n'est porté que par les dossiers récents ; les plus anciens n'ont que
         // son adresse, qui vaut mieux qu'un tiret.
-        contexte.setVariable("agentImpute",
-                valeurOuTiret(premierRenseigne(nc.getUserImputFullName(), nc.getUserImputeEmail())));
+        contexte.setVariable("agentImpute", valeurOuTiret(premierRenseigne(
+                nomDe(nc.getUserImputId(), nc.getUserImputFullName()), nc.getUserImputeEmail())));
         contexte.setVariable("participants", nc.getParticipants() != null
                 && nc.getParticipants().getFullNames() != null
                 && !nc.getParticipants().getFullNames().isEmpty()
@@ -196,7 +245,10 @@ public class FicheClotureNonConformiteService {
                 valeurOuVide(plan.getNumeroOdre()),
                 valeurOuTiret(plan.getCauseIdentifiees()),
                 valeurOuTiret(plan.getSolutionRetenues()),
-                valeurOuTiret(plan.getResponsableNomComplet()),
+                valeurOuTiret(premierRenseigne(
+                        nomDe(plan.getResponsableId() == null ? null : plan.getResponsableId().toString(),
+                                plan.getResponsableNomComplet()),
+                        plan.getResponsableEmail())),
                 plan.getDateEcheance() != null ? plan.getDateEcheance().format(DATE) : "—",
                 libelleStatut(plan.getStatus()));
     }
