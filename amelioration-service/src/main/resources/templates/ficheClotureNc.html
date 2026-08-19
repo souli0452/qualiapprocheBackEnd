@@ -311,18 +311,12 @@
     <tr>
         <td class="etiquette">Processus concerné</td>
         <td th:text="${processus}">—</td>
-        <td class="etiquette">Origine</td>
-        <td th:text="${origine}">—</td>
-    </tr>
-    <tr>
         <td class="etiquette">Type</td>
         <td th:text="${typeNonConformite}">—</td>
-        <td class="etiquette">Niveau</td>
-        <td th:text="${niveau}">—</td>
     </tr>
     <tr>
-        <td class="etiquette">Circuit de traitement</td>
-        <td th:text="${circuitTraitement}">—</td>
+        <td class="etiquette">Niveau</td>
+        <td th:text="${niveau}">—</td>
         <td class="etiquette">Agent chargé du traitement</td>
         <td th:text="${agentImpute}">—</td>
     </tr>
@@ -342,18 +336,16 @@
     <thead>
     <tr>
         <th style="width: 5%;">N°</th>
-        <th>Action</th>
-        <th th:if="${avecCause}">Cause identifiée</th>
-        <th>Solution retenue</th>
-        <th style="width: 14%;">Responsable</th>
+        <th th:if="${avecCause}">Cause(s) identifiée(s)</th>
+        <th>Solution(s) proposée(s)</th>
+        <th style="width: 16%;">Responsable</th>
         <th style="width: 11%; white-space: nowrap;">Échéance</th>
-        <th style="width: 10%;">Statut</th>
+        <th style="width: 11%;">Statut</th>
     </tr>
     </thead>
     <tbody>
     <tr th:each="plan : ${plans}">
         <td th:text="${plan.numero}">1</td>
-        <td th:text="${plan.actionCorrective}">—</td>
         <td th:if="${avecCause}" th:text="${plan.cause}">—</td>
         <td th:text="${plan.solution}">—</td>
         <td th:text="${plan.responsable}">—</td>
@@ -361,7 +353,7 @@
         <td th:text="${plan.statut}">—</td>
     </tr>
     <tr th:if="${#lists.isEmpty(plans)}">
-        <td th:colspan="${avecCause ? 7 : 6}">Aucun plan d'action n'a été ouvert sur ce dossier.</td>
+        <td th:colspan="${avecCause ? 6 : 5}">Aucun plan d'action n'a été ouvert sur ce dossier.</td>
     </tr>
     </tbody>
 </table>

@@ -155,10 +155,10 @@ public class FicheClotureNonConformiteService {
         contexte.setVariable("processus", valeurOuTiret(premierRenseigne(nc.getNomProcessus(), nc.getOrigineService())));
         contexte.setVariable("typeNonConformite", valeurOuTiret(nc.getTypeNonConformiteLibelle()));
         contexte.setVariable("niveau", valeurOuTiret(nc.getNiveauNonConformiteLibelle()));
-        contexte.setVariable("origine", valeurOuTiret(nc.getOriginNonConformiteLibelle()));
-        contexte.setVariable("circuitTraitement",
-                nc.getCircuit() != null ? nc.getCircuit().getLibelle() : "—");
-        contexte.setVariable("agentImpute", valeurOuTiret(nc.getUserImputFullName()));
+        // Le nom de l'agent n'est porté que par les dossiers récents ; les plus anciens n'ont que
+        // son adresse, qui vaut mieux qu'un tiret.
+        contexte.setVariable("agentImpute",
+                valeurOuTiret(premierRenseigne(nc.getUserImputFullName(), nc.getUserImputeEmail())));
         contexte.setVariable("participants", nc.getParticipants() != null
                 && nc.getParticipants().getFullNames() != null
                 && !nc.getParticipants().getFullNames().isEmpty()
@@ -194,7 +194,6 @@ public class FicheClotureNonConformiteService {
     private LignePlan lignePlan(PlanAction plan) {
         return new LignePlan(
                 valeurOuVide(plan.getNumeroOdre()),
-                valeurOuTiret(plan.getActionCorrective()),
                 valeurOuTiret(plan.getCauseIdentifiees()),
                 valeurOuTiret(plan.getSolutionRetenues()),
                 valeurOuTiret(plan.getResponsableNomComplet()),
@@ -211,8 +210,8 @@ public class FicheClotureNonConformiteService {
                 valeurOuTiret(decision.getComments()));
     }
 
-    /** Ligne du tableau des plans d'action, prête à imprimer. */
-    public record LignePlan(String numero, String actionCorrective, String cause, String solution,
+    /** Ligne du tableau des causes et solutions, prête à imprimer. */
+    public record LignePlan(String numero, String cause, String solution,
                             String responsable, String echeance, String statut) {
     }
 
