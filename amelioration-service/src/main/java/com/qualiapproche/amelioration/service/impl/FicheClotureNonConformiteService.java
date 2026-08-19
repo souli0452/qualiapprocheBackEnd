@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
@@ -86,6 +87,12 @@ public class FicheClotureNonConformiteService {
     public record FicheEditee(String nomDeFichier, byte[] contenu) {
     }
 
+    /**
+     * Transactionnel car la description du dossier et le contenu des plans sont des champs
+     * {@code @Lob} : Hibernate ne rend leur flux qu'à l'intérieur d'une transaction, et la
+     * fiche partait en « Unable to access lob stream » sitôt qu'un dossier en portait.
+     */
+    @Transactional(readOnly = true)
     public FicheEditee editer(UUID nonConformiteId) {
         NonConformite nc = nonConformiteRepository.findById(nonConformiteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
