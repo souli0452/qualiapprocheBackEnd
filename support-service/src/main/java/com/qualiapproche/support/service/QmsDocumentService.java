@@ -333,9 +333,14 @@ public class QmsDocumentService {
                 ? docType.getFolderName() : docType.getCode();
         String objectName = storageService.uploadFile(file, processusFolder, typeFolder);
 
-        // Le document était validé : le contenu change, il doit repasser par le circuit de validation
-        // avant de pouvoir de nouveau être considéré comme "VALIDE" (ISO 9001 §7.5.2).
-        boolean requiresRevalidation = document.isEsTraiter();
+        // Le contenu change : il doit repasser par le circuit de validation avant de pouvoir être
+        // de nouveau considéré comme "VALIDE" (ISO 9001 §7.5.2).
+        //
+        // Une révision décidée le veut toujours — c'est le sens même d'une demande de modification
+        // aboutie : le document reprend son circuit au rang suivant. Un dépôt ordinaire, lui, ne
+        // relance que ce qui était en vigueur ; une correction pendant le circuit initial n'a rien
+        // à relancer, elle s'y trouve déjà.
+        boolean requiresRevalidation = revision || document.isEsTraiter();
 
         if (revision) {
             document.setNumeroVersion(document.getNumeroVersion() + 1);

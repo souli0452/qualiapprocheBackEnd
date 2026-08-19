@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -192,6 +193,51 @@ class RelanceDuCircuitAuDepotDeVersionTest {
 
         verify(workflowClient).initiateWorkflow(DOCUMENT, "DOCUMENT", CIRCUIT_CONFIGURE, "PRO-001");
         assertThat(document.getWorkflowId()).isEqualTo(CIRCUIT_CONFIGURE);
+    }
+
+    @Test
+    @DisplayName("Le rang suit la version en place : v2 devient v3, jamais v1")
+    void revision_incrementeLeRangEnPlace() throws Exception {
+        DocumentQms document = documentValide(CIRCUIT_ATTACHE);
+        document.setNumeroVersion(2);
+        when(workflowClient.getLastValidationInstance(DOCUMENT)).thenReturn(null);
+        when(workflowClient.initiateWorkflow(DOCUMENT, "DOCUMENT", CIRCUIT_ATTACHE, "PRO-001"))
+                .thenReturn(instanceOuverte());
+
+        service.addVersion(DOCUMENT, fichier(), "révision", true);
+
+        assertThat(document.getNumeroVersion()).isEqualTo(3);
+        verify(versionRepository).save(argThat(v -> "v3".equals(v.getVersionLabel())));
+    }
+
+    @Test
+    @DisplayName("Une révision décidée relance le circuit même sur un document qui n'était pas en vigueur")
+    void revisionSurDocumentNonEnVigueur_relanceQuandMeme() throws Exception {
+        DocumentQms document = documentValide(CIRCUIT_ATTACHE);
+        // Document retiré du service, ou dont la validation précédente n'avait pas abouti : la
+        // modification a tout de même été instruite et décidée, elle doit être validée.
+        document.setEsTraiter(false);
+        when(workflowClient.getLastValidationInstance(DOCUMENT)).thenReturn(null);
+        when(workflowClient.initiateWorkflow(DOCUMENT, "DOCUMENT", CIRCUIT_ATTACHE, "PRO-001"))
+                .thenReturn(instanceOuverte());
+
+        service.addVersion(DOCUMENT, fichier(), "révision", true);
+
+        verify(workflowClient).initiateWorkflow(DOCUMENT, "DOCUMENT", CIRCUIT_ATTACHE, "PRO-001");
+        assertThat(document.getCurrentEtape()).isEqualTo("Rédaction");
+        assertThat(document.getNumeroVersion()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Un dépôt ordinaire sur un brouillon ne relance rien et ne change pas le rang")
+    void depotOrdinaireSurBrouillon_neRelanceRien() throws Exception {
+        DocumentQms document = documentValide(CIRCUIT_ATTACHE);
+        document.setEsTraiter(false);
+
+        service.addVersion(DOCUMENT, fichier(), "correction", false);
+
+        verify(workflowClient, never()).initiateWorkflow(any(), anyString(), any(), anyString());
+        assertThat(document.getNumeroVersion()).isEqualTo(0);
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.support.client.WorkflowClient;
+import com.qualiapproche.support.dto.DemandeDocumentDto;
 import com.qualiapproche.support.model.DemandeDocument;
 import com.qualiapproche.support.model.DemandeDocument.EtatDemande;
 import com.qualiapproche.support.model.DemandeDocument.TypeDemande;
@@ -235,6 +236,22 @@ class DemandeDocumentServiceTest {
 
         // Seul un humain peut fournir le document remplaçant : l'acceptation ne l'invente pas.
         verify(documentService, never()).supprimerSurDecision(any(), any());
+    }
+
+    @Test
+    @DisplayName("Le remplaçant déposé publie une révision : rang suivant et retour en validation")
+    void remplacantDepose_publieUneRevision() throws Exception {
+        when(demandeRepository.findById(DEMANDE))
+                .thenReturn(Optional.of(demande(TypeDemande.MODIFICATION, EtatDemande.ACCEPTEE)));
+        MultipartFile fichier = new org.springframework.mock.web.MockMultipartFile(
+                "file", "PRO-001-v2.pdf", "application/pdf", "contenu".getBytes());
+
+        DemandeDocumentDto rendue = service.deposerRemplacant(DEMANDE, fichier, "Chapitre 4 revu");
+
+        // Le dernier paramètre est ce qui distingue une révision d'un simple dépôt : lui seul fait
+        // passer le document au rang suivant et le renvoie dans son circuit de validation.
+        verify(documentService).addVersion(eq(DOCUMENT), eq(fichier), eq("Chapitre 4 revu"), eq(true));
+        assertThat(rendue.getEtat()).hasToString(EtatDemande.EXECUTEE.name());
     }
 
     @Test
