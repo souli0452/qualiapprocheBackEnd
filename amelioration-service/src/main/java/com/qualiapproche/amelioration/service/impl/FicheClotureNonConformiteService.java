@@ -276,6 +276,14 @@ public class FicheClotureNonConformiteService {
                 || !motifLienDossier.trim().toLowerCase(Locale.ROOT).startsWith("http")) {
             return null;
         }
+        // Le défaut de développement (localhost) ne désigne rien pour qui scanne un papier :
+        // mieux vaut une fiche sans QR qu'un code qui mène nulle part. FRONTEND_URL doit être
+        // renseignée sur ce service au déploiement, comme elle l'est sur workflow-service.
+        String adresse = motifLienDossier.trim().toLowerCase(Locale.ROOT);
+        if (adresse.contains("//localhost") || adresse.contains("//127.0.0.1")) {
+            log.warn("FRONTEND_URL n'est pas renseignée : la fiche part sans QR code.");
+            return null;
+        }
         String lien = motifLienDossier.trim().replace("{id}", nc.getId().toString());
         try {
             BitMatrix matrice = new QRCodeWriter().encode(lien, BarcodeFormat.QR_CODE, 240, 240,
