@@ -361,17 +361,38 @@ public class QmsDocumentService {
         auditLogService.logAction("MISE_A_JOUR_VERSION", document.getDocumentNumber(), "Nouvelle version ajoutée: " + versionLabel);
 
         if (requiresRevalidation) {
-            WorkflowInstanceDto previousInstance = null;
+            // Le circuit à relancer, du plus fidèle au plus général : celui que le document a
+            // réellement suivi, celui qui lui est resté attaché, et à défaut celui que
+            // l'administrateur a configuré pour ce type. Le premier repli seul faisait retomber le
+            // document en brouillon sans circuit dès que le moteur ne rendait pas l'instance
+            // passée — le document modifié ne « resuivait » alors jamais sa validation, et
+            // personne n'en était averti.
+            UUID circuit = null;
             try {
-                previousInstance = workflowClient.getLastValidationInstance(documentId);
-            } catch (Exception ignored) {
+                WorkflowInstanceDto previousInstance = workflowClient.getLastValidationInstance(documentId);
+                if (previousInstance != null) {
+                    circuit = previousInstance.getWorkflowId();
+                }
+            } catch (Exception e) {
+                log.warn("Instance de circuit passée illisible pour le document {} : {}",
+                        document.getDocumentNumber(), e.getMessage());
+            }
+            if (circuit == null) {
+                circuit = document.getWorkflowId();
+            }
+            if (circuit == null) {
+                try {
+                    circuit = circuitDuDepot(docType, null);
+                } catch (ResponseStatusException e) {
+                    log.warn("Aucun circuit configuré pour relancer la validation du document {}.",
+                            document.getDocumentNumber());
+                }
             }
 
-            if (previousInstance != null && previousInstance.getWorkflowId() != null) {
-                UUID prevWorkflowId = previousInstance.getWorkflowId();
+            if (circuit != null) {
                 WorkflowInstanceDto newInstance = workflowClient.initiateWorkflow(
-                        document.getId(), "DOCUMENT", prevWorkflowId, document.getDocumentNumber());
-                document.setWorkflowId(prevWorkflowId);
+                        document.getId(), "DOCUMENT", circuit, document.getDocumentNumber());
+                document.setWorkflowId(circuit);
                 if (newInstance != null && newInstance.getCurrentStateName() != null) {
                     document.setCurrentEtape(newInstance.getCurrentStateName());
                 }
