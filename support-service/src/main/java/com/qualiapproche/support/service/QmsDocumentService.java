@@ -475,11 +475,20 @@ public class QmsDocumentService {
      * Applique au document l'issue d'une transition de workflow.
      *
      * <p>Le cycle de vie du document est piloté par {@code status}, valeur machine émise par
-     * workflow-service ({@code EN_COURS} / {@code APPROVED} / {@code REJECTED}), tandis que
-     * {@code statusName} n'est que le libellé de l'étape atteinte, affiché tel quel. La version
-     * précédente testait le libellé lui-même contre « APPROVED »/« VALIDE » : comme les étapes
-     * réelles s'appellent « Validation RS », « Suivi RQ »…, aucun test ne passait jamais et le
-     * document restait indéfiniment en brouillon.</p>
+     * workflow-service ({@code EN_COURS} / {@code APPROVED} / {@code CLOSED} / {@code REJECTED}),
+     * tandis que {@code statusName} n'est que le libellé de l'étape atteinte, affiché tel quel. La
+     * version précédente testait le libellé lui-même contre « APPROVED »/« VALIDE » : comme les
+     * étapes réelles s'appellent « Validation RS », « Suivi RQ »…, aucun test ne passait jamais et
+     * le document restait indéfiniment en brouillon.</p>
+     *
+     * <p>Une <b>clôture</b> met le document en vigueur au même titre qu'une approbation. Le moteur
+     * publie {@code CLOSED} lorsque la décision finale est de nature clôture plutôt qu'approbation,
+     * et l'éditeur de circuits propose cette nature pour toutes les familles, documentaire
+     * comprise. Elle n'était traitée nulle part : un circuit monté ainsi conduisait son document
+     * jusqu'au bout sans jamais l'y faire entrer — il restait affiché à l'étape « CLOTURE »,
+     * introuvable parmi les documents en vigueur, et aucune demande de modification ne pouvait
+     * le viser. Ce qui compte pour le document est que son circuit soit arrivé à son terme sans
+     * avoir été refusé ; la nuance entre approuver et clore appartient au circuit, pas à lui.</p>
      *
      * @param status     issue machine de la transition
      * @param statusName libellé de l'étape atteinte, à afficher
@@ -494,13 +503,31 @@ public class QmsDocumentService {
                 doc.getDocumentNumber(), status, statusName);
 
         doc.setCurrentEtape(statusName);
-        if ("APPROVED".equalsIgnoreCase(status)) {
+        if (estUneFinDeCircuitAboutie(status)) {
             transitionStatus(documentId, "valide", comments != null ? comments : "Validation workflow complétée");
         } else if ("REJECTED".equalsIgnoreCase(status)) {
             transitionStatus(documentId, "brouillon", comments != null ? comments : "Validation workflow rejetée");
         } else {
+            // Une issue inconnue laisse le document où il est : la journaliser évite qu'une
+            // nouvelle nature de décision se perde aussi silencieusement que l'a fait la clôture.
+            if (!"EN_COURS".equalsIgnoreCase(status)) {
+                log.warn("Issue de circuit non reconnue pour le document '{}' : status={}. Le "
+                                + "document reste à l'étape « {} » ; vérifiez le circuit associé.",
+                        doc.getDocumentNumber(), status, statusName);
+            }
             documentRepository.save(doc);
         }
+    }
+
+    /**
+     * Vrai lorsque l'issue publiée signale un circuit mené à son terme, le document restant retenu.
+     *
+     * <p>{@code APPROVED} et {@code CLOSED} disent la même chose du document : plus personne n'a
+     * de décision à prendre et le texte n'a pas été refusé. Seul {@code REJECTED} le renvoie en
+     * rédaction.</p>
+     */
+    private boolean estUneFinDeCircuitAboutie(String status) {
+        return "APPROVED".equalsIgnoreCase(status) || "CLOSED".equalsIgnoreCase(status);
     }
 
     /**
