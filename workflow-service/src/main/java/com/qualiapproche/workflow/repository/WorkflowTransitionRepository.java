@@ -23,6 +23,15 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
     /** L'action d'une étape désignée par son code métier. */
     Optional<WorkflowTransition> findByFromStepIdAndCode(Long fromStepId, String code);
 
+    /**
+     * L'étape offre-t-elle au moins une action ?
+     *
+     * <p>Une étape qui n'en offre aucune est une fin de circuit voulue : le dossier l'atteint et
+     * s'y arrête, personne n'a plus de décision à y prendre. C'est ainsi que sont écrites la
+     * clôture d'une non-conformité et l'action soldée d'un plan.</p>
+     */
+    boolean existsByFromStepId(Long fromStepId);
+
     /** Faits déjà exigés par au moins une transition, tous circuits confondus. */
     @Query("select distinct t.conditionRequise from WorkflowTransition t where t.conditionRequise is not null")
     List<String> faitsExiges();

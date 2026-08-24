@@ -7,6 +7,7 @@ import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
 import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
+import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +58,7 @@ public class WorkflowEventListener {
     private static final String PREFIXE_ETAT_TERMINAL = "TERMINATED_";
 
     private final WorkflowStepRepository stepRepository;
+    private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
     private final ValidationHistoryRepository historyRepository;
     private final WorkflowFieldValueRepository fieldValueRepository;
@@ -159,7 +161,13 @@ public class WorkflowEventListener {
             payload.put("etatCode", null);
         } else if (etapeAtteinte.isPresent()) {
             WorkflowStep step = etapeAtteinte.get();
-            payload.put("status", "EN_COURS");
+            // Une étape qui n'offre aucune action est une fin de circuit, au même titre qu'une
+            // action déclarée terminale : le dossier s'y arrête, plus personne n'a de décision à y
+            // prendre. Annoncer « en cours » y était doublement faux — le moteur vient de clore
+            // l'instance, et le module métier attendait une suite qui ne viendrait jamais. Le
+            // libellé de l'étape et son état de traitement restent publiés, eux : c'est ce qui
+            // permet de dire « clôturé » plutôt que « terminé ».
+            payload.put("status", estSansSuite(step) ? issueDeLEtapeFinale(event, step) : "EN_COURS");
             payload.put("statusName", step.getNomEtape());
             payload.put("etatCode", step.getEtatTraitement());
         } else {
@@ -202,6 +210,49 @@ public class WorkflowEventListener {
 
     private boolean estTerminal(String etatApres) {
         return etatApres != null && etatApres.startsWith(PREFIXE_ETAT_TERMINAL);
+    }
+
+    /** L'étape n'offre aucune action : le dossier ne peut plus en sortir. */
+    private boolean estSansSuite(WorkflowStep step) {
+        return step.getId() != null && !transitionRepository.existsByFromStepId(step.getId());
+    }
+
+    /**
+     * Issue publiée quand le dossier atteint une étape sans suite.
+     *
+     * <p>Elle se lit sur la décision qui y a mené, comme pour une action terminale : un circuit
+     * peut fort bien se terminer sur une étape « Refusé » comme sur une étape « Clôturé », et
+     * confondre les deux ferait entrer en vigueur un document que l'on vient d'écarter.</p>
+     *
+     * <p>Décision introuvable — transition supprimée depuis, code inattendu — : la fin est
+     * annoncée en clôture. L'instance est close de toute façon ; laisser croire au module métier
+     * que son dossier avance le laisserait attendre une décision que le moteur refuse désormais.</p>
+     */
+    private String issueDeLEtapeFinale(TransitionFranchieEvent event, WorkflowStep step) {
+        String decision = decisionFranchie(event);
+        if (decision == null) {
+            log.warn("Étape « {} » sans suite atteinte par une décision introuvable ({}) : la fin "
+                            + "de circuit est annoncée en clôture.",
+                    step.getNomEtape(), event.getTransitionCode());
+            return "CLOSED";
+        }
+        return issueFinale(decision);
+    }
+
+    /** Nature de la décision qui vient d'être prise, ou {@code null} si la transition est inconnue. */
+    private String decisionFranchie(TransitionFranchieEvent event) {
+        String code = event.getTransitionCode();
+        if (code == null) {
+            return null;
+        }
+        try {
+            return transitionRepository.findById(Long.valueOf(code))
+                    .filter(transition -> transition.getDecision() != null)
+                    .map(transition -> transition.getDecision().name())
+                    .orElse(null);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**

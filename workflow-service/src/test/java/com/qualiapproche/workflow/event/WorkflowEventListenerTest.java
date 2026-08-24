@@ -9,6 +9,7 @@ import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
 import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
+import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.SmtpEmailService;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
@@ -45,6 +46,7 @@ import static org.mockito.Mockito.when;
 class WorkflowEventListenerTest {
 
     @Mock private WorkflowStepRepository stepRepository;
+    @Mock private WorkflowTransitionRepository transitionRepository;
     @Mock private EmailTemplateRepository emailTemplateRepository;
     @Mock private SmtpEmailService emailService;
     @Mock private WorkflowValidationInstanceRepository validationInstanceRepository;

@@ -57,7 +57,7 @@ class WorkflowEngineDAOAdapterTest {
         adapter = new WorkflowEngineDAOAdapter(workflowRepository, transitionRepository,
                 conditionAdapter, beanFactory);
         when(beanFactory.getBean(anyString(), any(Class.class)))
-                .thenReturn(new WorkflowStepAction());
+                .thenReturn(new WorkflowStepAction(transitionRepository));
     }
 
     /** Circuit à deux étapes : « Rédaction » puis « Vérification ». */
