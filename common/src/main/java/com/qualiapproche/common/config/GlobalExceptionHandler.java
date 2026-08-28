@@ -17,6 +17,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException ex) {
         ApiResponse<Void> response = ApiResponse.error(ex.getMessage(), ex.getStatus().value());
@@ -92,8 +95,21 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ApiResponse.error(message, status.value()), status);
     }
 
+    /**
+     * Dernier recours : ce qu'aucun autre gestionnaire n'a reconnu.
+     *
+     * <p>La pile est <b>journalisée</b>. Elle ne l'était pas : l'appelant recevait « une erreur
+     * interne est survenue » suivie du seul message de l'exception, et le serveur n'en gardait
+     * aucune trace — un 500 en production ne laissait donc rien à examiner, ni ligne fautive, ni
+     * cause. C'est la seule information qui compte ici, et la seule qui manquait.</p>
+     *
+     * <p>Le message reste rendu à l'appelant tel quel : il aide au diagnostic en développement, et
+     * les exceptions porteuses d'un message destiné à l'utilisateur ont leur propre gestionnaire
+     * plus haut.</p>
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        LOG.error("Erreur non gérée remontée jusqu'au gestionnaire général.", ex);
         ApiResponse<Void> response = ApiResponse.error("Une erreur interne est survenue: " + ex.getMessage(),
                 HttpStatus.INTERNAL_SERVER_ERROR.value());
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
