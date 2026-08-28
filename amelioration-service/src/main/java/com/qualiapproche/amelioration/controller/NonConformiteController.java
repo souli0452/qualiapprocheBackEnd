@@ -37,6 +37,8 @@ import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
 
 import com.qualiapproche.amelioration.service.NonConformiteService;
+import com.qualiapproche.common.service.GenericService;
+import com.qualiapproche.common.web.AbstractController;
 
 import static com.qualiapproche.common.utils.ApiUrls.*;
 import com.qualiapproche.amelioration.client.WorkflowClient;
@@ -57,10 +59,26 @@ import com.qualiapproche.common.dto.WorkflowStateDto;
         delete = {"nc-write", "SUBMIT_NC", "TRAITEMENT_NC"},
         validate = {"nc-validate", "VALIDATION_RQ", "VALIDATION_CHEF"}
 )
-public class NonConformiteController {
+public class NonConformiteController extends AbstractController<NonConformiteDto> {
+
     private final NonConformiteService nonConformiteService;
     private final WorkflowClient workflowClient;
     private final FicheClotureNonConformiteService ficheClotureService;
+
+    /**
+     * La recherche est héritée : {@code POST /search} vient de {@link AbstractController},
+     * qui la sert pour toutes les ressources cherchables. Le contrôleur n'a plus qu'à dire quel
+     * service la remplit.
+     *
+     * <p>Elle remplace un filtrage qui se faisait dans le navigateur, sur la page déjà chargée :
+     * cocher un processus ne retirait que des lignes de la page courante, les compteurs annonçaient
+     * un total qui ne correspondait à rien, et les dossiers des pages suivantes restaient invisibles
+     * quel que soit le filtre posé.</p>
+     */
+    @Override
+    protected GenericService<NonConformiteDto> recherche() {
+        return nonConformiteService;
+    }
 
     /**
      * Édite la fiche récapitulative d'une non-conformité clôturée, en PDF.

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.time.LocalDateTime;
 
 import com.qualiapproche.common.dto.NcCountsDto;
 import com.qualiapproche.common.dto.NcDashboardDto;
@@ -13,12 +12,11 @@ import com.qualiapproche.common.dto.NcStats;
 import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
-import com.qualiapproche.common.enumeration.TypeDemande;
-import com.qualiapproche.common.enumeration.Circuit;
+import com.qualiapproche.common.service.GenericService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-public interface NonConformiteService {
+public interface NonConformiteService extends GenericService<NonConformiteDto> {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
 
     /**
@@ -94,14 +92,7 @@ public interface NonConformiteService {
 
     Page<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId, Pageable pageable);
 
-    Page<NonConformiteDto> search(
-            String numeroReference, String nomProcessus, String origineId, String origineService,
-            String structureSoumissionId, String structureResponsableId,
-            Etat etatTraitement, Status status, TypeDemande typeDemande, Circuit circuit,
-            String userImputeEmail, String typeNonConformiteLibelle, String niveauNonConformiteLibelle,
-            UUID typeNonConformiteId, UUID niveauNonConformiteId,
-            LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
-            Pageable pageable);
+
 
     /**
      * Non-conformités sur lesquelles l'appelant a une décision à prendre.

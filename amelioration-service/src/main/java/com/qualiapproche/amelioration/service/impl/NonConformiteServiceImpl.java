@@ -42,6 +42,8 @@ import com.qualiapproche.common.enumeration.Circuit;
 import com.qualiapproche.amelioration.client.ReferentielClient;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.common.service.SendMailService;
+import com.qualiapproche.common.base.Participants;
+import com.qualiapproche.common.service.AbstractService;
 import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -54,6 +56,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
+import java.util.function.Function;
 import com.qualiapproche.amelioration.specification.NonConformiteSpecification;
 import lombok.RequiredArgsConstructor;
 import com.qualiapproche.amelioration.repository.PieceJointeRepository;
@@ -64,7 +69,9 @@ import org.springframework.beans.factory.annotation.Value;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
-public class NonConformiteServiceImpl implements NonConformiteService {
+public class NonConformiteServiceImpl
+        extends AbstractService<NonConformite, NonConformiteDto>
+        implements NonConformiteService {
 
     /**
      * Nom du champ d'étape portant le document justificatif d'un rejet.
@@ -369,7 +376,7 @@ public class NonConformiteServiceImpl implements NonConformiteService {
             return;
         }
         if (nc.getParticipants() == null) {
-            nc.setParticipants(new com.qualiapproche.common.base.Participants());
+            nc.setParticipants(new Participants());
         }
         nc.getParticipants().setFullNames(new java.util.HashSet<>(dto.getParticipants()));
     }
@@ -435,6 +442,12 @@ public class NonConformiteServiceImpl implements NonConformiteService {
     public NonConformiteDto update(NonConformiteDto nonConformiteDto) {
         return nonConformiteRepository.findById(nonConformiteDto.getId()).map(nonConformiteExisted -> {
             nonConformiteMapper.updateEntityFromDto(nonConformiteDto, nonConformiteExisted);
+            // Les pièces jointes suivent la fiche, ici comme dans les deux autres points d'entrée
+            // de mise à jour. Le mapper les ignore — à raison, la collection est en orphanRemoval
+            // et les réécrire depuis ce que l'écran renvoie les détruirait — mais les ignorer
+            // partout signifiait qu'un fichier ajouté depuis un écran passant par ici était perdu
+            // sans erreur, la réponse paraissant valide.
+            ncFichierService.synchroniser(nonConformiteDto.getFichiers(), nonConformiteDto.getId());
             return populateAttachments(nonConformiteMapper.toDto((nonConformiteExisted)));
         }).orElseThrow(() -> new ResponseStatusException(HttpStatus.OK, "Aucune NonConformité trouvée."));
     }
@@ -1091,28 +1104,47 @@ public class NonConformiteServiceImpl implements NonConformiteService {
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
+    // ------------------------------------------------------------------ recherche générique
+
     @Override
-    public Page<NonConformiteDto> search(
-            String numeroReference, String nomProcessus, String origineId, String origineService,
-            String structureSoumissionId, String structureResponsableId,
-            Etat etatTraitement,
-            Status status,
-            TypeDemande typeDemande,
-            Circuit circuit,
-            String userImputeEmail, String typeNonConformiteLibelle, String niveauNonConformiteLibelle,
-            UUID typeNonConformiteId, UUID niveauNonConformiteId,
-            LocalDateTime publicationDateFrom, LocalDateTime publicationDateTo,
-            Pageable pageable) {
-        Specification<NonConformite> spec = NonConformiteSpecification.filter(
-                numeroReference, nomProcessus, origineId, origineService,
-                structureSoumissionId, structureResponsableId,
-                etatTraitement, status, typeDemande, circuit,
-                userImputeEmail, typeNonConformiteLibelle, niveauNonConformiteLibelle,
-                typeNonConformiteId, niveauNonConformiteId,
-                publicationDateFrom, publicationDateTo
-        );
-        return nonConformiteRepository.findAll(spec, pageable)
-                .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
+    protected JpaSpecificationExecutor<NonConformite> depot() {
+        return nonConformiteRepository;
+    }
+
+    /**
+     * Ce que l'appelant reçoit : la fiche, ses pièces jointes et ses plans d'action.
+     *
+     * <p>La recherche rend exactement ce que rend la consultation. Sans les pièces, l'écran ne
+     * pourrait afficher ni le nom des fichiers ni leur icône sur les lignes qu'il vient de
+     * trouver.</p>
+     */
+    @Override
+    protected Function<NonConformite, NonConformiteDto> versDto() {
+        return nc -> populateAttachments(nonConformiteMapper.toDto(nc));
+    }
+
+    /** Colonnes confrontées au texte libre de la barre de recherche. */
+    @Override
+    protected List<String> champsRecherchables() {
+        return List.of("numeroReference", "nomProcessus", "origineService",
+                "typeNonConformiteLibelle", "niveauNonConformiteLibelle", "userImputFullName");
+    }
+
+    /**
+     * Ce que l'appelant a le droit de voir, quels que soient les filtres qu'il pose.
+     *
+     * <p>La recherche doit être bornée comme la liste générale l'est : sans cela, il suffirait de
+     * poser un filtre pour lire les dossiers de toutes les structures — la restriction ne
+     * s'appliquant qu'au point d'entrée « toutes les non-conformités ». L'administration et la
+     * responsabilité qualité en sont dispensées, leur fonction étant transverse.</p>
+     */
+    @Override
+    protected Specification<NonConformite> bornesDeVisibilite() {
+        if (permissionChecker.detient(RolesPlateforme.PORTEE_GLOBALE.toArray(String[]::new))) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+        return NonConformiteSpecification.visiblesPar(
+                SecurityUtils.getCurrentUserStructureId(), SecurityUtils.getCurrentUserId());
     }
 
     /**

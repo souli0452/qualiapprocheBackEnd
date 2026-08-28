@@ -128,6 +128,10 @@ class PieceJointeStockageServiceTest {
         verify(pieceJointeRepository).save(enregistree.capture());
         assertThat(enregistree.getValue().getUrl()).isEqualTo("NON_CONFORMITE/DSI/nouvelle.pdf");
         assertThat(enregistree.getValue().getEntityId()).isEqualTo(DOSSIER);
+        // Le nom d'origine et l'extension, et non la seule référence de l'objet stocké : sans eux,
+        // l'écran ne peut afficher ni le bon libellé ni la bonne icône, et n'a plus qu'un
+        // identifiant à montrer.
+        assertThat(enregistree.getValue().getNom()).isEqualTo("rapport.pdf");
         assertThat(enregistree.getValue().getExt()).isEqualTo("pdf");
     }
 

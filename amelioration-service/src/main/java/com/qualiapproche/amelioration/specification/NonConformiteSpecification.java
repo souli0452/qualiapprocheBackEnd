@@ -1,95 +1,51 @@
 package com.qualiapproche.amelioration.specification;
 
 import com.qualiapproche.amelioration.entities.NonConformite;
-import com.qualiapproche.common.enumeration.Etat;
-import com.qualiapproche.common.enumeration.Status;
-import com.qualiapproche.common.enumeration.TypeDemande;
-import com.qualiapproche.common.enumeration.Circuit;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
-public class NonConformiteSpecification {
+/**
+ * Ce qui, dans la recherche des non-conformités, ne peut pas être générique.
+ *
+ * <p>Les critères de l'appelant — période, processus, gravité, origine, étape, référence — sont
+ * traduits par {@code GenericSpecification} : l'écran nomme la colonne et la comparaison, et rien
+ * n'est à prévoir ici. Cette classe n'en garde donc qu'une clause, celle qui n'appartient
+ * précisément pas à l'appelant.</p>
+ */
+public final class NonConformiteSpecification {
 
-    public static Specification<NonConformite> filter(
-            String numeroReference,
-            String nomProcessus,
-            String origineId,
-            String origineService,
-            String structureSoumissionId,
-            String structureResponsableId,
-            Etat etatTraitement,
-            Status status,
-            TypeDemande typeDemande,
-            Circuit circuit,
-            String userImputeEmail,
-            String typeNonConformiteLibelle,
-            String niveauNonConformiteLibelle,
-            UUID typeNonConformiteId,
-            UUID niveauNonConformiteId,
-            LocalDateTime publicationDateFrom,
-            LocalDateTime publicationDateTo
-    ) {
+    private NonConformiteSpecification() {
+    }
+
+    /**
+     * Non-conformités qu'un utilisateur a le droit de voir : celles de sa structure — émises par
+     * elle ou qui lui sont adressées — et les siennes, déclarées ou imputées.
+     *
+     * <p>Reprend mot pour mot la règle de {@code NonConformiteRepository.findVisiblesPar}. Elle doit
+     * exister ici aussi, et non seulement dans la liste générale : une recherche sans borne de
+     * visibilité rendrait par ses filtres ce que la consultation refuse de montrer, et il suffirait
+     * de chercher pour lire les dossiers de toutes les structures.</p>
+     *
+     * <p>Combinée <b>en dehors</b> des critères reçus, par un ET : aucun filtre envoyé ne peut donc
+     * l'élargir.</p>
+     */
+    public static Specification<NonConformite> visiblesPar(String structureId, String userId) {
         return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (numeroReference != null && !numeroReference.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("numeroReference")), "%" + numeroReference.toLowerCase() + "%"));
+            List<Predicate> ou = new ArrayList<>();
+            if (structureId != null && !structureId.isBlank()) {
+                ou.add(cb.equal(root.get("structureSoumissionId"), structureId));
+                ou.add(cb.equal(root.get("origineId"), structureId));
             }
-            if (nomProcessus != null && !nomProcessus.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("nomProcessus")), "%" + nomProcessus.toLowerCase() + "%"));
+            if (userId != null && !userId.isBlank()) {
+                ou.add(cb.equal(root.get("createdById"), userId));
+                ou.add(cb.equal(root.get("userImputId"), userId));
             }
-            if (origineId != null && !origineId.isBlank()) {
-                predicates.add(cb.equal(root.get("origineId"), origineId));
-            }
-            if (origineService != null && !origineService.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("origineService")), "%" + origineService.toLowerCase() + "%"));
-            }
-            if (structureSoumissionId != null && !structureSoumissionId.isBlank()) {
-                predicates.add(cb.equal(root.get("structureSoumissionId"), structureSoumissionId));
-            }
-            if (structureResponsableId != null && !structureResponsableId.isBlank()) {
-                predicates.add(cb.equal(root.get("structureResponsableId"), structureResponsableId));
-            }
-            if (etatTraitement != null) {
-                predicates.add(cb.equal(root.get("etatTraitement"), etatTraitement));
-            }
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-            if (typeDemande != null) {
-                predicates.add(cb.equal(root.get("typeDemande"), typeDemande));
-            }
-            if (circuit != null) {
-                predicates.add(cb.equal(root.get("circuit"), circuit));
-            }
-            if (userImputeEmail != null && !userImputeEmail.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("userImputeEmail")), "%" + userImputeEmail.toLowerCase() + "%"));
-            }
-            if (typeNonConformiteLibelle != null && !typeNonConformiteLibelle.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("typeNonConformiteLibelle")), "%" + typeNonConformiteLibelle.toLowerCase() + "%"));
-            }
-            if (niveauNonConformiteLibelle != null && !niveauNonConformiteLibelle.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("niveauNonConformiteLibelle")), "%" + niveauNonConformiteLibelle.toLowerCase() + "%"));
-            }
-            if (typeNonConformiteId != null) {
-                predicates.add(cb.equal(root.get("typeNonConformiteId"), typeNonConformiteId));
-            }
-            if (niveauNonConformiteId != null) {
-                predicates.add(cb.equal(root.get("niveauNonConformiteId"), niveauNonConformiteId));
-            }
-            if (publicationDateFrom != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("publicationDate"), publicationDateFrom));
-            }
-            if (publicationDateTo != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("publicationDate"), publicationDateTo));
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
+            // Appelant sans structure ni identifiant : rien ne lui est rattaché, il ne voit rien.
+            // Ouvrir la liste entière serait le contraire de ce que cette borne garantit.
+            return ou.isEmpty() ? cb.disjunction() : cb.or(ou.toArray(new Predicate[0]));
         };
     }
 }
