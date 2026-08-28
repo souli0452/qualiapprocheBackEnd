@@ -4,6 +4,7 @@ import com.qualiapproche.workflow.core.exception.WorkflowException;
 import com.qualiapproche.workflow.core.model.Etat;
 import com.qualiapproche.workflow.core.model.WorkflowConfig;
 import com.qualiapproche.workflow.core.port.output.IWorkflowEngine;
+import com.qualiapproche.workflow.model.Cosignataires;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
@@ -110,6 +111,9 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
                     transition.setSeverite(dbTrans.getSeverity() != null
                             ? dbTrans.getSeverity() : dbTrans.getDecision().getSeveriteParDefaut());
                     transition.setPermission(habilitationDe(dbTrans, dbStep));
+                    // Portés par l'étape, recopiés sur chacune de ses issues : le contrôle
+                    // d'habilitation ne voit que des transitions.
+                    transition.setCosignataires(Cosignataires.lire(dbStep.getCosignataires()));
                     transition.setConditionRequise(dbTrans.getConditionRequise());
 
                     // Résoudre l'action via le bean factory (DefaultTransitionAction par défaut si non trouvé)

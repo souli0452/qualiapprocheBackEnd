@@ -6,6 +6,8 @@ import com.qualiapproche.workflow.model.SeveriteAction;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Set;
+
 /**
  * Transition construite depuis la base, enrichie de son habilitation et autres méta-données.
  */
@@ -28,6 +30,18 @@ public class TransitionPersistante extends Transition<IWorkflowData> {
 
     /** Couleur du bouton d'action. Voir {@link StepDecision#getSeveriteParDefaut()}. */
     private SeveriteAction severite;
+
+    /**
+     * Identifiants des personnes qui co-signent l'étape d'où part cette transition, ou ensemble
+     * vide.
+     *
+     * <p>Portés par la transition et non lus sur l'étape, pour la même raison que l'habilitation :
+     * le moteur ne connaît que des transitions, et {@code WorkflowConditionAdapter} n'a pas accès
+     * aux entités. C'est {@code WorkflowEngineDAOAdapter} qui les y recopie à la construction du
+     * catalogue. Toutes les transitions d'une même étape en portent donc la même liste — la
+     * séparation des signatures vaut pour l'étape, pas pour l'une de ses issues.</p>
+     */
+    private Set<String> cosignataires = Set.of();
 
     public TransitionPersistante() {
         super();

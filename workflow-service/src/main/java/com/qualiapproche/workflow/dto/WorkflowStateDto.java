@@ -36,6 +36,19 @@ public class WorkflowStateDto {
      * s'il doit agir, attendre, ou relancer quelqu'un.</p>
      */
     private String currentStepRole;
+
+    /**
+     * L'appelant est écarté de l'étape courante parce qu'il a lui-même soumis le dossier.
+     *
+     * <p>Sans ce drapeau, l'écran répondait « le pilote du processus doit se prononcer » — à un
+     * pilote, sur son propre document. La phrase était exacte et incompréhensible : c'est bien un
+     * pilote qu'on attend, mais pas celui-là. {@link #currentStepRole} ne pouvait pas le dire, la
+     * question n'étant pas celle du rôle.</p>
+     *
+     * <p>Ne vaut que lorsque {@link #allowedActions} est vide : l'administration passe outre la
+     * séparation des signatures, et l'écran lui propose alors les actions comme à n'importe qui.</p>
+     */
+    private boolean ecarteCommeAuteur;
     @Builder.Default
     private List<WorkflowActionDto> allowedActions = new ArrayList<>();
 

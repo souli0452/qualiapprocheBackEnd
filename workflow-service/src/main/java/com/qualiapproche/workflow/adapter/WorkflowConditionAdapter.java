@@ -4,10 +4,12 @@ import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.core.port.output.ITransitionCondition;
+import com.qualiapproche.workflow.model.Cosignataires;
 import com.qualiapproche.workflow.model.FaitsDuDossier;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
+import com.qualiapproche.workflow.service.AbstractWorkflowService;
 import com.qualiapproche.workflow.service.RolesUtilisateurService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,12 @@ import java.util.Set;
  * Keycloak ne porte que des rôles techniques, et l'en-tête {@code X-User-Permissions} propagé par la
  * gateway ne transporte que des permissions. Se fier au jeton revenait à ne reconnaître aucun rôle
  * métier, donc à n'autoriser aucune transition restreinte.</p>
+ *
+ * <p>Porter le rôle ne suffit pas toujours : une étape qui nomme nommément ses <b>co-signataires</b>
+ * en écarte celui qui a soumis le dossier — voir {@link #auteurEcarteDeLEtape}. Une étape qui n'en
+ * nomme aucun — le cas de toutes les étapes livrées — se décide comme avant, à l'habilitation seule.
+ * Y nommer l'auteur d'une étape réservée à {@code @CREATEUR} n'aurait donc pas de sens : elle ne
+ * s'ouvrirait plus à personne.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -55,6 +63,12 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         // La condition métier avant l'habilitation : une action que le dossier n'admet pas encore
         // ne doit être proposée à personne, fût-il habilité.
         if (!conditionRemplie(pContexte, pTransition)) {
+            return false;
+        }
+
+        // Avant l'habilitation : celui qui est écarté porte précisément le rôle attendu, et le
+        // contrôle de rôle l'aurait donc laissé passer.
+        if (auteurEcarteDeLEtape(pContexte, pTransition)) {
             return false;
         }
 
@@ -192,6 +206,68 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         }
 
         return createur.equals(SecurityUtils.getCurrentUserId());
+    }
+
+    /**
+     * L'appelant est-il écarté de cette étape parce qu'il a lui-même soumis le dossier ?
+     *
+     * <p>Une étape peut nommer ses <b>co-signataires</b> : les personnes dont la signature vaut, à
+     * cet endroit du circuit, engagement. Celle d'entre elles qui a ouvert le dossier n'y décide
+     * plus — un pilote qui rédige un document ne le vérifie pas, un responsable qualité qui en
+     * dépose un ne l'approuve pas. La séparation vaut pour l'étape entière et non pour l'une de ses
+     * issues : l'auteur ne peut ni approuver ni rejeter son propre dépôt.</p>
+     *
+     * <p>Le rôle ne savait pas dire cela, et c'est tout l'objet de cette liste : l'étape de
+     * vérification est confiée au rôle {@code PILOTE}, que l'auteur porte aussi — il se trouvait
+     * donc habilité à vérifier son propre document. L'écarter par son <b>identité</b>, et non par
+     * son rôle, laisse l'étape ouverte à tous les autres signataires.</p>
+     *
+     * <p>Trois façons de ne pas être concerné : l'étape ne nomme personne — c'est le cas de toutes
+     * les étapes livrées, et la règle est alors inactive ; l'appelant n'est pas l'auteur du dossier ;
+     * l'auteur ne compte pas parmi les co-signataires désignés, auquel cas l'habilitation ordinaire
+     * tranche seule — il n'y avait rien à séparer.</p>
+     *
+     * <p>L'administration passe outre, comme partout ailleurs, et le journal en garde trace : une
+     * organisation où une seule personne peut signer verrait sinon son dossier immobilisé sans
+     * autre issue que de remanier le circuit.</p>
+     */
+    private boolean auteurEcarteDeLEtape(ExecutionContext<IWorkflowData> pContexte,
+                                         TransitionPersistante pTransition) {
+        Set<String> cosignataires = pTransition.getCosignataires();
+        if (cosignataires == null || cosignataires.isEmpty()) {
+            return false;
+        }
+        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
+            return false;
+        }
+
+        String appelant = SecurityUtils.getCurrentUserId();
+        if (!Cosignataires.ecarteLAuteur(cosignataires, instance.getCreateurId(), appelant)) {
+            // L'appelant n'est pas l'auteur, ou l'auteur ne signe pas ici : rien à séparer, et
+            // l'habilitation ordinaire décidera — le plus souvent en le refusant, faute du rôle.
+            return false;
+        }
+
+        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
+                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+            log.warn("Le dossier {} est décidé par son auteur {} à une étape qui l'en écarte : "
+                    + "l'administration passe outre.", instance.getResourceId(), appelant);
+            return false;
+        }
+
+        // Le motif accompagne le refus jusqu'à l'appelant : sans lui, on répondrait à un pilote
+        // qu'il n'a pas le rôle attendu — alors qu'il l'a, et que c'est justement pour cela qu'on
+        // le lui refuse.
+        pContexte.putParametre(AbstractWorkflowService.CLE_MOTIF_REFUS, motifDuRefus(pTransition));
+        return true;
+    }
+
+    /** Ce qu'on répond à l'auteur qui tente de décider à une étape dont il est écarté. */
+    private String motifDuRefus(TransitionPersistante pTransition) {
+        String etape = pTransition.getEtatOrigine() != null ? pTransition.getEtatOrigine().getLibelle() : null;
+        return "Vous avez soumis ce dossier : "
+                + (etape != null && !etape.isBlank() ? "l'étape « " + etape + " » revient" : "cette étape revient")
+                + " à un autre signataire que son auteur.";
     }
 
     /**

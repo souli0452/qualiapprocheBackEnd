@@ -82,6 +82,11 @@ public class WorkflowStep {
      * dossier ; c'est le cas de presque toutes. La clôture d'une non-conformité fait exception :
      * elle s'annonce au pilote du processus qui a signalé l'écart, lequel n'est ni le rôle de
      * cette étape ni, à ce stade, la structure du dossier.</p>
+     *
+     * <p>Accepte aussi les deux désignations <b>personnelles</b> — {@code @CREATEUR},
+     * {@code @TITULAIRE} — pour une étape qui doit s'annoncer à quelqu'un sans pour autant lui
+     * être réservée : la rédaction d'un document reste ouverte à tout agent du processus, mais
+     * c'est à son auteur qu'on écrit quand le document lui revient.</p>
      */
     @Column(name = "destinataire_courriel", length = 80)
     private String destinataireCourriel;
@@ -95,6 +100,31 @@ public class WorkflowStep {
      */
     @Column(name = "champ_titulaire")
     private String champTitulaire;
+
+    /**
+     * Personnes qui co-signent cette étape, séparées par des virgules, ou vide.
+     *
+     * <p>Le rôle responsable dit qui <b>peut</b> décider ; celle-ci nomme qui, parmi eux, engage
+     * effectivement sa signature ici. Elle n'ouvre ni ne ferme l'étape à personne : elle porte une
+     * seule règle, la <b>séparation des signatures</b> — celui de ces signataires qui a soumis le
+     * dossier ne le décide pas à cette étape. Le pilote qui rédige un document ne le vérifie donc
+     * pas lui-même, tandis que ses co-signataires le vérifient comme avant.</p>
+     *
+     * <p>Des <b>personnes</b> et non des rôles : le rôle est déjà dit par {@link #responsableRole},
+     * et le redire n'apprendrait rien. La séparation, elle, porte sur une identité — celui-là, sur
+     * ce dossier-là — et deux porteurs d'un même rôle ne sont pas interchangeables au regard d'une
+     * signature.</p>
+     *
+     * <p>Vide — le cas de toutes les étapes livrées —, la règle est inactive et l'étape se décide
+     * comme avant, à l'habilitation seule. C'est une décision d'organisation, pas une règle du
+     * moteur : une structure où une seule personne peut signer ne peut pas se l'offrir sans
+     * immobiliser ses dossiers, et c'est à elle d'en juger.</p>
+     *
+     * <p>Identifiants d'utilisateur, tels que user-service les connaît. Voir {@link Cosignataires}
+     * pour la lecture, l'écriture et la comparaison de la liste.</p>
+     */
+    @Column(name = "cosignataires", length = 1000)
+    private String cosignataires;
 
     /**
      * Modèle d'étape du catalogue ayant servi à pré-remplir cette étape.

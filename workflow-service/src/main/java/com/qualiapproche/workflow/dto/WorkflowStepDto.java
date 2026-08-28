@@ -27,7 +27,8 @@ public class WorkflowStepDto {
     private String emailTemplateCode;
 
     /**
-     * Destinataire du courriel d'étape sous la forme {@code RÔLE@PORTÉE}, quand ce n'est pas celui
+     * Destinataire du courriel d'étape sous la forme {@code RÔLE@PORTÉE}, ou l'une des deux
+     * désignations personnelles {@code @CREATEUR} / {@code @TITULAIRE}, quand ce n'est pas celui
      * qui doit agir à l'étape. Vide, le courriel suit la règle : le rôle de l'étape, dans la
      * structure du dossier.
      */
@@ -47,6 +48,20 @@ public class WorkflowStepDto {
      * devenaient indécidables — plus personne ne pouvait faire avancer le dossier.</p>
      */
     private String champTitulaire;
+
+    /**
+     * Identifiants des personnes qui co-signent l'étape, et dont l'auteur du dossier est écarté.
+     *
+     * <p>Liste, et non chaîne : l'écran de configuration y présente une sélection multiple parmi
+     * les utilisateurs. La forme stockée reste une chaîne — voir {@code Cosignataires} — mais c'est
+     * une affaire de colonne, dont l'éditeur n'a pas à connaître la syntaxe.</p>
+     *
+     * <p>Liste vide : l'étape ne pose aucune séparation des signatures, et se décide à
+     * l'habilitation seule.</p>
+     */
+    @Builder.Default
+    private List<String> cosignataires = new ArrayList<>();
+
     @Builder.Default
     private List<WorkflowTransitionDto> transitions = new ArrayList<>();
     @Builder.Default

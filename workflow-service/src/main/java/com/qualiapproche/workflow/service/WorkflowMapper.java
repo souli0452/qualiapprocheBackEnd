@@ -4,6 +4,7 @@ import com.qualiapproche.workflow.dto.WorkflowDto;
 import com.qualiapproche.workflow.dto.WorkflowStepDto;
 import com.qualiapproche.workflow.dto.WorkflowStepFieldDto;
 import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
+import com.qualiapproche.workflow.model.Cosignataires;
 import com.qualiapproche.workflow.model.FieldType;
 import com.qualiapproche.workflow.model.SeveriteAction;
 import com.qualiapproche.workflow.model.StepDecision;
@@ -13,6 +14,7 @@ import com.qualiapproche.workflow.model.WorkflowStepField;
 import com.qualiapproche.workflow.model.WorkflowTransition;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.stream.Collectors;
 import com.qualiapproche.common.exception.BusinessException;
 import org.springframework.http.HttpStatus;
@@ -56,6 +58,7 @@ public class WorkflowMapper {
                 .destinataireCourriel(entity.getDestinataireCourriel())
                 .stepTemplateId(entity.getStepTemplateId())
                 .champTitulaire(entity.getChampTitulaire())
+                .cosignataires(List.copyOf(Cosignataires.lire(entity.getCosignataires())))
                 .transitions(entity.getTransitions() != null ? entity.getTransitions().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .fields(entity.getFields() != null ? entity.getFields().stream().map(this::toDto).collect(Collectors.toList()) : null)
                 .build();
@@ -143,6 +146,9 @@ public class WorkflowMapper {
                 // pièces depuis l'éditeur perdait la désignation du titulaire, et ses étapes
                 // réservées devenaient indécidables dès le premier dossier.
                 .champTitulaire(dto.getChampTitulaire())
+                // La liste que l'éditeur envoie devient la chaîne que porte la colonne ; vide, elle
+                // vaut « aucune séparation des signatures » et non « une liste effacée ».
+                .cosignataires(Cosignataires.ecrire(dto.getCosignataires()))
                 .build();
 
         if (dto.getTransitions() != null) {

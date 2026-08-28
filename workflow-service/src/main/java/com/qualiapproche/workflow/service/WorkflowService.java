@@ -8,6 +8,7 @@ import com.qualiapproche.workflow.dto.WorkflowDto;
 import com.qualiapproche.workflow.dto.WorkflowStepDto;
 import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
 import com.qualiapproche.workflow.event.CatalogueWorkflowModifieEvent;
+import com.qualiapproche.workflow.model.Cosignataires;
 import com.qualiapproche.workflow.model.FieldType;
 import com.qualiapproche.workflow.model.SourceDeChoix;
 import com.qualiapproche.workflow.model.StepDecision;
@@ -404,6 +405,10 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             // cessait de nommer le titulaire, et les étapes qui lui sont réservées devenaient
             // indécidables.
             step.setChampTitulaire(stepDto.getChampTitulaire());
+            // Les co-signataires suivent le même chemin : l'éditeur envoie les personnes qu'il a
+            // choisies, la colonne les porte en chaîne. Une liste vidée désactive la séparation des
+            // signatures, ce qui est un choix d'administrateur comme un autre.
+            step.setCosignataires(Cosignataires.ecrire(stepDto.getCosignataires()));
             step.setWorkflow(existing);
             mergeTransitions(step, stepDto);
             mergeFields(step, stepDto);
@@ -1056,6 +1061,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 // action ne peut que se taire : l'utilisateur voit un dossier immobile sans savoir
                 // s'il doit agir, attendre, ou relancer quelqu'un.
                 .currentStepRole(etape == null ? null : etape.getResponsableRole())
+                // Pourquoi cet écran n'offre rien à celui qui, pourtant, porte le rôle attendu :
+                // il a soumis ce dossier, et l'étape le compte parmi ses signataires.
+                .ecarteCommeAuteur(etape != null && Cosignataires.ecarteLAuteur(
+                        Cosignataires.lire(etape.getCosignataires()),
+                        instance.getCreateurId(), SecurityUtils.getCurrentUserId()))
                 .allowedActions(actions)
                 .currentStepFields(etape == null ? List.of()
                         : etape.getFields().stream().map(mapper::toDto).toList())

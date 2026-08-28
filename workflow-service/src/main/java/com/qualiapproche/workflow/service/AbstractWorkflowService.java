@@ -46,6 +46,18 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
      */
     protected static final String CLE_LOT = "lotId";
 
+    /**
+     * Clé du paramètre de contexte où le contrôle d'habilitation dépose, s'il y a lieu, le motif
+     * précis de son refus.
+     *
+     * <p>Le contrôle est un prédicat : il rend vrai ou faux, et le service ne pouvait donc
+     * qu'annoncer un manque d'habilitation. C'est faux dans le cas de la séparation des signatures
+     * — l'auteur écarté d'une étape porte bien le rôle attendu, et se voyait répondre le contraire.
+     * Le motif emprunte le contexte, prévu pour ce qui appartient à l'application hôte, plutôt que
+     * d'élargir la signature du prédicat que le moteur appelle.</p>
+     */
+    public static final String CLE_MOTIF_REFUS = "motifRefus";
+
     protected final IWorkflowEnginePort<IWorkflowData, TransitionPersistante, WorkflowPersistant> moteur;
     protected final ValidationHistoryRepository historyRepository;
     protected final ApplicationEventPublisher eventPublisher;
@@ -264,13 +276,16 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
      * 500, indiscernable d'une panne pour l'appelant.
      */
     protected void verifierHabilitation(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
-        if (!this.transitionsAutorisees(pContexte).contains(pTransition)) {
-            throw new BusinessException(
-                    "Vous n'avez pas l'habilitation requise pour effectuer cette action"
-                            + (pTransition.getPermission() != null
-                                    ? " (rôle attendu : " + pTransition.getPermission() + ")." : "."),
-                    HttpStatus.FORBIDDEN);
+        if (this.transitionsAutorisees(pContexte).contains(pTransition)) {
+            return;
         }
+        // Le contrôle a pu dire pourquoi il refuse : c'est le cas quand ce n'est pas le rôle qui
+        // manque. À défaut, le rôle attendu reste la meilleure explication disponible.
+        String motif = pContexte.getParametre(CLE_MOTIF_REFUS, String.class)
+                .orElseGet(() -> "Vous n'avez pas l'habilitation requise pour effectuer cette action"
+                        + (pTransition.getPermission() != null
+                                ? " (rôle attendu : " + pTransition.getPermission() + ")." : "."));
+        throw new BusinessException(motif, HttpStatus.FORBIDDEN);
     }
 
     /**
