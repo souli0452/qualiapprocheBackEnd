@@ -90,6 +90,26 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
             new TemplateDef("actionSoldee", "Action reconnue efficace et soldée – {numeroNc}",
                     "Fin de parcours d'une action corrective"),
 
+            // Un gabarit par étape des deux circuits documentaires — le document lui-même, et les
+            // demandes de modification ou de suppression qui le visent une fois en vigueur. Ils
+            // empruntaient jusqu'ici les modèles génériques des non-conformités : le rédacteur d'une
+            // procédure recevait « Nouvelle Non-Conformité imputée », et le responsable qualité à qui
+            // un document était transmis pour approbation, « Validation attendue - Non-Conformité ».
+            // La référence du document — {reference} — remplace {numeroNc}, qui n'a jamais rien
+            // désigné ici.
+            new TemplateDef("documentAVerifier", "Document à vérifier – {reference}",
+                    "Circuit documentaire, étape 2 — document déposé, au pilote du processus"),
+            new TemplateDef("documentAApprouver", "Document à approuver et mettre en vigueur – {reference}",
+                    "Circuit documentaire, étape 3 — document vérifié, au responsable qualité"),
+            new TemplateDef("documentRenvoyeAuRedacteur", "Document à corriger – {reference}",
+                    "Circuit documentaire — document retourné à son rédacteur"),
+            new TemplateDef("demandeAInstruire", "Demande sur document à instruire – {reference}",
+                    "Demande sur document, étape 2 — au responsable qualité"),
+            new TemplateDef("demandeRetenue", "Demande retenue – décision attendue – {reference}",
+                    "Demande sur document, étape 3 — suite à donner"),
+            new TemplateDef("demandeRenvoyeeAuDemandeur", "Demande à reprendre – {reference}",
+                    "Demande sur document — renvoyée à son auteur"),
+
             // Modèles antérieurs, conservés : les circuits recomposés à la main et les modules qui
             // n'ont pas d'étape propre s'y réfèrent encore, et un gabarit retiré laisserait une
             // notification partir sans corps.

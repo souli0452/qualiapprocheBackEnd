@@ -118,6 +118,42 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
     public void run(String... args) {
         completer("NON_CONFORMITE", WorkflowDataInitializer::circuitNonConformiteParDefaut);
         completer("PLAN_ACTION", WorkflowDataInitializer::circuitPlanActionParDefaut);
+        // Les deux circuits documentaires ne reçoivent que l'adressage de leurs courriels — voir
+        // adresserSeulement.
+        adresserSeulement("DOCUMENT", WorkflowDataInitializer::circuitDocumentParDefaut);
+        adresserSeulement("DEMANDE_DOCUMENT", WorkflowDataInitializer::circuitDemandeDocumentParDefaut);
+    }
+
+    /**
+     * Rattrape les seuls courriels d'un circuit, sans toucher à ses étapes ni à ses routes.
+     *
+     * <p>Les circuits documentaires empruntaient les gabarits génériques des non-conformités : le
+     * rédacteur d'une procédure recevait « Nouvelle Non-Conformité imputée », et le responsable
+     * qualité à qui un document était transmis pour approbation, « Validation attendue -
+     * Non-Conformité ». {@link WorkflowDataInitializer} ne recréant les circuits que sur une base
+     * vierge, aucune installation en service n'aurait vu les gabarits neufs.</p>
+     *
+     * <p>Rattrapage <b>restreint</b>, et c'est délibéré : ces deux circuits n'ont pas changé de
+     * forme, et leur appliquer le rattrapage complet y rajouterait les étapes, routes et champs du
+     * circuit livré — c'est-à-dire défaire ce qu'un administrateur a pu retirer en connaissance de
+     * cause. Seul l'adressage est repris, et lui-même ne remplace qu'un ancien gabarit générique :
+     * un modèle choisi depuis l'écran d'administration reste en place.</p>
+     */
+    private void adresserSeulement(String typeRessource, Supplier<Workflow> circuitDeReference) {
+        List<Workflow> circuits = workflowRepository.findByResourceType(typeRessource);
+        if (circuits.isEmpty()) {
+            return;
+        }
+
+        Map<String, WorkflowStep> etapesDeReference = parCode(circuitDeReference.get().getSteps());
+        for (Workflow circuit : circuits) {
+            int adressees = adresserLesCourriels(circuit, etapesDeReference);
+            if (adressees > 0) {
+                workflowRepository.save(circuit);
+                log.info("Circuit « {} » : {} courriel(s) d'étape réadressé(s).",
+                        circuit.getNom(), adressees);
+            }
+        }
     }
 
     private void completer(String typeRessource, Supplier<Workflow> circuitDeReference) {
@@ -588,6 +624,7 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 .emailTemplateCode(modele.getEmailTemplateCode())
                 .destinataireCourriel(modele.getDestinataireCourriel())
                 .champTitulaire(modele.getChampTitulaire())
+                .cosignataires(modele.getCosignataires())
                 .build();
 
         modele.getFields().forEach(champ -> copie.getFields().add(WorkflowStepField.builder()

@@ -47,11 +47,12 @@ class RafraichissementDesGabaritsTest {
     /**
      * Nombre de modèles livrés avec la version.
      *
-     * <p>Chaque étape des circuits de non-conformité et d'action corrective a le sien, plus les
-     * modèles antérieurs conservés pour les circuits recomposés à la main. Le compte a donc vocation
-     * à bouger : il est ici pour qu'un gabarit oublié se remarque, non pour figer un total.</p>
+     * <p>Chaque étape des circuits de non-conformité, d'action corrective, du document et des
+     * demandes qui le visent a le sien, plus les modèles antérieurs conservés pour les circuits
+     * recomposés à la main. Le compte a donc vocation à bouger : il est ici pour qu'un gabarit
+     * oublié se remarque, non pour figer un total.</p>
      */
-    private static final int LIVRES = 28;
+    private static final int LIVRES = 34;
 
     /** Un code présent dans la liste livrée, et le fichier qui l'accompagne. */
     private static final String CODE = "validationRq";

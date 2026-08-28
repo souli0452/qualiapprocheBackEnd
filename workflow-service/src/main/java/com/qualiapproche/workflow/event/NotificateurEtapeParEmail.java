@@ -106,6 +106,32 @@ public class NotificateurEtapeParEmail {
     }
 
     /**
+     * La personne que l'étape désigne comme destinataire, ou {@code null} si elle n'en désigne pas.
+     *
+     * <p>Distinct du <b>rôle responsable</b>, qui dit qui peut décider : une étape ouverte au rôle
+     * {@code AGENT} pour que n'importe quel rédacteur puisse reprendre un brouillon doit tout de
+     * même annoncer à <b>son</b> auteur que son document lui revient. Confondre les deux envoyait
+     * « votre document vous est retourné » à tous les agents du processus, dont aucun ne l'avait
+     * écrit.</p>
+     *
+     * <p>Les deux mêmes désignations que les habilitations — {@code @CREATEUR}, {@code @TITULAIRE} —
+     * pour qu'un auteur de circuit n'ait qu'un vocabulaire à connaître.</p>
+     */
+    private List<DestinataireDto> personneDesignee(WorkflowStep step, TransitionFranchieEvent event) {
+        String designation = step.getDestinataireCourriel() == null
+                ? "" : step.getDestinataireCourriel().trim();
+        if (RolesPlateforme.HABILITATION_CREATEUR.equalsIgnoreCase(designation)) {
+            return destinatairesEtapeService.destinataire(
+                    surLInstance(event, WorkflowValidationInstance::getCreateurId));
+        }
+        if (RolesPlateforme.HABILITATION_TITULAIRE.equalsIgnoreCase(designation)) {
+            return destinatairesEtapeService.destinataire(
+                    surLInstance(event, WorkflowValidationInstance::getTitulaireId));
+        }
+        return null;
+    }
+
+    /**
      * Qui prévenir : les porteurs du rôle de l'étape — dans la structure où le dossier se trouve —
      * ou la seule personne à qui le dossier a été confié.
      *
@@ -118,6 +144,15 @@ public class NotificateurEtapeParEmail {
         // non-conformité s'annonce au pilote du processus qui l'a signalée, lequel n'est ni le rôle
         // de l'étape — le responsable qualité — ni, à ce stade, la structure du dossier, qui a été
         // confié au processus destinataire six étapes plus tôt.
+        // Une étape peut aussi désigner une **personne** plutôt qu'un rôle : le document retourné à
+        // son rédacteur s'annonce à celui qui l'a déposé, non à tous les agents du processus. Ces
+        // désignations ne s'écrivent pas RÔLE@PORTÉE — DestinataireCourriel.lire les rend nulles —
+        // et sans ce branchement l'étape retomberait sur son rôle responsable.
+        List<DestinataireDto> personne = personneDesignee(step, event);
+        if (personne != null) {
+            return personne;
+        }
+
         DestinataireCourriel designation = DestinataireCourriel.lire(step.getDestinataireCourriel());
         if (designation != null) {
             return destinatairesEtapeService.destinatairesDuRole(

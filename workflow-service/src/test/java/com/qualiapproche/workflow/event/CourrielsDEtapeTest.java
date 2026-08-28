@@ -193,6 +193,40 @@ class CourrielsDEtapeTest {
     }
 
     @Test
+    @DisplayName("Une étape peut s'annoncer à l'auteur du dossier plutôt qu'aux porteurs de son rôle")
+    void destinataireCourriel_auteurDuDossier() throws Exception {
+        // Le document retourné à son rédacteur : l'étape reste ouverte au rôle AGENT — n'importe
+        // quel rédacteur du processus peut reprendre le brouillon — mais c'est à celui qui l'a
+        // déposé qu'on écrit. Sans la désignation, « votre document vous est retourné » partait à
+        // tous les agents de la structure, dont aucun ne l'avait écrit.
+        WorkflowStep redaction = new WorkflowStep();
+        redaction.setId(1L);
+        redaction.setNomEtape("Rédaction");
+        redaction.setResponsableRole("AGENT");
+        redaction.setEmailTemplateCode("NOTIF_ETAPE");
+        redaction.setDestinataireCourriel("@CREATEUR");
+
+        TransitionFranchieEvent event = etapeFranchieSur("DOCUMENT", "42");
+        DestinataireDto redacteur = DestinataireDto.builder().userId("auteur-du-document")
+                .email("redacteur@exemple.fr").nomComplet("Ibrahim Ouédraogo").build();
+        when(instances.findById(UUID.fromString(event.getEntityId())))
+                .thenReturn(Optional.of(WorkflowValidationInstance.builder()
+                        .createurId("auteur-du-document").build()));
+        when(destinatairesEtapeService.destinataire("auteur-du-document"))
+                .thenReturn(List.of(redacteur));
+
+        notificateur.notifier(redaction, event);
+
+        List<MimeMessage> messages = messagesExpedies();
+        assertThat(messages).hasSize(1);
+        assertThat(messages.get(0).getRecipients(Message.RecipientType.TO)[0].toString())
+                .contains("redacteur@exemple.fr");
+        // Le rôle de l'étape n'a pas été interrogé : la désignation prime, elle ne s'y ajoute pas.
+        verify(destinatairesEtapeService, org.mockito.Mockito.never())
+                .destinatairesDuRole(eq("AGENT"), any());
+    }
+
+    @Test
     @DisplayName("Le corps expédié nomme la personne, le dossier et l'étape")
     void courrielExpedie_corpsRenseigne() throws Exception {
         responsables(claire());

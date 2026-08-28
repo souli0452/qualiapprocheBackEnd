@@ -37,6 +37,11 @@ class GabaritsLivresTest {
             Map.entry("link", "https://exemple.test/dossier/42"),
             Map.entry("observation", "Direction des opérations"),
             Map.entry("numeroNc", "NC-2026-0148"),
+            // Noms neutres employés par les gabarits documentaires : la référence d'un document
+            // n'est pas un numéro de non-conformité, et l'auteur d'une décision est nommé partout.
+            Map.entry("reference", "DOC-2026-007"),
+            Map.entry("auteur", "Ibrahim Ouédraogo"),
+            Map.entry("etape", "Vérification"),
             Map.entry("firstName", "Awa"),
             Map.entry("lastName", "Traoré"),
             Map.entry("temporaryPassword", "Provisoire#2026"),
@@ -60,7 +65,14 @@ class GabaritsLivresTest {
             "emailPlanAction", "validationPlanRequise", "emailRqPlan", "validationAfterPlan",
             "rejectPlanAction", "alertePlanAction", "alerteLastDay", "alerteEpuise",
             "verificationEmailTemplate", "reinitializePasswordEmailTemplate",
-            "resetPasswordEmailTemplate", "qmsDocumentShare"})
+            "resetPasswordEmailTemplate", "qmsDocumentShare",
+            // Un gabarit par étape des circuits de non-conformité et d'action corrective.
+            "ncRecue", "ncAApprecier", "ncTransmise", "ncImputee", "ncPlanAValider",
+            "ncPlanAContresigner", "ncAClore", "ncCloturee", "ncRenvoyeeAuDeclarant",
+            "actionAMener", "actionAVerifier", "actionEfficaciteAMesurer", "actionSoldee",
+            // Et un par étape des deux circuits documentaires.
+            "documentAVerifier", "documentAApprouver", "documentRenvoyeAuRedacteur",
+            "demandeAInstruire", "demandeRetenue", "demandeRenvoyeeAuDemandeur"})
     void gabaritRenduSansResidu(String code) throws IOException {
         String source = lire(code);
 
@@ -89,7 +101,14 @@ class GabaritsLivresTest {
             "emailPlanAction", "validationPlanRequise", "emailRqPlan", "validationAfterPlan",
             "rejectPlanAction", "alertePlanAction", "alerteLastDay", "alerteEpuise",
             "verificationEmailTemplate", "reinitializePasswordEmailTemplate",
-            "resetPasswordEmailTemplate", "qmsDocumentShare"})
+            "resetPasswordEmailTemplate", "qmsDocumentShare",
+            // Un gabarit par étape des circuits de non-conformité et d'action corrective.
+            "ncRecue", "ncAApprecier", "ncTransmise", "ncImputee", "ncPlanAValider",
+            "ncPlanAContresigner", "ncAClore", "ncCloturee", "ncRenvoyeeAuDeclarant",
+            "actionAMener", "actionAVerifier", "actionEfficaciteAMesurer", "actionSoldee",
+            // Et un par étape des deux circuits documentaires.
+            "documentAVerifier", "documentAApprouver", "documentRenvoyeAuRedacteur",
+            "demandeAInstruire", "demandeRetenue", "demandeRenvoyeeAuDemandeur"})
     void squeletteCommun(String code) throws IOException {
         String source = lire(code);
 

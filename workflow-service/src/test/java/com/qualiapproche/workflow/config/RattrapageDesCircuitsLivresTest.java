@@ -395,4 +395,78 @@ class RattrapageDesCircuitsLivresTest {
         // était devenu.
         assertThat(cloture.getDestinataireCourriel()).isEqualTo("PILOTE@STRUCTURE_EMETTRICE");
     }
+    // ------------------------------------------------------- les circuits documentaires
+
+    @Test
+    @DisplayName("Un circuit documentaire en service cesse d'annoncer ses étapes en termes de non-conformité")
+    void circuitDocumentaire_gabaritsReadresses() {
+        Workflow enService = WorkflowDataInitializer.circuitDocumentParDefaut();
+        // La base d'avant : les trois étapes empruntaient les gabarits génériques des
+        // non-conformités, et le rédacteur d'une procédure recevait « Nouvelle Non-Conformité
+        // imputée ». L'initialiseur ne recréant les circuits que sur une base vierge, aucune
+        // installation en service n'aurait vu les gabarits neufs.
+        etape(enService, "REDACTION").setEmailTemplateCode("emailTemplate");
+        etape(enService, "REDACTION").setDestinataireCourriel(null);
+        etape(enService, "VERIFICATION").setEmailTemplateCode("structureToStructure");
+        etape(enService, "APPROBATION").setEmailTemplateCode("validationRq");
+        enBase("DOCUMENT", enService);
+
+        rattrapage.run();
+
+        assertThat(etape(enService, "REDACTION").getEmailTemplateCode())
+                .isEqualTo("documentRenvoyeAuRedacteur");
+        assertThat(etape(enService, "REDACTION").getDestinataireCourriel()).isEqualTo("@CREATEUR");
+        assertThat(etape(enService, "VERIFICATION").getEmailTemplateCode())
+                .isEqualTo("documentAVerifier");
+        assertThat(etape(enService, "APPROBATION").getEmailTemplateCode())
+                .isEqualTo("documentAApprouver");
+        verify(workflowRepository).save(enService);
+    }
+
+    @Test
+    @DisplayName("Un gabarit choisi par un administrateur n'est pas remplacé")
+    void circuitDocumentaire_gabaritChoisiConserve() {
+        Workflow enService = WorkflowDataInitializer.circuitDocumentParDefaut();
+        etape(enService, "VERIFICATION").setEmailTemplateCode("monGabaritMaison");
+        etape(enService, "APPROBATION").setEmailTemplateCode("validationRq");
+        enBase("DOCUMENT", enService);
+
+        rattrapage.run();
+
+        // Seuls les anciens codes livrés sont repris : le corps d'un courriel appartient à qui l'a
+        // choisi, et le rattrapage n'a pas à défaire ce choix.
+        assertThat(etape(enService, "VERIFICATION").getEmailTemplateCode())
+                .isEqualTo("monGabaritMaison");
+        assertThat(etape(enService, "APPROBATION").getEmailTemplateCode())
+                .isEqualTo("documentAApprouver");
+    }
+
+    @Test
+    @DisplayName("Le rattrapage documentaire ne touche ni aux étapes ni aux routes du circuit")
+    void circuitDocumentaire_formeIntacte() {
+        Workflow enService = WorkflowDataInitializer.circuitDocumentParDefaut();
+        // Un circuit dont l'administrateur a retiré l'approbation : le rattrapage complet la lui
+        // rendrait, ce qui reviendrait à défaire une décision prise en connaissance de cause. Seul
+        // l'adressage des courriels est repris sur ces circuits.
+        enService.getSteps().remove(etape(enService, "APPROBATION"));
+        etape(enService, "VERIFICATION").setEmailTemplateCode("structureToStructure");
+        enBase("DOCUMENT", enService);
+
+        rattrapage.run();
+
+        assertThat(enService.getSteps()).hasSize(2);
+        assertThat(etape(enService, "VERIFICATION").getEmailTemplateCode())
+                .isEqualTo("documentAVerifier");
+    }
+
+    @Test
+    @DisplayName("Un circuit documentaire déjà à jour n'est pas réenregistré")
+    void circuitDocumentaire_dejaAJour_pasDEcriture() {
+        enBase("DOCUMENT", WorkflowDataInitializer.circuitDocumentParDefaut());
+
+        rattrapage.run();
+
+        verify(workflowRepository, never()).save(any());
+    }
+
 }

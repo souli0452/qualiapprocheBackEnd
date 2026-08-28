@@ -241,7 +241,16 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("REDACTION")
                 .description("Rédaction et dépôt du document")
                 .responsableRole("AGENT")
-                .emailTemplateCode("emailTemplate")
+                // L'étape n'est franchie *vers* l'arrière que lorsqu'un document est retourné :
+                // c'est le seul moment où elle s'annonce, d'où un gabarit qui parle de correction
+                // et non de dépôt. À l'ouverture du circuit, aucune transition n'est franchie et
+                // aucun courriel ne part.
+                .emailTemplateCode("documentRenvoyeAuRedacteur")
+                // À son auteur, et non à tous les agents du processus : le rôle dit qui peut
+                // reprendre le brouillon, il ne dit pas de qui l'on attend la correction. Sans
+                // cette désignation, tout agent de la structure recevait « votre document vous est
+                // retourné » pour un document qu'il n'avait pas écrit.
+                .destinataireCourriel(HABILITATION_CREATEUR)
                 .build();
 
         WorkflowStep verification = WorkflowStep.builder()
@@ -251,7 +260,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("VERIFICATION")
                 .description("Vérification de la forme et du fond")
                 .responsableRole("PILOTE")
-                .emailTemplateCode("structureToStructure")
+                .emailTemplateCode("documentAVerifier")
                 .build();
         verification.getFields().add(WorkflowStepField.builder().step(verification)
                 .fieldName("observationsVerification").fieldLabel("Observations du vérificateur")
@@ -264,7 +273,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("APPROBATION")
                 .description("Approbation et mise en vigueur")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("validationRq")
+                .emailTemplateCode("documentAApprouver")
                 .build();
 
         redaction.getTransitions().add(WorkflowTransition.builder()
@@ -898,7 +907,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .description("Rédaction et dépôt de la demande")
                 // Le demandeur, et lui seul : c'est son objectif qui sera instruit.
                 .responsableRole(HABILITATION_CREATEUR)
-                .emailTemplateCode("emailTemplate")
+                // Comme la rédaction d'un document : l'étape ne s'annonce que lorsque la demande
+                // revient à son auteur. L'habilitation désignant déjà le créateur, le courriel le
+                // trouve sans désignation supplémentaire.
+                .emailTemplateCode("demandeRenvoyeeAuDemandeur")
                 .build();
 
         WorkflowStep instruction = WorkflowStep.builder()
@@ -908,7 +920,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("INSTRUCTION")
                 .description("Examen de la demande au titre de la qualité")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("validationRq")
+                .emailTemplateCode("demandeAInstruire")
                 .build();
         instruction.getFields().add(WorkflowStepField.builder().step(instruction)
                 .fieldName("avisQualite").fieldLabel("Avis du responsable qualité")
@@ -921,7 +933,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
                 .etatTraitement("DECISION")
                 .description("Suite donnée à la demande")
                 .responsableRole("RESPONSABLE_QUALITE")
-                .emailTemplateCode("traitementReussi")
+                .emailTemplateCode("demandeRetenue")
                 .build();
 
         soumission.getTransitions().add(WorkflowTransition.builder()
