@@ -44,12 +44,13 @@ class FinDeCircuitDuDocumentTest {
     private static final String STRUCTURE = "structure-1";
 
     private DocumentQmsRepository documentRepository;
+    private ProfilUtilisateurService profilService;
     private QmsDocumentService service;
 
     @BeforeEach
     void setUp() throws Exception {
         documentRepository = mock(DocumentQmsRepository.class);
-        ProfilUtilisateurService profilService = mock(ProfilUtilisateurService.class);
+        profilService = mock(ProfilUtilisateurService.class);
         NiveauxConfidentialiteService niveauxService = mock(NiveauxConfidentialiteService.class);
 
         service = new QmsDocumentService(
@@ -150,5 +151,68 @@ class FinDeCircuitDuDocumentTest {
         assertThat(document.isEsTraiter()).isFalse();
         assertThat(document.getCurrentEtape()).isEqualTo("Vérification");
         assertThat(document.getDateVigueur()).isNull();
+    }
+
+    /**
+     * Place le contexte de sécurité du rappel de circuit : un compte de service, tel que
+     * l'authentifie {@code @perm.appelDeService()}.
+     *
+     * <p>Ce n'est pas un détail de mise en scène : c'est le seul contexte dans lequel le rappel
+     * s'exécute réellement. Les cas ci-dessus s'appuyaient sur un utilisateur rattaché à la
+     * structure du document — un contexte que le rappel ne connaît jamais — et validaient donc un
+     * chemin que la production n'emprunte pas.</p>
+     */
+    private void contexteDuRappelDeCircuit() {
+        // Un compte de service n'est rattaché à aucune structure et ne porte aucun rôle métier :
+        // c'est très exactement ce qui le privait de portée sur le document.
+        when(profilService.profilCourant())
+                .thenReturn(new ProfilUtilisateurService.Profil(null, java.util.Set.of()));
+
+        Jwt jeton = Jwt.withTokenValue("jeton-de-service")
+                .header("alg", "none")
+                .subject("11111111-1111-4111-8111-111111111111")
+                .claim("preferred_username", "service-account-workflow")
+                .issuedAt(java.time.Instant.EPOCH)
+                .expiresAt(java.time.Instant.EPOCH.plusSeconds(3600))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(jeton, null, java.util.List.of()));
+    }
+
+    @Test
+    @DisplayName("Le compte de service du circuit met le document en vigueur, sans portée sur lui")
+    void rappelDeCircuit_approbation_metEnVigueur() {
+        DocumentQms document = documentEnApprobation();
+        contexteDuRappelDeCircuit();
+
+        service.updateWorkflowStatus(DOCUMENT, "APPROVED", "APPROUVE", "Approuvé");
+
+        assertThat(document.isEsTraiter()).isTrue();
+        assertThat(document.getDateVigueur()).isNotNull();
+        assertThat(document.getCurrentEtape()).isEqualTo("APPROUVE");
+    }
+
+    @Test
+    @DisplayName("Une clôture prononcée par le circuit met elle aussi le document en vigueur")
+    void rappelDeCircuit_cloture_metEnVigueur() {
+        DocumentQms document = documentEnApprobation();
+        contexteDuRappelDeCircuit();
+
+        service.updateWorkflowStatus(DOCUMENT, "CLOSED", "CLOTURE", "Dossier clos");
+
+        assertThat(document.isEsTraiter()).isTrue();
+        assertThat(document.getDateVigueur()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Un rejet prononcé par le circuit rend bien le document à son rédacteur")
+    void rappelDeCircuit_rejet_renvoieEnRedaction() {
+        DocumentQms document = documentEnApprobation();
+        contexteDuRappelDeCircuit();
+
+        service.updateWorkflowStatus(DOCUMENT, "REJECTED", "REJETE", "À revoir");
+
+        assertThat(document.isEsTraiter()).isFalse();
+        assertThat(document.getCurrentEtape()).isNull();
     }
 }

@@ -422,7 +422,25 @@ public class QmsDocumentService {
         DocumentQms doc = documentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Document introuvable avec l'ID: " + id));
         exigerAccesInterne(doc);
+        return appliquerTransition(doc, nextStatus, reason);
+    }
 
+    /**
+     * Applique la transition d'état, sans contrôle de visibilité sur l'appelant.
+     *
+     * <p>Ce contrôle appartient aux appels d'écran, où il y a un utilisateur à qui opposer une
+     * portée. Le circuit, lui, décide sans personne derrière : son rappel arrive sous un jeton
+     * {@code service-account-*}, qui n'est ni l'auteur du document, ni rattaché à sa structure, ni
+     * destinataire d'un partage. {@code porteeSur} y répondait donc {@code AUCUNE} et
+     * {@code exigerAccesInterne} levait « Document introuvable » — annulant, par le rollback de la
+     * transaction du rappel, jusqu'à l'étape que celui-ci venait d'écrire. Un circuit mené à son
+     * terme laissait ainsi son document figé sur sa dernière étape, jamais mis en vigueur et jamais
+     * rendu à son rédacteur, la notification étant rejouée huit fois puis abandonnée.</p>
+     *
+     * <p>Revérifier ici serait de toute façon redondant : le moteur a déjà opposé l'habilitation de
+     * l'étape à celui qui a pris la décision, avant de laisser passer la transition.</p>
+     */
+    private DocumentQms appliquerTransition(DocumentQms doc, String nextStatus, String reason) {
         String oldState = getDocumentDisplayState(doc);
         log.info("Transitioning document '{}' state: {} -> {}", doc.getDocumentNumber(), oldState, nextStatus);
 
@@ -504,9 +522,9 @@ public class QmsDocumentService {
 
         doc.setCurrentEtape(statusName);
         if (estUneFinDeCircuitAboutie(status)) {
-            transitionStatus(documentId, "valide", comments != null ? comments : "Validation workflow complétée");
+            appliquerTransition(doc, "valide", comments != null ? comments : "Validation workflow complétée");
         } else if ("REJECTED".equalsIgnoreCase(status)) {
-            transitionStatus(documentId, "brouillon", comments != null ? comments : "Validation workflow rejetée");
+            appliquerTransition(doc, "brouillon", comments != null ? comments : "Validation workflow rejetée");
         } else {
             // Une issue inconnue laisse le document où il est : la journaliser évite qu'une
             // nouvelle nature de décision se perde aussi silencieusement que l'a fait la clôture.
