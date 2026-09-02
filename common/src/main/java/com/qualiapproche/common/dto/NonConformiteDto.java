@@ -34,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 @SuperBuilder
 @Transactional
 public class NonConformiteDto extends AuditEntityDto {
-    private String numeroReference;
     private String nomProcessus;
     private String numeroFdac;
     private String pertinanceRsSuivi;
@@ -50,15 +49,10 @@ public class NonConformiteDto extends AuditEntityDto {
     private String fonctionEmetteur;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "dd-MM-yyyy 'à' HH:mm")
     private LocalDateTime dateVisaEmetteur;
-    private String justification;
     private String delaisMiseOeuvre;
     @Enumerated(EnumType.STRING)
-    private Etat etatTraitement;
-    @Enumerated(EnumType.STRING)
     private Status status;
-    private String observationsRq;
-    private String structureSoumissionId;
-    private String structureSoumissionLibelle;
+    private String observationRq;
     private String dateObservationsRq;
     private String observationsCloture;
     private String dateVerification;
@@ -67,29 +61,17 @@ public class NonConformiteDto extends AuditEntityDto {
     private UUID efficaciteId;
     private UUID niveauNonConformiteId;
     private UUID actionId;
-    private UUID typeNonConformiteId;
-    private UUID typeProcessusId;
     @Enumerated(EnumType.STRING)
     private TypeDemande typeDemande;
     private String actionLibelle;
-    private String actionDsc;
-    private String typeNonConformiteLibelle;
     private String niveauNonConformiteLibelle;
     private String efficaciteLibelle;
-    private String typeProcessusLibelle;
     private String version;
     private List<PieceJointeDTO> fichiers;
     private List<PlanActionDto> planActions;
     private String structureResponsableId;
     private String structureResponsableSigle;
     private String structureResponsableLibelle;
-    private String pertinanceRs;
-    private String justificationRs;
-    private String pertinancePilote;
-    private String justificationPilote;
-    private String userImputId;
-    private String userImputFullName;
-    private String userImputeEmail;
     private Set<String> participants = new HashSet<>();
     private String originNonConformiteId;
     private String originNonConformiteLibelle;
@@ -108,4 +90,25 @@ public class NonConformiteDto extends AuditEntityDto {
      * aucune action de workflow.
      */
     private WorkflowStateDto workflowState;
+
+    // --- NOUVELLES APPELLATIONS CLAIRES (AI-READY) ---
+    private String numeroDeReference;
+    private Etat etatDeTraitement;
+    private String structureDeSoumissionId;
+    private String structureDeSoumissionLibelle;
+    private String description;
+    private UUID sourceDeNonConformiteId;
+    private String sourceDeNonConformiteLibelle;
+    private UUID categorieProcessusId;
+    private String categorieProcessusLibelle;
+    private String agentImputeId;
+    private String agentImputeNomComplet;
+    private String agentImputeEmail;
+    private String actionImmediate;
+    private String pertinencePilote;
+    private String pertinenceRs;
+
+        private String observationPilote;
+    private String observationRs;
 }
+

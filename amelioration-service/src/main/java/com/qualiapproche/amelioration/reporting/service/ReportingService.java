@@ -96,11 +96,11 @@ public class ReportingService {
 
         // Champs texte
         parameterMap.put("SERVICE_PRODUIT", demande.getOrigineService() != null ? demande.getOrigineService() : "");
-        parameterMap.put("ORIGINE", demande.getTypeNonConformiteLibelle() != null ? demande.getTypeNonConformiteLibelle() : "");
+        parameterMap.put("ORIGINE", demande.getSourceNonConformiteLibelle() != null ? demande.getSourceNonConformiteLibelle() : "");
         parameterMap.put("DESCRIPTION", demande.getJustification() != null ? demande.getJustification() : "");
         parameterMap.put("REACTION",  "Pas de réaction");
-        parameterMap.put("JUSTIFICATION_PILOTE", demande.getJustificationPilote() != null ? stripTags(demande.getJustificationPilote()) : "");
-        parameterMap.put("JUSTIFICATION_RS", demande.getJustificationRs() != null ? stripTags(demande.getJustificationRs()) : "");
+        parameterMap.put("JUSTIFICATION_PILOTE", demande.getObservationPilote() != null ? stripTags(demande.getObservationPilote()) : "");
+        parameterMap.put("JUSTIFICATION_RS", demande.getObservationRs() != null ? stripTags(demande.getObservationRs()) : "");
         parameterMap.put("PARTICIPANTS",
                 demande.getParticipants() != null && demande.getParticipants().getFullNames() != null
                         ? String.join(", ", demande.getParticipants().getFullNames())

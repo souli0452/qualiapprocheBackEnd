@@ -15,20 +15,26 @@
 	<name>quali-sira</name>
 	
 	<modules>
+		<!-- Bibliothèques communes -->
 		<module>common</module>
 		<module>lib-storage</module>
-		<module>referentiel-service</module>
-		<module>user-service</module>
-		<module>amelioration-service</module>
+
+		<!-- Infrastructure centrale -->
 		<module>discovery</module>
 		<module>api-gateway</module>
-		<module>support-service</module>
+		<module>user-service</module>
 		<module>workflow-service</module>
 
-		<module>evaluation-service</module>
-		<module>realisation-service</module>
-		<module>planification-service</module>
-		<module>contexte-service</module>
+		<!-- Services métier actifs -->
+		<module>referentiel-service</module>
+		<module>amelioration-service</module>
+
+		<!-- Modules en attente de développement (décommenter au besoin) -->
+		<!-- <module>support-service</module> -->
+		<!-- <module>evaluation-service</module> -->
+		<!-- <module>realisation-service</module> -->
+		<!-- <module>planification-service</module> -->
+		<!-- <module>contexte-service</module> -->
 	</modules>
 	<description>Système de gestion de la qualité (SGQ) quali-sira</description>
 	<url/>

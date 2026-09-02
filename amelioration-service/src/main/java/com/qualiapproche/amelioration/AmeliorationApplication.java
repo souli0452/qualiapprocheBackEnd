@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(scanBasePackages = {
         "com.qualiapproche.amelioration",
         "com.qualiapproche.common.config"
-})
+}) 
 @EnableDiscoveryClient
 @EnableFeignClients
 @EnableJpaRepositories(basePackages = {

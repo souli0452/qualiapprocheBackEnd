@@ -20,31 +20,47 @@ import org.springframework.data.domain.Pageable;
 
 public interface NonConformiteRepository extends JpaRepository<NonConformite, UUID>, JpaSpecificationExecutor<NonConformite> {
 
-        Page<NonConformite> findByEtatTraitement(Etat etat, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.etatDeTraitement = :etat")
+        Page<NonConformite> findByEtatTraitement(@Param("etat") Etat etat, Pageable pageable);
 
         Page<NonConformite> findAllByOrigineId(String origineId, Pageable pageable);
 
         Page<NonConformite> findAllByOrigineIdAndStatusIsNot(String origineId, Status status, Pageable pageable);
 
-        Page<NonConformite> findAllByStructureSoumissionIdAndStatusIsNot(String structureSoumissionId, Status status, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.structureDeSoumissionId = :structureSoumissionId AND n.status <> :status")
+        Page<NonConformite> findAllByStructureSoumissionIdAndStatusIsNot(
+                @Param("structureSoumissionId") String structureSoumissionId,
+                @Param("status") Status status, Pageable pageable);
 
-        Page<NonConformite> findAllByEtatTraitementAndStructureSoumissionId(Etat etatTraitement,
-                        String structureSoumissionId, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.etatDeTraitement = :etatTraitement AND n.structureDeSoumissionId = :structureSoumissionId")
+        Page<NonConformite> findAllByEtatTraitementAndStructureSoumissionId(
+                @Param("etatTraitement") Etat etatTraitement,
+                @Param("structureSoumissionId") String structureSoumissionId, Pageable pageable);
 
-        Page<NonConformite> findAllByEtatTraitementAndOrigineId(Etat etatTraitement, String origineId, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.etatDeTraitement = :etatTraitement AND n.origineId = :origineId")
+        Page<NonConformite> findAllByEtatTraitementAndOrigineId(
+                @Param("etatTraitement") Etat etatTraitement,
+                @Param("origineId") String origineId, Pageable pageable);
 
-        NonConformite getNonConformiteByNumeroReference(String numeroReference);
+        @Query("SELECT n FROM NonConformite n WHERE n.numeroDeReference = :numeroReference")
+        NonConformite getNonConformiteByNumeroReference(@Param("numeroReference") String numeroReference);
 
-        Page<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId, Etat etatTraitement, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.agentImputeId = :userImputId AND n.etatDeTraitement = :etatTraitement")
+        Page<NonConformite> findByUserImputIdAndEtatTraitement(
+                @Param("userImputId") String userImputId,
+                @Param("etatTraitement") Etat etatTraitement, Pageable pageable);
 
-        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_soumission_id = :structureId GROUP BY a.status",
+        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_de_soumission_id = :structureId GROUP BY a.status",
                 nativeQuery = true)
         List<NcStats> countByStatusForStructure(@Param("structureId") String structureId);
 
-        Page<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.status = :status AND n.structureDeSoumissionId = :structureSoumissionId")
+        Page<NonConformite> findAllByStatusAndStructureSoumissionId(
+                @Param("status") Status status,
+                @Param("structureSoumissionId") String structureSoumissionId, Pageable pageable);
 
-        @Query("SELECT MAX(CAST(SUBSTRING(n.numeroReference, LENGTH(n.numeroReference) - 4) AS integer)) " +
-                        "FROM NonConformite n WHERE n.structureSoumissionId = :structureSoumissionId " +
+        @Query("SELECT MAX(CAST(SUBSTRING(n.numeroDeReference, LENGTH(n.numeroDeReference) - 4) AS integer)) " +
+                        "FROM NonConformite n WHERE n.structureDeSoumissionId = :structureSoumissionId " +
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
         Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
 
@@ -129,11 +145,15 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findAllByCreatedByIdAndStatusIn(String createdById, List<Status> statuses, Pageable pageable);
 
-        Page<NonConformite> findAllByUserImputId(String userImputId, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.agentImputeId = :userImputId")
+        Page<NonConformite> findAllByUserImputId(@Param("userImputId") String userImputId, Pageable pageable);
 
         Page<NonConformite> findAllByCreatedByIdAndStatus(String createdById, Status status, Pageable pageable);
 
-        Page<NonConformite> findAllByStructureSoumissionIdOrOrigineId(String structureSoumissionId, String originId, Pageable pageable);
+        @Query("SELECT n FROM NonConformite n WHERE n.structureDeSoumissionId = :structureSoumissionId OR n.origineId = :originId")
+        Page<NonConformite> findAllByStructureSoumissionIdOrOrigineId(
+                @Param("structureSoumissionId") String structureSoumissionId,
+                @Param("originId") String originId, Pageable pageable);
 
         /**
          * Non-conformités désignées une à une.
@@ -152,9 +172,9 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
          * structure qu'il a quittée reste ainsi visible à son auteur, et un dossier imputé
          * nominativement l'est à son traitant même si l'affectation a changé de structure.</p>
          */
-        @Query("SELECT n FROM NonConformite n WHERE n.structureSoumissionId = :structureId "
+        @Query("SELECT n FROM NonConformite n WHERE n.structureDeSoumissionId = :structureId "
                         + "OR n.origineId = :structureId "
-                        + "OR n.createdById = :userId OR n.userImputId = :userId")
+                        + "OR n.createdById = :userId OR n.agentImputeId = :userId")
         Page<NonConformite> findVisiblesPar(@Param("structureId") String structureId,
                         @Param("userId") String userId, Pageable pageable);
 
@@ -162,16 +182,17 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         long countByCreatedByIdAndStatus(String userId, Status status);
 
-        long countByUserImputId(String userId);
+        @Query("SELECT COUNT(n) FROM NonConformite n WHERE n.agentImputeId = :userId")
+        long countByUserImputId(@Param("userId") String userId);
 
-        @Query("SELECT n FROM NonConformite n WHERE n.createdById = :userId OR n.userImputId = :userId")
+        @Query("SELECT n FROM NonConformite n WHERE n.createdById = :userId OR n.agentImputeId = :userId")
         Page<NonConformite> findAllByUserInvolved(@Param("userId") String userId, Pageable pageable);
 
         @Query(value = "SELECT EXTRACT(MONTH FROM created_at) as mois, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
                         "FROM quali_nc " +
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_de_soumission_id = :structureId OR origine_id = :structureId) " +
                         "GROUP BY EXTRACT(MONTH FROM created_at), niveau_non_conformite_libelle", nativeQuery = true)
         List<Object[]> getEvolutionStatsByYear(
                         @Param("annee") int annee,
@@ -181,7 +202,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "FROM quali_nc " +
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_de_soumission_id = :structureId OR origine_id = :structureId)",
                                 nativeQuery = true)
         long countTotalByYear(
                         @Param("annee") int annee,
@@ -192,7 +213,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND EXTRACT(MONTH FROM created_at) = :mois " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_de_soumission_id = :structureId OR origine_id = :structureId) " +
                         "GROUP BY CEIL(EXTRACT(DAY FROM created_at) / 7.0), niveau_non_conformite_libelle", nativeQuery = true)
         List<Object[]> getEvolutionStatsByMonth(
                         @Param("annee") int annee,
@@ -204,7 +225,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND EXTRACT(MONTH FROM created_at) = :mois " +
                         "AND status <> 'DRAFT' " +
-                        "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
+                        "AND (:structureId IS NULL OR :structureId = '' OR structure_de_soumission_id = :structureId OR origine_id = :structureId)",
                                 nativeQuery = true)
         long countTotalByMonth(
                         @Param("annee") int annee,

@@ -1,13 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
-import com.qualiapproche.amelioration.entities.PieceJointe;
-import com.qualiapproche.amelioration.service.impl.NonConformiteFichierService;
-import com.qualiapproche.amelioration.utils.EnTeteFichier;
-import com.qualiapproche.common.annotation.RequirePermissions;
-import com.qualiapproche.common.response.ApiResponse;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import java.util.UUID;
+
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -23,10 +17,17 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.UUID;
-
-import static com.qualiapproche.common.utils.ApiUrls.NON_CONFORMITE_ROOT_URL;
+import com.qualiapproche.amelioration.entities.PieceJointe;
+import com.qualiapproche.amelioration.service.impl.NonConformiteFichierService;
 import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
+import com.qualiapproche.amelioration.utils.EnTeteFichier;
+import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.common.response.ApiResponse;
+import static com.qualiapproche.common.utils.ApiUrls.NON_CONFORMITE_ROOT_URL;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Fichiers attachés à une non-conformité.

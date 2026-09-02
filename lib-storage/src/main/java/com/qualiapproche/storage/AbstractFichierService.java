@@ -1,11 +1,12 @@
 package com.qualiapproche.storage;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
+
+import org.springframework.web.multipart.MultipartFile;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Gestion des pièces jointes d'un dossier métier, entièrement sur le serveur d'objets.

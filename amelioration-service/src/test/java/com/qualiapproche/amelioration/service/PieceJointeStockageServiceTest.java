@@ -1,20 +1,13 @@
 package com.qualiapproche.amelioration.service;
 
-import com.qualiapproche.amelioration.entities.PieceJointe;
-import com.qualiapproche.amelioration.entities.mappers.PieceJointeMapper;
-import com.qualiapproche.amelioration.repository.PieceJointeRepository;
-import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
-import com.qualiapproche.common.dto.PieceJointeDTO;
-import com.qualiapproche.storage.StorageService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,6 +15,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.qualiapproche.amelioration.entities.PieceJointe;
+import com.qualiapproche.amelioration.entities.mappers.PieceJointeMapper;
+import com.qualiapproche.amelioration.repository.PieceJointeRepository;
+import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
+import com.qualiapproche.common.dto.PieceJointeDTO;
+import com.qualiapproche.storage.StorageService;
 
 /**
  * Alignement des pièces jointes d'un dossier sur ce que le client renvoie.

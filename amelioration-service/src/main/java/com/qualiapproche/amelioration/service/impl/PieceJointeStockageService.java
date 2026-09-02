@@ -135,7 +135,10 @@ public class PieceJointeStockageService extends AbstractFichierService<PieceJoin
 
         souhaitees.stream()
                 .filter(dto -> dto.getFichier() != null && dto.getFichier().length > 0)
-                .forEach(dto -> deposer(dto.getFichier(), dto.getNom(), dto.getType(), dossierId, sousDossier));
+                .forEach(dto -> {
+                    log.info("Dépôt vers MinIO : nom={}, taille={} octets", dto.getNom(), dto.getFichier().length);
+                    deposer(dto.getFichier(), dto.getNom(), dto.getType(), dossierId, sousDossier);
+                });
     }
 
     /** Pièce désignée par son identifiant. */

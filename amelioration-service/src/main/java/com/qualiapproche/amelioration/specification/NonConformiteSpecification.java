@@ -36,12 +36,12 @@ public final class NonConformiteSpecification {
         return (root, query, cb) -> {
             List<Predicate> ou = new ArrayList<>();
             if (structureId != null && !structureId.isBlank()) {
-                ou.add(cb.equal(root.get("structureSoumissionId"), structureId));
+                ou.add(cb.equal(root.get("structureDeSoumissionId"), structureId));
                 ou.add(cb.equal(root.get("origineId"), structureId));
             }
             if (userId != null && !userId.isBlank()) {
                 ou.add(cb.equal(root.get("createdById"), userId));
-                ou.add(cb.equal(root.get("userImputId"), userId));
+                ou.add(cb.equal(root.get("agentImputeId"), userId));
             }
             // Appelant sans structure ni identifiant : rien ne lui est rattaché, il ne voit rien.
             // Ouvrir la liste entière serait le contraire de ce que cette borne garantit.

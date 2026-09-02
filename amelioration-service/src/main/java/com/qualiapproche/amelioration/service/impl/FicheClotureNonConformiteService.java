@@ -202,7 +202,7 @@ public class FicheClotureNonConformiteService {
         contexte.setVariable("fonctionEmetteur", valeurOuVide(nc.getFonctionEmetteur()));
         contexte.setVariable("structureEmettrice", valeurOuTiret(nc.getStructureSoumissionLibelle()));
         contexte.setVariable("processus", valeurOuTiret(premierRenseigne(nc.getNomProcessus(), nc.getOrigineService())));
-        contexte.setVariable("typeNonConformite", valeurOuTiret(nc.getTypeNonConformiteLibelle()));
+        contexte.setVariable("sourceNonConformite", valeurOuTiret(nc.getSourceNonConformiteLibelle()));
         contexte.setVariable("niveau", valeurOuTiret(nc.getNiveauNonConformiteLibelle()));
         // Le nom de l'agent n'est porté que par les dossiers récents ; les plus anciens n'ont que
         // son adresse, qui vaut mieux qu'un tiret.

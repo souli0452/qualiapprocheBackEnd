@@ -43,7 +43,7 @@ public class PlanActionSpecification {
                 predicates.add(cb.equal(root.get("status"), status));
             }
             if (nonConformeId != null) {
-                predicates.add(cb.equal(root.get("nonConformeId"), nonConformeId));
+                predicates.add(cb.equal(root.get("nonConformiteId"), nonConformeId));
             }
             if (dateEcheanceFrom != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("dateEcheance"), dateEcheanceFrom));

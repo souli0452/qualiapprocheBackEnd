@@ -1,38 +1,38 @@
 package com.qualiapproche.amelioration.service;
 
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import com.qualiapproche.amelioration.client.ReferentielClient;
+import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PieceJointe;
 import com.qualiapproche.amelioration.entities.mappers.NonConformiteMapper;
 import com.qualiapproche.amelioration.entities.mappers.PlanActionMapper;
-import com.qualiapproche.amelioration.client.ReferentielClient;
-import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.repository.ActionRepository;
 import com.qualiapproche.amelioration.repository.EfficaciteRepository;
 import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PieceJointeRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
-import com.qualiapproche.amelioration.repository.TypeNonConformiteRepository;
-import com.qualiapproche.amelioration.service.impl.NonConformiteServiceImpl;
+import com.qualiapproche.amelioration.repository.SourceNonConformiteRepository;
 import com.qualiapproche.amelioration.service.impl.NonConformiteFichierService;
+import com.qualiapproche.amelioration.service.impl.NonConformiteServiceImpl;
 import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
 import com.qualiapproche.amelioration.service.impl.PlansActionDeLaNonConformiteService;
 import com.qualiapproche.common.service.SendMailService;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 
 /**
  * Rattachement du justificatif de rejet à la non-conformité, depuis la saisie faite dans le moteur.
@@ -49,7 +49,7 @@ class NonConformiteDocumentRejetTest {
     @Mock private PieceJointeRepository pieceJointeRepository;
     @Mock private NonConformiteMapper nonConformiteMapper;
     @Mock private PlanActionMapper planActionMapper;
-    @Mock private TypeNonConformiteRepository typeNonConformiteRepository;
+    @Mock private SourceNonConformiteRepository sourceNonConformiteRepository;
     @Mock private ReferentielClient referentielClient;
     @Mock private EfficaciteRepository efficaciteRepository;
     @Mock private ActionRepository actionRepository;

@@ -1,28 +1,20 @@
 package com.qualiapproche.amelioration.controller;
 
-import com.qualiapproche.common.annotation.RequirePermissions;
-import org.springframework.security.access.prepost.PreAuthorize;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.qualiapproche.common.dto.NcStats;
-import com.qualiapproche.common.dto.NcEvolutionDto;
-import com.qualiapproche.common.dto.NonConformiteDto;
-import com.qualiapproche.common.dto.NcCountsDto;
-import com.qualiapproche.common.dto.NcDashboardDto;
-import com.qualiapproche.common.enumeration.Etat;
-import com.qualiapproche.common.enumeration.Status;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,20 +24,35 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springdoc.core.annotations.ParameterObject;
 
-import com.qualiapproche.amelioration.service.NonConformiteService;
-import com.qualiapproche.common.service.GenericService;
-import com.qualiapproche.common.web.AbstractController;
-
-import static com.qualiapproche.common.utils.ApiUrls.*;
 import com.qualiapproche.amelioration.client.WorkflowClient;
+import com.qualiapproche.amelioration.service.NonConformiteService;
 import com.qualiapproche.amelioration.service.impl.FicheClotureNonConformiteService;
 import com.qualiapproche.amelioration.utils.EnTeteFichier;
+import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.common.dto.NcCountsDto;
+import com.qualiapproche.common.dto.NcDashboardDto;
+import com.qualiapproche.common.dto.NcEvolutionDto;
+import com.qualiapproche.common.dto.NcStats;
+import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.common.dto.PlanActionDto;
 import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.common.enumeration.Etat;
+import com.qualiapproche.common.enumeration.Status;
+import com.qualiapproche.common.service.GenericService;
+import static com.qualiapproche.common.utils.ApiUrls.DELETE_NON_CONFORMITE;
+import static com.qualiapproche.common.utils.ApiUrls.GET_ALL_CONFORMITE_IMPUTED;
+import static com.qualiapproche.common.utils.ApiUrls.GET_ALL_NON_CONFORMITE;
+import static com.qualiapproche.common.utils.ApiUrls.GET_NON_CONFORMITE_BY_ID;
+import static com.qualiapproche.common.utils.ApiUrls.NON_CONFORMITE_ROOT_URL;
+import static com.qualiapproche.common.utils.ApiUrls.UPDATE_MANY_NON_CONFORMITE_PROCESSUS;
+import static com.qualiapproche.common.utils.ApiUrls.UPDATE_NON_CONFORMITE;
+import static com.qualiapproche.common.utils.ApiUrls.UPDATE_NON_CONFORMITE_PROCESSUS;
+import com.qualiapproche.common.web.AbstractController;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
@@ -61,9 +68,34 @@ import com.qualiapproche.common.dto.WorkflowStateDto;
 )
 public class NonConformiteController extends AbstractController<NonConformiteDto> {
 
+    private void logDetailNC(String titre, NonConformiteDto dto) {
+        if (dto == null) {
+            return;
+        }
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode node = objectMapper.valueToTree(dto);
+            if (node.has("fichiers") && node.get("fichiers").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode fNode : node.get("fichiers")) {
+                    if (fNode instanceof com.fasterxml.jackson.databind.node.ObjectNode fObj && fObj.has("fichier")) {
+                        fObj.put("fichier", "[CONTENU BINAIRE MASQUÉ]");
+                    }
+                }
+            }
+            String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+            log.info("\n============================== [NC : {}] ==============================\n{}"
+                    + "\n====================================================================================",
+                    titre, prettyJson);
+        } catch (Exception e) {
+            log.info("NC [{}] : ID={}, Ref={}, État={}, Étape={}",
+                    titre, dto.getId(), dto.getNumeroDeReference(), dto.getEtatDeTraitement(), dto.getWorkflowStatus());
+        }
+    }
+
+
     private final NonConformiteService nonConformiteService;
     private final WorkflowClient workflowClient;
     private final FicheClotureNonConformiteService ficheClotureService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * La recherche est héritée : {@code POST /search} vient de {@link AbstractController},
@@ -118,13 +150,14 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     public ResponseEntity<NonConformiteDto> createNonConformite(
             @RequestBody NonConformiteDto dto,
             @RequestParam(value = "soumettre", defaultValue = "false") boolean soumettre) throws IOException {
+        log.info("Création d'une nouvelle Non-Conformité...");
         NonConformiteDto createdNonConformite = nonConformiteService.createNonConformite(dto);
         if (soumettre) {
-            // Deux gestes, et non un seul : l'enregistrement doit être committé avant que le circuit
-            // ne soit franchi, faute de quoi le moteur reviendrait interroger ce service à propos
-            // d'un dossier que sa transaction n'a pas encore rendu visible.
-            return ResponseEntity.ok(nonConformiteService.soumettre(createdNonConformite.getId()));
+            NonConformiteDto soumise = nonConformiteService.soumettre(createdNonConformite.getId());
+            logDetailNC("CRÉÉE ET SOUMISE AU PILOTE", soumise);
+            return ResponseEntity.ok(soumise);
         }
+        logDetailNC("CRÉÉE EN BROUILLON", createdNonConformite);
         return ResponseEntity.ok(createdNonConformite);
     }
 
@@ -140,7 +173,10 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     @PreAuthorize("@perm.canUpdate(this)")
     @PostMapping("/{id}/soumettre")
     public ResponseEntity<NonConformiteDto> soumettre(@PathVariable UUID id) {
-        return ResponseEntity.ok(nonConformiteService.soumettre(id));
+        log.info("Soumission de la NC {} au pilote de processus...", id);
+        NonConformiteDto soumise = nonConformiteService.soumettre(id);
+        logDetailNC("SOUMISE DEPUIS BROUILLON", soumise);
+        return ResponseEntity.ok(soumise);
     }
 
     /*-----------------------------------------------------------------------/
@@ -169,6 +205,7 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
         return ResponseEntity.ok(avecEtatDuCircuit(nonConformiteService.findImupted(userId, etapeTraitement, pageable)));
     }
 
+    /*
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTORIGIN)
     public ResponseEntity<Page<NonConformiteDto>> getNonConformitesByEtatAndOrigineId(
@@ -176,6 +213,8 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
         return ResponseEntity.ok(avecEtatDuCircuit(
                 nonConformiteService.getNonConformitesByEtatAndStructureOrigine(etapeTraitement, structureId, pageable)));
     }
+ */
+/*
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_NON_CONFORMITE_BY_ETAT_AND_STRUCTSOUMISSION)
@@ -184,6 +223,7 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
         return ResponseEntity.ok(
                 avecEtatDuCircuit(nonConformiteService.getNonConformitesByEtatAnStructure(etapeTraitement, structureId, pageable)));
     }
+ */
 
     /*-----------------------------------------------------------------------/
     /               Méthode de création d'une NonConformité                  /
@@ -219,12 +259,14 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     /*-----------------------------------------------------------------------/
     /      Méthode de récupération de NonConformités par Etat                /
     /-----------------------------------------------------------------------*/
+/*
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ETAT_BAY_NON_CONFORMITE)
     public Page<NonConformiteDto> getNonConformitesByEtat(@PathVariable Etat etapeTraitement, @ParameterObject Pageable pageable) {
         return avecEtatDuCircuit(nonConformiteService.getNonConformitesByEtatNonConformite(etapeTraitement, pageable));
     }
+ */
 
     /**
      * Les non-conformités que l'appelant a à traiter — et elles seules.
@@ -320,6 +362,7 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
         NonConformiteDto nonConformite = nonConformiteService.getNonConformiteById(id);
         nonConformite.setWorkflowState(etatWorkflow(id));
         joindreLEtatDesPlans(nonConformite);
+        logDetailNC("CONSULTATION FICHE DÉTAILS", nonConformite);
         return new ResponseEntity<>(nonConformite, HttpStatus.OK);
     }
 

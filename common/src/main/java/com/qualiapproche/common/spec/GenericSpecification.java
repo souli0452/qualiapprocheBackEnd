@@ -81,21 +81,49 @@ public class GenericSpecification<T> {
      * Traverse un chemin éventuellement imbriqué : {@code "structure.libelle"} devient
      * {@code root.get("structure").get("libelle")}.
      */
+    private static String resoudreAlias(String partie) {
+        return switch (partie) {
+            case "userImputId" -> "agentImputeId";
+            case "userImputFullName" -> "agentImputeNomComplet";
+            case "userImputeEmail" -> "agentImputeEmail";
+            case "numeroReference" -> "numeroDeReference";
+            case "justification" -> "description";
+            case "etatTraitement" -> "etatDeTraitement";
+            case "sourceNonConformiteId" -> "sourceDeNonConformiteId";
+            case "sourceNonConformiteLibelle" -> "sourceDeNonConformiteLibelle";
+            case "categorieProcessusId" -> "categorieProcessusId";
+            case "categorieProcessusLibelle" -> "categorieProcessusLibelle";
+            case "structureSoumissionId" -> "structureDeSoumissionId";
+            case "structureSoumissionLibelle" -> "structureDeSoumissionLibelle";
+            case "actionDsc" -> "actionImmediate";
+            case "pertinancePilote" -> "pertinencePilote";
+            case "pertinanceRs" -> "pertinenceRs";
+            case "numeroOdre" -> "numeroOrdre";
+            case "nonConformeId" -> "nonConformiteId";
+            case "causeIdentifiees" -> "causeIdentifiee";
+            case "solutionRetenues" -> "solutionRetenue";
+            default -> partie;
+        };
+    }
+
+    /**
+     * Traverse un chemin éventuellement imbriqué : {@code "structure.libelle"} devient
+     * {@code root.get("structure").get("libelle")}.
+     */
     private Path<?> chemin(Root<T> root, String champ) {
         Path<?> chemin = root;
         for (String partie : champ.split("\\.")) {
+            String resolu = resoudreAlias(partie);
             try {
-                chemin = chemin.get(partie);
+                chemin = chemin.get(resolu);
             } catch (RuntimeException e) {
-                // Un champ qui ne désigne aucun attribut de l'entité est une faute de l'appelant,
-                // pas une panne : laissée telle quelle, elle remontait en erreur serveur, et
-                // l'écran n'avait aucun moyen d'apprendre que son nom de colonne était le fautif.
-                // BusinessException et non IllegalArgumentException : cette dernière est traduite
-                // par la couche de persistance en InvalidDataAccessApiUsageException, et le refus
-                // repartait en 500 — une faute de nom de colonne passait pour une panne du serveur.
-                throw new BusinessException(
-                        "Le critère « " + champ + " » ne désigne aucune donnée de cette ressource.",
-                        HttpStatus.BAD_REQUEST);
+                try {
+                    chemin = chemin.get(partie);
+                } catch (RuntimeException ignored) {
+                    throw new BusinessException(
+                            "Le critère « " + champ + " » ne désigne aucune donnée de cette ressource.",
+                            HttpStatus.BAD_REQUEST);
+                }
             }
         }
         return chemin;

@@ -1,12 +1,9 @@
-package com.qualiapproche.amelioration.common.utils;
-
-import com.qualiapproche.amelioration.repository.NonConformiteRepository;
+package com.qualiapproche.amelioration.utils;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
 public class UtilsClass {
-private NonConformiteRepository nonConformiteRepository;
         /*-------------------------------------------------------------------------------------------------/
     /*    Méthode de géneration du code unique pour la suivie des statut d'une demande                /
     /*----------------------------------------------------------------------------------------------*/

@@ -19,6 +19,13 @@ public class StorageProperties {
     /** URL du serveur compatible S3. */
     private String url;
 
+    public String getUrl() {
+        if (url != null && url.contains(":9001")) {
+            return url.replace(":9001", ":9000");
+        }
+        return url;
+    }
+
     /** Identifiant d'accès. */
     private String accessKey;
 

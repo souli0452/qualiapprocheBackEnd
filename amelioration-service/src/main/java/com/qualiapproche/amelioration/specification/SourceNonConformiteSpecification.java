@@ -1,14 +1,14 @@
 package com.qualiapproche.amelioration.specification;
 
-import com.qualiapproche.amelioration.entities.TypeNonConformite;
+import com.qualiapproche.amelioration.entities.SourceDeNonConformite;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TypeNonConformiteSpecification {
+public class SourceNonConformiteSpecification {
 
-    public static Specification<TypeNonConformite> filter(String libelle, String description) {
+    public static Specification<SourceDeNonConformite> filter(String libelle, String description) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (libelle != null && !libelle.isBlank()) {

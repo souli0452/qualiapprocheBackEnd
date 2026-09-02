@@ -15,11 +15,11 @@ import lombok.experimental.SuperBuilder;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-//
+
 
 @SuperBuilder
 
-public class TypeNonConformiteDto extends AuditEntityDto {
+public class CategorieProcessusDto extends AuditEntityDto {
 
     private String libelle;
     private String description;

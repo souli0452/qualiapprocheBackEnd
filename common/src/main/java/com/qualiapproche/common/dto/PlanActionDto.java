@@ -54,4 +54,48 @@ public class PlanActionDto extends AuditEntityDto {
 
     /** État du circuit de validation du plan d'action (cf. {@link NonConformiteDto#getWorkflowState()}). */
     private WorkflowStateDto workflowState;
+
+    // --- NOUVELLES APPELLATIONS CLAIRES (AI-READY) ---
+    private String numeroOrdre;
+    private UUID nonConformiteId;
+    private String causeIdentifiee;
+    private String solutionRetenue;
+
+    public String getNumeroOrdre() {
+        return this.numeroOrdre != null ? this.numeroOrdre : this.numeroOdre;
+    }
+    public void setNumeroOrdre(String v) {
+        this.numeroOrdre = v;
+        if (this.numeroOdre == null) {
+            this.numeroOdre = v;
+        }
+    }
+    public UUID getNonConformiteId() {
+        return this.nonConformiteId != null ? this.nonConformiteId : this.nonConformeId;
+    }
+    public void setNonConformiteId(UUID v) {
+        this.nonConformiteId = v;
+        if (this.nonConformeId == null) {
+            this.nonConformeId = v;
+        }
+    }
+    public String getCauseIdentifiee() {
+        return this.causeIdentifiee != null ? this.causeIdentifiee : this.causeIdentifiees;
+    }
+    public void setCauseIdentifiee(String v) {
+        this.causeIdentifiee = v;
+        if (this.causeIdentifiees == null) {
+            this.causeIdentifiees = v;
+        }
+    }
+    public String getSolutionRetenue() {
+        return this.solutionRetenue != null ? this.solutionRetenue : this.solutionRetenues;
+    }
+    public void setSolutionRetenue(String v) {
+        this.solutionRetenue = v;
+        if (this.solutionRetenues == null) {
+            this.solutionRetenues = v;
+        }
+    }
+
 }

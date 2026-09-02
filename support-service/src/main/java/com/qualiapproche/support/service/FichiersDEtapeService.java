@@ -45,7 +45,7 @@ public class FichiersDEtapeService {
 
     private final StorageService storageService;
     private final PieceJointeEtapeRepository pieceRepository;
-
+ 
     /**
      * Dépose une pièce et rend sa référence.
      *

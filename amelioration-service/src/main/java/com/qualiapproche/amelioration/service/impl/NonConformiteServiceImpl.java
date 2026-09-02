@@ -34,7 +34,7 @@ import com.qualiapproche.amelioration.repository.EfficaciteRepository;
 import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
-import com.qualiapproche.amelioration.repository.TypeNonConformiteRepository;
+import com.qualiapproche.amelioration.repository.SourceNonConformiteRepository;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.enumeration.TypeDemande;
@@ -117,7 +117,7 @@ public class NonConformiteServiceImpl
     private final PieceJointeRepository pieceJointeRepository;
     private final NonConformiteMapper nonConformiteMapper;
     private final PlanActionMapper planActionMapper;
-    private final TypeNonConformiteRepository typeNonConformiteRepository;
+    private final SourceNonConformiteRepository sourceNonConformiteRepository;
     private final ReferentielClient referentielClient;
     private final EfficaciteRepository efficaciteRepository;
     private final ActionRepository actionRepository;
@@ -148,11 +148,11 @@ public class NonConformiteServiceImpl
         return id;
     }
 
-    private UUID findTypeNonConformiteById(UUID id) {
+    private UUID findSourceNonConformiteById(UUID id) {
         return id;
     }
 
-    private UUID findTypeProcessusById(UUID id) {
+    private UUID findCategorieProcessusById(UUID id) {
         return id;
     }
 
@@ -160,10 +160,21 @@ public class NonConformiteServiceImpl
         if (dto == null) {
             return null;
         }
-        dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
+        var fichiers = fichierService.getPjByEntityId(dto.getId());
+        if (fichiers != null) {
+            fichiers.forEach(pj -> pj.setCurrentUserStructure(dto.getStructureDeSoumissionLibelle()));
+        }
+        dto.setFichiers(fichiers);
+
         completerLesPlansDAction(dto);
         if (dto.getPlanActions() != null) {
-            dto.getPlanActions().forEach(plan -> plan.setFichiers(fichierService.getPjByEntityId(plan.getId())));
+            dto.getPlanActions().forEach(plan -> {
+                var planFichiers = fichierService.getPjByEntityId(plan.getId());
+                if (planFichiers != null) {
+                    planFichiers.forEach(pj -> pj.setCurrentUserStructure(dto.getStructureDeSoumissionLibelle()));
+                }
+                plan.setFichiers(planFichiers);
+            });
         }
         return dto;
     }
@@ -217,18 +228,18 @@ public class NonConformiteServiceImpl
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
         nonConformite.setOriginNonConformiteLibelle(dto.getOriginNonConformiteLibelle());
-        nonConformite.setNumeroReference(genererNumeroReference(dto.getStructureSoumissionId(), dto.getStructureSoumissionLibelle()));
-        nonConformite.setStructureSoumissionId(dto.getStructureSoumissionId());
-        nonConformite.setStructureSoumissionLibelle(dto.getStructureSoumissionLibelle());
+        nonConformite.setNumeroReference(genererNumeroReference(dto.getStructureDeSoumissionId(), dto.getStructureDeSoumissionLibelle()));
+        nonConformite.setStructureSoumissionId(dto.getStructureDeSoumissionId());
+        nonConformite.setStructureSoumissionLibelle(dto.getStructureDeSoumissionLibelle());
         nonConformite.setOrigineId(null);
         nonConformite.setOrigineService(null);
         nonConformite.setOrigineServiceLibelleCourt(null);
         nonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
-        nonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
-        nonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
+        nonConformite.setSourceNonConformiteId(findSourceNonConformiteById(dto.getSourceDeNonConformiteId()));
+        nonConformite.setCategorieProcessusId(findCategorieProcessusById(dto.getCategorieProcessusId()));
         // État de départ, avant toute transition : le circuit prendra la suite. Les deux branches
         // se réaffectaient la valeur qu'elles venaient de lire, ce qui masquait la règle.
-        if (nonConformite.getEtatTraitement() == null) {
+        if (nonConformite.getEtatDeTraitement() == null) {
             nonConformite.setEtatTraitement(Etat.SOUMISSION);
         }
         if (nonConformite.getStatus() == null) {
@@ -254,7 +265,7 @@ public class NonConformiteServiceImpl
                     "NON_CONFORMITE",
                     workflowId,
                     // La référence lisible : c'est elle que citeront les courriels d'étape.
-                    savedNonConformite.getNumeroReference()
+                    savedNonConformite.getNumeroDeReference()
             );
 
             if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
@@ -334,16 +345,16 @@ public class NonConformiteServiceImpl
         existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
         existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
         existingNonConformite.setActionId(findActionById(dto.getActionId()));
-        existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
-        existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
+        existingNonConformite.setSourceNonConformiteId(findSourceNonConformiteById(dto.getSourceDeNonConformiteId()));
+        existingNonConformite.setCategorieProcessusId(findCategorieProcessusById(dto.getCategorieProcessusId()));
         existingNonConformite.setCircuit(dto.getCircuit());
         existingNonConformite.setOrigineId(dto.getOrigineId());
         existingNonConformite.setOrigineService(dto.getOrigineService());
         existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
         existingNonConformite.setActionLibelle(dto.getActionLibelle());
 
-        existingNonConformite.setUserImputId(dto.getUserImputId());
-        existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
+        existingNonConformite.setUserImputId(dto.getAgentImputeId());
+        existingNonConformite.setUserImputFullName(dto.getAgentImputeNomComplet());
         appliquerLesParticipants(existingNonConformite, dto);
         // Mettre à jour les fichiers s'ils sont fournis
         ncFichierService.synchroniser(dto.getFichiers(), id);
@@ -387,14 +398,14 @@ public class NonConformiteServiceImpl
             NonConformite existingNonConformite = nonConformiteRepository.findById(dto.getId())
                     .orElseThrow(
                             () -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + dto.getId()));
-            existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
-            existingNonConformite.setJustificationPilote(dto.getJustificationPilote());
-            existingNonConformite.setPertinancePilote(dto.getPertinancePilote());
-            existingNonConformite.setJustificationRs(dto.getJustificationRs());
+            existingNonConformite.setPertinanceRs(dto.getPertinenceRs());
+            existingNonConformite.setObservationPilote(dto.getObservationPilote());
+            existingNonConformite.setPertinancePilote(dto.getPertinencePilote());
+            existingNonConformite.setObservationRs(dto.getObservationRs());
             existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
             existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
-            existingNonConformite.setTypeNonConformiteId(findTypeNonConformiteById(dto.getTypeNonConformiteId()));
-            existingNonConformite.setTypeProcessusId(findTypeProcessusById(dto.getTypeProcessusId()));
+            existingNonConformite.setSourceNonConformiteId(findSourceNonConformiteById(dto.getSourceDeNonConformiteId()));
+            existingNonConformite.setCategorieProcessusId(findCategorieProcessusById(dto.getCategorieProcessusId()));
             if (dto.getCircuit() != null) {
                 existingNonConformite.setCircuit(dto.getCircuit());
             }
@@ -408,10 +419,10 @@ public class NonConformiteServiceImpl
                 existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
             }
 
-            existingNonConformite.setUserImputId(dto.getUserImputId());
-            existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
-            existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
-            existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
+            existingNonConformite.setUserImputId(dto.getAgentImputeId());
+            existingNonConformite.setUserImputeEmail(dto.getAgentImputeEmail());
+            existingNonConformite.setUserImputFullName(dto.getAgentImputeNomComplet());
+            existingNonConformite.setPertinanceRs(dto.getPertinenceRs());
             existingNonConformite.setActionPreventive(dto.getActionPreventive());
             existingNonConformite.setPertinanceRsSuivi(dto.getPertinanceRsSuivi());
             existingNonConformite.setNumeroFdac(dto.getNumeroFdac());
@@ -425,7 +436,7 @@ public class NonConformiteServiceImpl
                     existingNonConformite.getParticipants().getFullNames().add(participant);
                 });
             }
-            existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
+            existingNonConformite.setUserImputFullName(dto.getAgentImputeNomComplet());
             // Les actions correctives ne se réécrivent plus depuis la fiche. Ce bloc vidait la
             // collection — en `orphanRemoval`, cela les **supprimait** — puis en recréait à partir
             // de ce que l'écran renvoyait : chaque enregistrement effaçait le responsable, le
@@ -1127,7 +1138,7 @@ public class NonConformiteServiceImpl
     @Override
     protected List<String> champsRecherchables() {
         return List.of("numeroReference", "nomProcessus", "origineService",
-                "typeNonConformiteLibelle", "niveauNonConformiteLibelle", "userImputFullName");
+                "sourceNonConformiteLibelle", "niveauNonConformiteLibelle", "userImputFullName");
     }
 
     /**
@@ -1163,7 +1174,7 @@ public class NonConformiteServiceImpl
         NonConformite nc = nonConformiteRepository.findById(nonConformiteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Non conformité introuvable"));
 
-        appliquerChampsSaisis(nc, champs);
+        appliquerChampsSaisis(nc, champs, etatCode);
 
         nc.setWorkflowStatus(nomEtape);
         Status ancienStatut = nc.getStatus();
@@ -1199,7 +1210,15 @@ public class NonConformiteServiceImpl
      * <p>Une référence inconnue n'interrompt pas la transition : la décision de l'utilisateur a
      * déjà été prise et enregistrée par le moteur, la refuser ici la ferait rejouer sans fin.</p>
      */
-    private void appliquerChampsSaisis(NonConformite nc, Map<String, String> champs) {
+
+    private void appliquerChampsSaisis(NonConformite nc, Map<String, String> champs, String etatCode) {
+        if (champs == null || champs.isEmpty()) {
+            return;
+        }
+
+
+
+
         if (champs == null || champs.isEmpty()) {
             return;
         }
@@ -1250,7 +1269,7 @@ public class NonConformiteServiceImpl
      */
     private void appliquerAgentImpute(NonConformite nc, String agentId) {
         String agent = valeurRenseignee(agentId);
-        if (agent == null || agent.equals(nc.getUserImputId())) {
+        if (agent == null || agent.equals(nc.getAgentImputeId())) {
             return;
         }
         nc.setUserImputId(agent);

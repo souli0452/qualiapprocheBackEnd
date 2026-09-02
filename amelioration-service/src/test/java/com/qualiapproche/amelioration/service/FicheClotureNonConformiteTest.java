@@ -63,10 +63,10 @@ class FicheClotureNonConformiteTest {
         // fiche doit donc les lire au dépôt, pas sur l'entité.
         lenient().when(planActionRepository.findPlanActionsByNonConformeId(DOSSIER)).thenReturn(List.of(
                 PlanAction.builder()
-                        .numeroOdre("1")
+                        .numeroOrdre("1")
                         .actionCorrective("Mettre à jour la procédure d'achat")
-                        .causeIdentifiees("Procédure obsolète")
-                        .solutionRetenues("Révision de la procédure et diffusion")
+                        .causeIdentifiee("Procédure obsolète")
+                        .solutionRetenue("Révision de la procédure et diffusion")
                         .responsableNomComplet("Idrissa Ouédraogo")
                         .dateEcheance(LocalDate.of(2026, 5, 15))
                         .status(StatutEnum.TRAITER)
@@ -76,14 +76,14 @@ class FicheClotureNonConformiteTest {
     private NonConformite dossierCloture() {
         NonConformite nc = NonConformite.builder()
                 .id(DOSSIER)
-                .numeroReference("NC-2026-014")
+                .numeroDeReference("NC-2026-014")
                 .version("1.0")
-                .etatTraitement(Etat.CLOTURE)
+                .etatDeTraitement(Etat.CLOTURE)
                 .circuit(Circuit.ACTION_CORRECTIVE)
-                .justification("Écart constaté entre la procédure et la pratique.")
-                .structureSoumissionLibelle("Direction des achats")
+                .description("Écart constaté entre la procédure et la pratique.")
+                .structureDeSoumissionLibelle("Direction des achats")
                 .nomProcessus("Achats")
-                .userImputFullName("Awa Traoré")
+                .agentImputeNomComplet("Awa Traoré")
                 .createdAt(LocalDateTime.of(2026, 3, 2, 9, 30))
                 .build();
         return nc;

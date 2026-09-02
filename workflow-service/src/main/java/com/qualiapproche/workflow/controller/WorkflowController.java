@@ -50,6 +50,7 @@ import com.qualiapproche.workflow.model.TypeRessource;
 @RestController
 @RequestMapping("/api/v1/workflows")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @RequirePermissions(
         create = {"workflow-write"},
         update = {"workflow-write"},
@@ -281,6 +282,7 @@ public class WorkflowController {
     public ResponseEntity<Void> validateStep(
             @PathVariable UUID resourceId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
+        log.info("Validation de l'étape pour la ressource {}...", resourceId);
 
         workflowService.validateStep(resourceId, request);
         return ResponseEntity.ok().build();
@@ -290,6 +292,7 @@ public class WorkflowController {
     public ResponseEntity<Void> rejectStep(
             @PathVariable UUID resourceId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
+        log.info("Rejet de l'étape pour la ressource {}...", resourceId);
 
         workflowService.rejectStep(resourceId, request);
         return ResponseEntity.ok().build();
@@ -299,6 +302,7 @@ public class WorkflowController {
     public ResponseEntity<Void> clotureStep(
             @PathVariable UUID resourceId,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
+        log.info("Clôture de l'étape pour la ressource {}...", resourceId);
 
         workflowService.clotureStep(resourceId, request);
         return ResponseEntity.ok().build();
@@ -309,6 +313,7 @@ public class WorkflowController {
             @PathVariable UUID resourceId,
             @RequestParam("transitionCode") String transitionCode,
             @RequestBody(required = false) WorkflowValidationRequestDto request) {
+        log.info("Exécution de la transition {} sur la ressource {}...", transitionCode, resourceId);
 
         workflowService.executeDynamicTransition(resourceId, transitionCode, request);
         return ResponseEntity.ok().build();

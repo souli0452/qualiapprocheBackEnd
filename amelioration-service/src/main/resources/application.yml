@@ -1,13 +1,20 @@
 server:
   port: 8083
+  tomcat:
+    max-swallow-size: 50MB
+    max-http-form-post-size: 50MB
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
   application:
     name: amelioration-service
   datasource:
-    url: ${DB_URL_AMELIORATION:jdbc:postgresql://localhost:5432/qualisira_amelioration}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:root}
+    url: ${DB_URL_AMELIORATION:jdbc:postgresql://localhost:5433/qualisira_amelioration}
+    username: ${DB_USERNAME:saas_user}
+    password: ${DB_PASSWORD:saas_password}
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -45,7 +52,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET}
+            client-secret: ${KC_CLIENT_SECRET:}
             authorization-grant-type: client_credentials
         provider:
           keycloak:
@@ -87,7 +94,7 @@ eureka:
 # Serveur d'objets commun à la plateforme : mêmes coordonnées que support-service, le bucket
 # est partagé et les modules s'y distinguent par le préfixe de dossier.
 minio:
-  url: ${MINIO_URL:https://s3.horeb.tech}
+  url: ${MINIO_URL:http://localhost:9000}
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
   bucket-name: ${MINIO_BUCKET_NAME:quali-sira}

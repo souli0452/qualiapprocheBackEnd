@@ -2,8 +2,8 @@ package com.qualiapproche.referentiel.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
 import org.springframework.security.access.prepost.PreAuthorize;
-import com.qualiapproche.common.dto.TypeProcessusDto;
-import com.qualiapproche.referentiel.service.TypeProcessusService;
+import com.qualiapproche.common.dto.CategorieProcessusDto;
+import com.qualiapproche.referentiel.service.CategorieProcessusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,38 +32,38 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
         read = {"type-processus-read", "type-processus-write", "CONFIG_READ", "TYPE_PROC_MANAGE"},
         delete = {"type-processus-write", "TYPE_PROC_MANAGE"}
 )
-public class TypeProcessusController {
+public class CategorieProcessusController {
 
-    private final TypeProcessusService typeProcessusService;
+    private final CategorieProcessusService categorieProcessusService;
 
     @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_TYPE_PROCESSUS)
-    public ResponseEntity<TypeProcessusDto> create(@RequestBody TypeProcessusDto typeProcessusDto) {
-        TypeProcessusDto typeProcessusDto1 = typeProcessusService.create(typeProcessusDto);
-        return new ResponseEntity<>(typeProcessusDto1, HttpStatus.OK);
+    public ResponseEntity<CategorieProcessusDto> create(@RequestBody CategorieProcessusDto categorieProcessusDto) {
+        CategorieProcessusDto categorieProcessusDto1 = categorieProcessusService.create(categorieProcessusDto);
+        return new ResponseEntity<>(categorieProcessusDto1, HttpStatus.OK);
     }
 
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_TYPE_PROCESSUS)
-    public ResponseEntity<TypeProcessusDto> update(@RequestBody TypeProcessusDto typeProcessusDto) {
-        TypeProcessusDto typeProcessusDto1 = typeProcessusService.update(typeProcessusDto);
-        return new ResponseEntity<>(typeProcessusDto1, HttpStatus.OK);
+    public ResponseEntity<CategorieProcessusDto> update(@RequestBody CategorieProcessusDto categorieProcessusDto) {
+        CategorieProcessusDto categorieProcessusDto1 = categorieProcessusService.update(categorieProcessusDto);
+        return new ResponseEntity<>(categorieProcessusDto1, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_ALL_TYPE_PROCESSUS)
-    public ResponseEntity<Page<TypeProcessusDto>> allTypeProcessus(@ParameterObject Pageable pageable) {
-        Page<TypeProcessusDto> typeProcessusDtos = typeProcessusService.getAll(pageable);
-        return new ResponseEntity<>(typeProcessusDtos, HttpStatus.OK);
+    public ResponseEntity<Page<CategorieProcessusDto>> allCategorieProcessus(@ParameterObject Pageable pageable) {
+        Page<CategorieProcessusDto> categorieProcessusDtos = categorieProcessusService.getAll(pageable);
+        return new ResponseEntity<>(categorieProcessusDtos, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_TYPE_PROCESSUS_BY_ID)
-    public ResponseEntity<TypeProcessusDto> getById(@PathVariable UUID id) {
-        TypeProcessusDto typeProcessusDto = typeProcessusService.getById(id);
-        return new ResponseEntity<>(typeProcessusDto, HttpStatus.OK);
+    public ResponseEntity<CategorieProcessusDto> getById(@PathVariable UUID id) {
+        CategorieProcessusDto categorieProcessusDto = categorieProcessusService.getById(id);
+        return new ResponseEntity<>(categorieProcessusDto, HttpStatus.OK);
     }
     @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_TYPE_PROCESSUS)
     public void deleteyId(@PathVariable UUID id) {
-        typeProcessusService.delete(id);
+        categorieProcessusService.delete(id);
     }
 }

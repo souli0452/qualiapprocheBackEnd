@@ -4,7 +4,7 @@ import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.common.dto.NonConformiteDto;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
-
+ 
 /**
  * Le dossier tel qu'une action corrective a besoin de le montrer : son identité, son origine, ce
  * qui a été constaté, où il en est.

@@ -71,6 +71,10 @@ public class AmeliorationInternalCallbackController {
                 resultat.put(nom.toString(), valeur.toString());
             }
         });
+
+        if (payload.containsKey("comments") && payload.get("comments") != null) {
+            resultat.put("WORKFLOW_COMMENTS", payload.get("comments").toString());
+        }
         return resultat;
     }
 

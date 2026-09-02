@@ -47,6 +47,7 @@ public class ValidationHistory {
     @Column(nullable = false)
     private String decision;
 
+    @Column(columnDefinition = "TEXT")
     private String comments;
 
     @Column(nullable = false)

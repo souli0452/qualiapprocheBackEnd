@@ -11,7 +11,7 @@ import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PieceJointeRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
-import com.qualiapproche.amelioration.repository.TypeNonConformiteRepository;
+import com.qualiapproche.amelioration.repository.SourceNonConformiteRepository;
 import com.qualiapproche.amelioration.service.impl.NonConformiteFichierService;
 import com.qualiapproche.amelioration.service.impl.NonConformiteServiceImpl;
 import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
@@ -64,7 +64,7 @@ class PiecesJointesDeLaMiseAJourTest {
     @Mock private PieceJointeRepository pieceJointeRepository;
     @Mock private NonConformiteMapper nonConformiteMapper;
     @Mock private PlanActionMapper planActionMapper;
-    @Mock private TypeNonConformiteRepository typeNonConformiteRepository;
+    @Mock private SourceNonConformiteRepository sourceNonConformiteRepository;
     @Mock private ReferentielClient referentielClient;
     @Mock private EfficaciteRepository efficaciteRepository;
     @Mock private ActionRepository actionRepository;
