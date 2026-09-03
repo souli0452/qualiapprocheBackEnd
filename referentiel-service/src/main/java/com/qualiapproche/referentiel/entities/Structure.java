@@ -4,6 +4,7 @@ import com.qualiapproche.common.base.AuditEntity;
 import com.qualiapproche.common.enumeration.TypeStructure;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -27,6 +28,16 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 public class Structure extends AuditEntity {
     private String libelleLong;
     private String libelleCourt;
+
+    /**
+     * Ce dont la structure a la charge.
+     *
+     * <p>Le champ figurait dans {@code StructureDto} depuis l'origine sans avoir de contrepartie
+     * ici : MapStruct l'écartait sans bruit à l'entrée comme à la sortie, et l'écran voyait sa
+     * saisie revenir vide à chaque relecture. Même longueur que la valeur d'un paramètre.</p>
+     */
+    @Column(length = 2000)
+    private String description;
     private String emailStruct;
     private String telephone;
     private String adresse;
