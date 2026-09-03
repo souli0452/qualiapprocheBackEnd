@@ -100,7 +100,7 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
                     .pageSize(size)
                     .totalElements(totalElements)
                     .totalPages(totalPages)
-                    .isLast(page >= totalPages - 1)
+                    .last(page >= totalPages - 1)
                     .build();
 
             return ApiResponse.success(paginatedResponse);

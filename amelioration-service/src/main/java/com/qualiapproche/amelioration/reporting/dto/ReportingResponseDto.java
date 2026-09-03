@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.reporting.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.NoArgsConstructor;
 
 /**
@@ -9,7 +10,13 @@ import lombok.NoArgsConstructor;
  */
 @NoArgsConstructor
 @SuppressWarnings("ALL")
+@Schema(description = "État produit, porté en mémoire. Enveloppe interne : le point d'entrée "
+        + "d'édition n'en rend que le contenu binaire, jamais cet objet.")
 public class ReportingResponseDto {
+
+    @Schema(description = "Contenu du fichier produit, dans le format demandé. Nul lorsque "
+            + "l'édition a échoué : l'erreur est journalisée et l'appelant reçoit un état vide "
+            + "plutôt qu'un refus.")
     private byte[] reportFile;
 
     /**

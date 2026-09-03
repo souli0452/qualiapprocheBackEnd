@@ -31,8 +31,14 @@ public class PrioriteDocument extends AuditEntity {
 
     private String description;
 
-    /** Rang d'affichage, du plus urgent au moins urgent. */
-    private Integer ordre;
+    /**
+     * Poids de la priorité, du plus urgent au moins urgent.
+     *
+     * <p>C'est lui qui range les priorités entre elles. Le libellé ne le permet pas : « Normal » et
+     * « Urgent » se suivent dans l'ordre alphabétique en sens inverse de leur urgence. L'échelle
+     * appartient à l'organisation, qui décide de son étendue.</p>
+     */
+    private Integer score;
 
     /** Couleur d'affichage, facultative. */
     private String couleur;

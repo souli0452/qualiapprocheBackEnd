@@ -1,5 +1,7 @@
 package com.qualiapproche.common.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Comparaisons qu'un critère de recherche peut exprimer.
  *
@@ -7,6 +9,9 @@ package com.qualiapproche.common.api;
  * et laisser le client en écrire une reviendrait à lui ouvrir la base. L'énumération est le contrat
  * entre l'écran, qui compose ses filtres, et le serveur, qui seul sait les exécuter.</p>
  */
+@Schema(description = "Comparaison appliquée par un critère de recherche. Les opérateurs de "
+        + "texte cherchent par préfixe ou par fragment ; CONTAINS impose un parcours complet de "
+        + "la table et se paie donc sur les grands référentiels.")
 public enum FilterOperator {
 
     /** Égalité stricte. Valeur nulle : la colonne doit être nulle. */

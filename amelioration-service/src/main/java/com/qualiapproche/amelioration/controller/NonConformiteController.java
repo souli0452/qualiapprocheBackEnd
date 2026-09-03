@@ -10,6 +10,7 @@ import java.util.UUID;
 import com.qualiapproche.common.dto.NcStats;
 import com.qualiapproche.common.dto.NcEvolutionDto;
 import com.qualiapproche.common.dto.NonConformiteDto;
+import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.dto.NcCountsDto;
 import com.qualiapproche.common.dto.NcDashboardDto;
 import com.qualiapproche.common.enumeration.Etat;
@@ -43,9 +44,11 @@ import com.qualiapproche.common.web.AbstractController;
 import static com.qualiapproche.common.utils.ApiUrls.*;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.service.impl.FicheClotureNonConformiteService;
+import com.qualiapproche.amelioration.service.impl.NotificationsDeLUtilisateurService;
 import com.qualiapproche.amelioration.utils.EnTeteFichier;
 import com.qualiapproche.common.dto.PlanActionDto;
 import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.common.response.ApiResponse;
 
 @RestController
 @RequestMapping(NON_CONFORMITE_ROOT_URL)
@@ -64,6 +67,7 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     private final NonConformiteService nonConformiteService;
     private final WorkflowClient workflowClient;
     private final FicheClotureNonConformiteService ficheClotureService;
+    private final NotificationsDeLUtilisateurService notificationsService;
 
     /**
      * La recherche est héritée : {@code POST /search} vient de {@link AbstractController},
@@ -505,6 +509,30 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     @GetMapping("/user/{userId}/archived")
     public ResponseEntity<Page<NonConformiteDto>> getArchivedNCByUser(@PathVariable String userId, @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(nonConformiteService.findArchivedByUser(userId, pageable));
+    }
+
+    /**
+     * Ce qui attend l'appelant, calculé à l'instant où il le demande.
+     *
+     * <p>Sans paramètre : la question ne se pose que pour soi. L'ancien comptage voisin prend un
+     * identifiant dans son chemin, si bien que chacun peut lire la charge d'un autre ; ici c'est le
+     * jeton qui désigne le destinataire, et lui seul.</p>
+     *
+     * <p>Enveloppé explicitement : {@code GlobalResponseHandler} pagine d'office toute réponse de
+     * type {@code List}, à dix éléments, et la cloche aurait reçu une enveloppe paginée au lieu de
+     * son tableau.</p>
+     *
+     * <p>Sans habilitation propre, au-delà de l'authentification, et pour deux raisons. La ligne ne
+     * révèle que ce que l'appelant a lui-même à faire : le moteur a déjà tranché ce qu'il peut
+     * décider, et ses brouillons sont les siens. Et la passerelle assemble cette liste avec celles
+     * des autres modules par un appel direct, qui ne porte pas l'en-tête de permissions — exiger
+     * une permission ici aurait rendu la cloche vide pour tout le monde, en 403 silencieux.</p>
+     */
+    @Operation(summary = "Ce que l'utilisateur connecté a en attente",
+            description = "Lignes de la cloche, recalculées à chaque appel et jamais conservées")
+    @GetMapping("/notifications")
+    public ResponseEntity<ApiResponse<List<NotificationDto>>> notifications() {
+        return ResponseEntity.ok(ApiResponse.success(notificationsService.pourLAppelant()));
     }
 
     @Operation(summary = "Nombres de NC pour les pastilles", description = "Renvoie les comptes (brouillons, imputées, archivées) pour l'utilisateur")

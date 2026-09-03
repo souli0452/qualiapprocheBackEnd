@@ -24,7 +24,7 @@ public class PrioriteDocumentServiceImpl implements PrioriteDocumentService {
     private final PrioriteDocumentRepository repository;
 
     /** Rangé par ordre croissant, le libellé départageant les rangs identiques ou absents. */
-    private static final Sort ORDRE = Sort.by(Sort.Order.asc("ordre").nullsLast(), Sort.Order.asc("libelle"));
+    private static final Sort ORDRE = Sort.by(Sort.Order.asc("score").nullsLast(), Sort.Order.asc("libelle"));
 
     @Override
     public PrioriteDocumentDto create(PrioriteDocumentDto dto) {

@@ -1,5 +1,7 @@
 package com.qualiapproche.common.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +27,9 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Ce sur quoi porte une recherche : un texte libre et des critères nommés. "
+        + "Transmis dans le corps de la requête, une sélection multiple sur plusieurs colonnes "
+        + "dépassant vite ce qu'une chaîne de requête sait porter lisiblement.")
 public class CriteriaDto {
 
     /**
@@ -33,9 +38,15 @@ public class CriteriaDto {
      * <p>Recherche par <b>préfixe</b> : c'est la seule forme qu'un index sait servir, et la seule
      * qui reste tenable quand la table grandit.</p>
      */
+    @Schema(description = "Texte cherché, confronté aux seuls champs que la ressource déclare "
+            + "consultables. La recherche se fait par préfixe : c'est la seule forme qu'un index "
+            + "sait servir, et la seule qui tienne quand la table grandit.",
+            example = "NC-2026")
     private String search;
 
     /** Critères nommés, cumulés entre eux par un ET. Vide : la recherche ne restreint rien. */
     @Builder.Default
+    @Schema(description = "Critères nommés, cumulés entre eux par un ET. Vide, la recherche ne "
+            + "restreint rien.")
     private List<FilterExtra> filters = new ArrayList<>();
 }

@@ -1,12 +1,17 @@
 package com.qualiapproche.support.dto;
 
 import com.qualiapproche.support.model.DocumentQms;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Dimension selon laquelle regrouper les documents pour la statistique générique
  * ({@code GET /documents/stats/by/{dimension}}). Ajouter un type de statistique = ajouter
  * une constante ici, sans toucher au service ni au contrôleur.
  */
+@Schema(description = "Clé de regroupement de la statistique générique. Chaque constante dit "
+        + "quelle valeur du document sert de clé au comptage ; les documents dont cette valeur est "
+        + "absente ne sont comptés nulle part. STATUT et CURRENT_ETAPE se recouvrent en partie : "
+        + "le premier ne nomme l'étape que si le document est encore en circuit.")
 public enum DocumentStatDimension {
 
     DOCUMENT_TYPE {
