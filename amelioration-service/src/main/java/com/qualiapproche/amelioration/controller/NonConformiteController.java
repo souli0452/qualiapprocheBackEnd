@@ -13,6 +13,8 @@ import com.qualiapproche.common.dto.NonConformiteDto;
 import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.dto.NcCountsDto;
 import com.qualiapproche.common.dto.NcDashboardDto;
+import com.qualiapproche.common.dto.NcNotificationsResumeDto;
+import com.qualiapproche.common.utils.LotsDuMoteur;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import io.swagger.v3.oas.annotations.Operation;
@@ -250,14 +252,6 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     }
 
     /**
-     * Taille maximale d'un lot demandé au moteur, alignée sur ce qu'il accepte.
-     *
-     * <p>Au-delà, il refuse la demande entière. Une page plus grande que ce seuil aurait donc perdu
-     * toutes ses actions d'un coup, silencieusement : mieux vaut la découper.</p>
-     */
-    private static final int TAILLE_LOT_ETATS = 200;
-
-    /**
      * Joint à chaque ligne l'état de son circuit.
      *
      * <p>Sans lui, la fiche ouverte depuis une liste n'a pas d'{@code workflowState} et n'affiche
@@ -292,8 +286,8 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
         }
 
         Map<UUID, WorkflowStateDto> etats = new java.util.HashMap<>();
-        for (int debut = 0; debut < identifiants.size(); debut += TAILLE_LOT_ETATS) {
-            List<UUID> lot = identifiants.subList(debut, Math.min(debut + TAILLE_LOT_ETATS, identifiants.size()));
+        for (int debut = 0; debut < identifiants.size(); debut += LotsDuMoteur.TAILLE_MAX) {
+            List<UUID> lot = identifiants.subList(debut, Math.min(debut + LotsDuMoteur.TAILLE_MAX, identifiants.size()));
             try {
                 Map<UUID, WorkflowStateDto> reponse =
                         workflowClient.getWorkflowStates(lot);
@@ -533,6 +527,21 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     @GetMapping("/notifications")
     public ResponseEntity<ApiResponse<List<NotificationDto>>> notifications() {
         return ResponseEntity.ok(ApiResponse.success(notificationsService.pourLAppelant()));
+    }
+
+    /**
+     * Les mêmes attentes en nombres, pour les pastilles de l'accueil.
+     *
+     * <p>L'écran recomposait ces totaux en relisant les lignes de la cloche une à une, et comptait
+     * deux fois un plan à la fois ouvert à sa décision et pressé par son échéance. Sans
+     * habilitation propre, pour les mêmes raisons que la cloche : rien n'y est révélé que le
+     * travail de l'appelant lui-même.</p>
+     */
+    @Operation(summary = "Ce que l'utilisateur connecté a en attente, en nombres",
+            description = "Trois files qui ne se recoupent pas, et leur somme")
+    @GetMapping("/notifications/resume")
+    public ResponseEntity<NcNotificationsResumeDto> resumeDesNotifications() {
+        return ResponseEntity.ok(notificationsService.resume());
     }
 
     @Operation(summary = "Nombres de NC pour les pastilles", description = "Renvoie les comptes (brouillons, imputées, archivées) pour l'utilisateur")

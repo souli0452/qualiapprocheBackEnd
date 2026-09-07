@@ -14,13 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
-import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
+import com.qualiapproche.common.dto.NcNotificationsResumeDto;
 import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.enumeration.GraviteNotification;
 import com.qualiapproche.common.enumeration.SourceNotification;
-import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.utils.ClesReglages;
 import com.qualiapproche.common.utils.StatutEnum;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
@@ -58,10 +58,13 @@ public class NotificationsDeLUtilisateurService {
     public static final String CODE_ECHEANCE_DEPASSEE = "PLAN_ACTION_ECHEANCE_DEPASSEE";
     public static final String CODE_ECHEANCE_PROCHE = "PLAN_ACTION_ECHEANCE_PROCHE";
 
+    /** Familles de ressources telles que le moteur les nomme. */
+    private static final String FAMILLE_NC = "NON_CONFORMITE";
+    private static final String FAMILLE_PLAN = "PLAN_ACTION";
+
     /** Nombre de jours avant l'échéance à partir duquel le plan est annoncé, à défaut de réglage. */
     private static final long SEUIL_DE_RAPPEL_PAR_DEFAUT = 2;
 
-    private final NonConformiteRepository nonConformiteRepository;
     private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
     private final ReglagesOrganisation reglagesOrganisation;
@@ -74,15 +77,53 @@ public class NotificationsDeLUtilisateurService {
      */
     @Transactional(readOnly = true)
     public List<NotificationDto> pourLAppelant() {
-        String utilisateur = SecurityUtils.getCurrentUserId();
         List<NotificationDto> lignes = new ArrayList<>();
 
-        lignes.addAll(nonConformitesADecider());
-        lignes.addAll(plansActionADecider());
+        lignes.addAll(nonConformitesADecider(ressources(FAMILLE_NC)));
+        lignes.addAll(plansActionADecider(ressources(FAMILLE_PLAN).size()));
         lignes.addAll(echeancesDeMesPlans());
-        brouillonsAFinaliser(utilisateur).ifPresent(lignes::add);
+        brouillonsAFinaliser(mesDossiersOuverts()).ifPresent(lignes::add);
 
         return lignes;
+    }
+
+    /**
+     * Les mêmes attentes, en nombres : ce que l'accueil pose sur ses pastilles.
+     *
+     * <p>Pendant chiffré de {@link #pourLAppelant()}, adossé aux mêmes sources — l'écran
+     * recomposait les nombres en relisant les lignes une à une, et comptait deux fois un plan à la
+     * fois ouvert à sa décision et pressé par son échéance.</p>
+     *
+     * <p>Les trois files ne se recoupent pas, et le total en est la somme exacte : ce que
+     * l'appelant doit décider, ce qu'il n'a jamais soumis, ce qu'il a soumis et qui attend
+     * ailleurs. Les échéances n'y forment pas une file : les plans qu'elles pressent sont déjà
+     * comptés parmi ce qu'il a à traiter, et leur urgence se lit sur la cloche, qui la dit.</p>
+     */
+    @Transactional(readOnly = true)
+    public NcNotificationsResumeDto resume() {
+        List<UUID> ncADecider = ressources(FAMILLE_NC);
+        long aTraiter = (long) ncADecider.size() + ressources(FAMILLE_PLAN).size();
+
+        Map<UUID, AvancementCircuit> miens = mesDossiersOuverts();
+        long brouillons = miens.values().stream()
+                .filter(avancement -> avancement == AvancementCircuit.NON_ENGAGE)
+                .count();
+
+        // Un dossier que l'appelant a soumis et sur lequel il a lui-même une décision ouverte
+        // n'attend personne : il l'attend, lui. Le compter des deux côtés aurait gonflé la
+        // pastille d'un dossier qui ne l'est qu'une fois.
+        java.util.Set<UUID> aDecider = new java.util.HashSet<>(ncADecider);
+        long enAttenteValidation = miens.entrySet().stream()
+                .filter(dossier -> dossier.getValue() == AvancementCircuit.EN_COURS)
+                .filter(dossier -> !aDecider.contains(dossier.getKey()))
+                .count();
+
+        return NcNotificationsResumeDto.builder()
+                .totalAlertes(brouillons + aTraiter + enAttenteValidation)
+                .brouillons(brouillons)
+                .aTraiter(aTraiter)
+                .enAttenteValidation(enAttenteValidation)
+                .build();
     }
 
     /**
@@ -92,8 +133,7 @@ public class NotificationsDeLUtilisateurService {
      * intitulés du circuit sont paramétrables, et toute liste figée côté module aurait cessé d'être
      * exacte à la première étape ajoutée.</p>
      */
-    private List<NotificationDto> nonConformitesADecider() {
-        List<UUID> aDecider = ressources("NON_CONFORMITE");
+    private List<NotificationDto> nonConformitesADecider(List<UUID> aDecider) {
         if (aDecider.isEmpty()) {
             return List.of();
         }
@@ -129,8 +169,7 @@ public class NotificationsDeLUtilisateurService {
     }
 
     /** Les plans d'action dont le circuit ouvre une décision à l'appelant. */
-    private List<NotificationDto> plansActionADecider() {
-        long nombre = ressources("PLAN_ACTION").size();
+    private List<NotificationDto> plansActionADecider(long nombre) {
         if (nombre == 0) {
             return List.of();
         }
@@ -152,11 +191,10 @@ public class NotificationsDeLUtilisateurService {
      * <p>Rien ne les réclame et personne ne les attend : elles informent, là où une décision
      * ouverte retient le dossier.</p>
      */
-    private Optional<NotificationDto> brouillonsAFinaliser(String utilisateur) {
-        if (!renseigne(utilisateur)) {
-            return Optional.empty();
-        }
-        long nombre = nonConformiteRepository.countByCreatedByIdAndStatus(utilisateur, Status.DRAFT);
+    private Optional<NotificationDto> brouillonsAFinaliser(Map<UUID, AvancementCircuit> miens) {
+        long nombre = miens.values().stream()
+                .filter(avancement -> avancement == AvancementCircuit.NON_ENGAGE)
+                .count();
         if (nombre == 0) {
             return Optional.empty();
         }
@@ -245,6 +283,24 @@ public class NotificationsDeLUtilisateurService {
                     .build());
         }
         return lignes;
+    }
+
+    /**
+     * Les dossiers que l'appelant a ouverts et qui ne sont pas arrivés, avec leur avancement.
+     *
+     * <p>C'est le moteur qui distingue le brouillon du dossier soumis : le premier n'a franchi
+     * aucune étape. Le déduire d'un statut {@code DRAFT} inscrit sur la fiche revenait à tenir ici
+     * une seconde règle, qui se taisait dès qu'un dossier soumis était renvoyé à son auteur.</p>
+     */
+    private Map<UUID, AvancementCircuit> mesDossiersOuverts() {
+        try {
+            Map<UUID, AvancementCircuit> miens = workflowClient.mesDossiersOuverts(FAMILLE_NC);
+            return miens == null ? Map.of() : miens;
+        } catch (Exception e) {
+            log.warn("Dossiers ouverts par l'appelant indisponibles, le moteur est injoignable : {}",
+                    e.getMessage());
+            return Map.of();
+        }
     }
 
     /** Interroge le moteur, et rend une liste vide plutôt qu'une erreur s'il est hors d'atteinte. */

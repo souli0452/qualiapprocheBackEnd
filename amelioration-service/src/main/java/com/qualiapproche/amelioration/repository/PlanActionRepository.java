@@ -23,6 +23,15 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
     List<PlanAction> findPlanActionsByStatus(StatutEnum statut);
     List<PlanAction> findPlanActionsByNonConformeId(UUID nonConformeId);
 
+    /**
+     * Actions de plusieurs dossiers en une requête.
+     *
+     * <p>Ce que réclame un tableau de bord : il pose sur les actions deux questions — l'échéance
+     * est-elle tenue, l'action est-elle soldée — pour tout un périmètre. Les demander dossier par
+     * dossier aurait coûté une requête par non-conformité comptée.</p>
+     */
+    List<PlanAction> findByNonConformeIdIn(java.util.Collection<UUID> nonConformeIds);
+
     /** Actions désignées par le moteur comme ouvertes à une décision de l'appelant. */
     Page<PlanAction> findByIdIn(java.util.Collection<UUID> ids, Pageable pageable);
     @Query(value = "SELECT " +

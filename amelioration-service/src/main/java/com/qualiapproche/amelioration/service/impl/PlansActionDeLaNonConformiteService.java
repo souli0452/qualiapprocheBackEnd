@@ -131,7 +131,7 @@ public class PlansActionDeLaNonConformiteService {
         List<PlanAction> plans = planActionRepository.findPlanActionsByNonConformeId(nonConformiteId);
 
         boolean toutesAffectees = plans.stream().allMatch(plan -> plan.getResponsableId() != null);
-        boolean toutesSoldees = plans.stream().allMatch(plan -> plan.getStatus() == StatutEnum.TRAITER);
+        boolean toutesSoldees = plans.stream().allMatch(PlansActionDeLaNonConformiteService::estSoldee);
         // Un dossier sans aucune action ne peut pas non plus être soumis : le traitement consiste
         // précisément à proposer un plan, et l'étape serait franchie sans que rien n'ait été proposé.
         Circuit circuit = plans.isEmpty() ? null : circuitDu(nonConformiteId);
@@ -141,6 +141,22 @@ public class PlansActionDeLaNonConformiteService {
         declarer(nonConformiteId, FAIT_PLANS_ACTION_AFFECTES, toutesAffectees);
         declarer(nonConformiteId, FAIT_PLANS_ACTION_SOLDES, toutesSoldees);
         declarer(nonConformiteId, FAIT_PLANS_ACTION_COMPLETS, toutesCompletes);
+    }
+
+    /**
+     * Une action est-elle soldée ?
+     *
+     * <p>Elle ne l'est qu'au terme de son propre circuit : réalisée, sa réalisation vérifiée, son
+     * efficacité reconnue. Les états intermédiaires — déclarée faite par son responsable, en
+     * attente du constat du pilote — ne comptent pas : les tenir pour soldés reviendrait à clore
+     * une non-conformité sans qu'aucun effet n'ait été constaté.</p>
+     *
+     * <p>Définition unique, exposée parce que les tableaux de bord la posent aussi — pour le
+     * retard d'échéance et le respect des délais. Deux écritures de la même règle auraient fini
+     * par ne plus dire la même chose, et le chiffre affiché aurait contredit la clôture offerte.</p>
+     */
+    public static boolean estSoldee(PlanAction plan) {
+        return plan != null && plan.getStatus() == StatutEnum.TRAITER;
     }
 
     /**

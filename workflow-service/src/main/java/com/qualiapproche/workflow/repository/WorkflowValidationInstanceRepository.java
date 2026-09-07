@@ -38,4 +38,14 @@ public interface WorkflowValidationInstanceRepository extends JpaRepository<Work
      * le type de ressource borne la recherche au module qui la demande.</p>
      */
     List<WorkflowValidationInstance> findByResourceTypeAndStatus(String resourceType, ValidationStatus status);
+
+    /**
+     * Circuits non terminés d'une famille, ouverts par une personne donnée.
+     *
+     * <p>Base du « ce que j'ai déposé et qui n'est pas arrivé ». Bornée aux circuits en cours :
+     * ce qu'on veut savoir, ce sont les dossiers qui attendent encore quelque chose, et la liste
+     * reste ainsi petite quel que soit l'ancienneté du compte.</p>
+     */
+    List<WorkflowValidationInstance> findByResourceTypeAndCreateurIdAndStatus(
+            String resourceType, String createurId, ValidationStatus status);
 }

@@ -23,18 +23,18 @@ public enum DocumentStatDimension {
     STATUT {
         public String extract(DocumentQms d) {
             if (d.isArchived()) {
-                return "ARCHIVE";
+                return STATUT_ARCHIVE;
             }
             if (d.isObsolete()) {
-                return "OBSOLETE";
+                return STATUT_OBSOLETE;
             }
             if (d.isEsTraiter()) {
-                return "VALIDE";
+                return STATUT_EN_VIGUEUR;
             }
             if (d.getCurrentEtape() != null && !d.getCurrentEtape().isBlank()) {
                 return d.getCurrentEtape();
             }
-            return "BROUILLON";
+            return STATUT_BROUILLON;
         }
     },
     DOMAINE {
@@ -91,4 +91,40 @@ public enum DocumentStatDimension {
     };
 
     public abstract String extract(DocumentQms document);
+
+    /**
+     * Les quatre statuts que {@link #STATUT} nomme lui-même. Toute autre valeur qu'il rend est le
+     * code d'une étape, et signifie donc que le document est en circuit.
+     *
+     * <p>Ils étaient écrits en clair dans la dimension et recopiés partout où l'on voulait compter
+     * les documents en vigueur : deux orthographes suffisaient à faire diverger deux chiffres tirés
+     * de la même règle.</p>
+     */
+    public static final String STATUT_ARCHIVE = "ARCHIVE";
+    public static final String STATUT_OBSOLETE = "OBSOLETE";
+    /** Validé, donc officiellement applicable. */
+    public static final String STATUT_EN_VIGUEUR = "VALIDE";
+    /** Déposé, jamais remis au circuit. */
+    public static final String STATUT_BROUILLON = "BROUILLON";
+
+    /**
+     * Le document est-il en cours de rédaction, de vérification ou d'approbation ?
+     *
+     * <p>Se lit à l'envers : est en circuit tout document dont le statut affiché n'est aucun des
+     * quatre que la dimension nomme — c'est alors le code de son étape courante. Énumérer les
+     * étapes aurait supposé de les connaître, or elles sont paramétrables et un circuit peut en
+     * gagner une sans que rien ici ne l'apprenne.</p>
+     */
+    public static boolean estEnCircuit(DocumentQms document) {
+        String statut = STATUT.extract(document);
+        return !STATUT_ARCHIVE.equals(statut)
+                && !STATUT_OBSOLETE.equals(statut)
+                && !STATUT_EN_VIGUEUR.equals(statut)
+                && !STATUT_BROUILLON.equals(statut);
+    }
+
+    /** Le document est-il officiellement applicable ? */
+    public static boolean estEnVigueur(DocumentQms document) {
+        return STATUT_EN_VIGUEUR.equals(STATUT.extract(document));
+    }
 }

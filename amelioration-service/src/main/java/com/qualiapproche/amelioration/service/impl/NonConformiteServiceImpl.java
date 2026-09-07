@@ -27,6 +27,7 @@ import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import com.qualiapproche.amelioration.entities.NonConformite;
+import com.qualiapproche.amelioration.entities.PlanAction;
 import com.qualiapproche.amelioration.entities.mappers.NonConformiteMapper;
 import com.qualiapproche.amelioration.entities.mappers.PlanActionMapper;
 import com.qualiapproche.amelioration.repository.ActionRepository;
@@ -44,6 +45,8 @@ import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.common.base.Participants;
 import com.qualiapproche.common.service.AbstractService;
+import com.qualiapproche.common.enumeration.AvancementCircuit;
+import com.qualiapproche.common.utils.LotsDuMoteur;
 import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
 import jakarta.persistence.EntityNotFoundException;
@@ -938,6 +941,18 @@ public class NonConformiteServiceImpl
         return buildDashboardDto(all);
     }
 
+    /**
+     * Les chiffres d'un périmètre de dossiers.
+     *
+     * <p>L'avancement — en cours, clôturés — est demandé au moteur, dossier par dossier mais en
+     * lots. Le déduire de {@code Etat.CLOTURE} ou de {@code Status.DRAFT} revenait à tenir ici une
+     * seconde table de règles : elle aurait cessé d'être exacte à la première étape ajoutée au
+     * circuit, et n'aurait rien su dire d'un second circuit servant la même famille de dossiers.
+     * C'est la même raison qui a fait passer les listes « à traiter » par le moteur.</p>
+     *
+     * <p>Le respect des délais, lui, se lit sur les actions correctives : c'est leur échéance qui
+     * est tenue ou non, la non-conformité n'en porte aucune.</p>
+     */
     private NcDashboardDto buildDashboardDto(List<NonConformite> ncs) {
         Map<Status, Long> statsByStatus = ncs.stream()
                 .filter(nc -> nc.getStatus() != null)
@@ -950,11 +965,123 @@ public class NonConformiteServiceImpl
                         Collectors.groupingBy(NonConformite::getNiveauNonConformiteLibelle, Collectors.counting())
                 ));
 
+        List<UUID> dossiers = ncs.stream()
+                .map(NonConformite::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<UUID, AvancementCircuit> avancements = avancementDesDossiers(dossiers);
+        long enCours = avancements.values().stream().filter(a -> a == AvancementCircuit.EN_COURS).count();
+        long cloturees = avancements.values().stream().filter(a -> a == AvancementCircuit.TERMINE).count();
+
+        RespectDesEcheances echeances = respectDesEcheances(dossiers);
+
+        long total = ncs.size();
+        // Le moteur muet sur une partie du périmètre laisse les comptes incomplets. Le taux, lui,
+        // est rendu nul plutôt que faux : c'est le chiffre qui se lit comme un jugement, et
+        // l'annoncer sur un dénominateur amputé aurait affirmé une contre-performance imaginaire.
+        boolean avancementComplet = avancements.size() == dossiers.size();
+
         return NcDashboardDto.builder()
-                .totalNC(ncs.size())
+                .totalNC(total)
+                .total(total)
+                .enCours(enCours)
+                .cloturees(cloturees)
+                .enRetard(echeances.dossiersEnRetard())
+                .tauxSla(echeances.tauxSla())
+                .tauxResolution(avancementComplet ? pourcentage(cloturees, total) : null)
                 .statsByStatus(statsByStatus)
                 .statsByStatusAndGravity(statsByStatusAndGravity)
                 .build();
+    }
+
+    /**
+     * Où en est chacun des dossiers du périmètre, demandé au moteur par lots.
+     *
+     * <p>Le point d'entrée en lot refuse au-delà d'un certain nombre, et un tableau de bord porte
+     * volontiers sur toute la table : le découpage est donc obligatoire. Un lot que le moteur ne
+     * rend pas est omis plutôt que fatal — le reste du tableau, qui ne dépend pas de lui, vaut
+     * mieux qu'un écran en erreur — et l'appelant sait alors que le compte est incomplet parce
+     * qu'il manque des dossiers à l'appel.</p>
+     */
+    private Map<UUID, AvancementCircuit> avancementDesDossiers(List<UUID> dossiers) {
+        Map<UUID, AvancementCircuit> avancements = new java.util.HashMap<>();
+        for (int debut = 0; debut < dossiers.size(); debut += LotsDuMoteur.TAILLE_MAX) {
+            List<UUID> lot = dossiers.subList(debut, Math.min(debut + LotsDuMoteur.TAILLE_MAX, dossiers.size()));
+            try {
+                Map<UUID, AvancementCircuit> reponse = workflowClient.avancementDesRessources(lot);
+                if (reponse != null) {
+                    avancements.putAll(reponse);
+                }
+            } catch (Exception e) {
+                log.warn("Avancement indisponible pour {} dossier(s) du tableau de bord : {}",
+                        lot.size(), e.getMessage());
+            }
+        }
+        return avancements;
+    }
+
+    /**
+     * Ce que les actions correctives du périmètre disent du respect des délais.
+     *
+     * <p>Deux lectures distinctes sur la même liste, et il ne faut pas les confondre :</p>
+     * <ul>
+     *   <li><b>le dossier en retard</b> porte au moins une action dont l'échéance est passée et qui
+     *       n'est pas soldée — c'est un constat sur <i>maintenant</i>, il appelle une relance ;</li>
+     *   <li><b>l'action hors délai</b> a été réalisée après son échéance, ou ne l'est toujours pas
+     *       alors que l'échéance est passée — c'est un constat sur le <i>parcours</i>, il alimente
+     *       le taux. Une action réalisée en retard puis soldée reste hors délai : l'oublier ferait
+     *       remonter le taux à mesure qu'on solde les dossiers en retard.</li>
+     * </ul>
+     *
+     * <p>Une action sans échéance saisie est écartée du taux plutôt que comptée dans les temps :
+     * rien ne permet de dire qu'elle l'est, et l'y verser aurait récompensé l'absence de saisie.</p>
+     */
+    private RespectDesEcheances respectDesEcheances(List<UUID> dossiers) {
+        if (dossiers.isEmpty()) {
+            return new RespectDesEcheances(0, null);
+        }
+
+        LocalDate aujourdHui = LocalDate.now();
+        Set<UUID> enRetard = new java.util.HashSet<>();
+        long avecEcheance = 0;
+        long horsDelai = 0;
+
+        for (PlanAction plan : planActionRepository.findByNonConformeIdIn(dossiers)) {
+            LocalDate echeance = plan.getDateEcheance();
+            if (echeance == null) {
+                continue;
+            }
+            avecEcheance++;
+
+            boolean echue = aujourdHui.isAfter(echeance);
+            if (echue && !PlansActionDeLaNonConformiteService.estSoldee(plan)
+                    && plan.getNonConformeId() != null) {
+                enRetard.add(plan.getNonConformeId());
+            }
+
+            // La date de traitement est posée à la réalisation, non au solde : c'est bien le
+            // moment où l'action a été menée que l'on confronte à son échéance.
+            LocalDate realisation = plan.getDateTraitement();
+            if (realisation != null ? realisation.isAfter(echeance) : echue) {
+                horsDelai++;
+            }
+        }
+
+        return new RespectDesEcheances(enRetard.size(),
+                avecEcheance == 0 ? null : pourcentage(avecEcheance - horsDelai, avecEcheance));
+    }
+
+    /** Ce que les échéances des actions correctives valent pour un périmètre de dossiers. */
+    private record RespectDesEcheances(long dossiersEnRetard, Double tauxSla) {
+    }
+
+    /** Un pourcentage arrondi au dixième, ou {@code null} quand il n'y a rien à rapporter. */
+    private static Double pourcentage(long part, long tout) {
+        if (tout <= 0) {
+            return null;
+        }
+        return Math.round(part * 1000.0 / tout) / 10.0;
     }
 
     @Override

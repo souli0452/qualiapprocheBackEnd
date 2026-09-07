@@ -26,15 +26,15 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
-import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.amelioration.service.impl.NotificationsDeLUtilisateurService;
+import com.qualiapproche.common.dto.NcNotificationsResumeDto;
 import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.dto.WorkflowStateDto;
+import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.enumeration.GraviteNotification;
 import com.qualiapproche.common.enumeration.SourceNotification;
-import com.qualiapproche.common.enumeration.Status;
 import com.qualiapproche.common.utils.StatutEnum;
 
 /**
@@ -51,7 +51,6 @@ class NotificationsDeLUtilisateurTest {
     private static final String MOI = "agent-1";
     private static final String MON_COURRIEL = "agent-1@exemple.bf";
 
-    @Mock private NonConformiteRepository nonConformiteRepository;
     @Mock private PlanActionRepository planActionRepository;
     @Mock private WorkflowClient workflowClient;
     @Mock private ReglagesOrganisation reglagesOrganisation;
@@ -65,6 +64,7 @@ class NotificationsDeLUtilisateurTest {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jeton));
         lenient().when(workflowClient.ressourcesADecider("NON_CONFORMITE")).thenReturn(List.of());
         lenient().when(workflowClient.ressourcesADecider("PLAN_ACTION")).thenReturn(List.of());
+        lenient().when(workflowClient.mesDossiersOuverts("NON_CONFORMITE")).thenReturn(Map.of());
         lenient().when(planActionRepository
                 .findPlanActionsByResponsableEmailAndStatus(MON_COURRIEL, StatutEnum.NON_TRAITER))
                 .thenReturn(List.of());
@@ -133,16 +133,25 @@ class NotificationsDeLUtilisateurTest {
                 .satisfies(l -> assertThat(l.getNombre()).isEqualTo(1));
     }
 
+    /** Les dossiers que l'appelant a ouverts, tels que le moteur les rend. */
+    private void mesDossiers(AvancementCircuit... avancements) {
+        Map<UUID, AvancementCircuit> miens = new java.util.LinkedHashMap<>();
+        for (AvancementCircuit avancement : avancements) {
+            miens.put(UUID.randomUUID(), avancement);
+        }
+        lenient().when(workflowClient.mesDossiersOuverts("NON_CONFORMITE")).thenReturn(miens);
+    }
+
     @Test
-    @DisplayName("Le moteur injoignable retire ses lignes, sans faire échouer la cloche")
-    void moteurInjoignable_clocheDegradee() {
+    @DisplayName("Une source injoignable retire ses lignes, sans faire échouer la cloche")
+    void sourceInjoignable_clocheDegradee() {
         when(workflowClient.ressourcesADecider("NON_CONFORMITE"))
                 .thenThrow(new IllegalStateException("workflow-service injoignable"));
-        when(nonConformiteRepository.countByCreatedByIdAndStatus(MOI, Status.DRAFT)).thenReturn(2L);
+        mesDossiers(AvancementCircuit.NON_ENGAGE, AvancementCircuit.NON_ENGAGE);
 
         List<NotificationDto> lignes = service.pourLAppelant();
 
-        // Ce que le module sait par lui-même reste annoncé. Une cloche en erreur se lit comme une
+        // Ce que les autres sources savent reste annoncé. Une cloche en erreur se lit comme une
         // panne de l'application entière, pour une source secondaire indisponible.
         assertThat(lignes).singleElement()
                 .satisfies(l -> assertThat(l.getCode())
@@ -152,7 +161,7 @@ class NotificationsDeLUtilisateurTest {
     @Test
     @DisplayName("Les brouillons de l'appelant informent, ils ne réclament rien")
     void brouillons_informent() {
-        when(nonConformiteRepository.countByCreatedByIdAndStatus(MOI, Status.DRAFT)).thenReturn(1L);
+        mesDossiers(AvancementCircuit.NON_ENGAGE);
 
         List<NotificationDto> lignes = service.pourLAppelant();
 
@@ -164,11 +173,55 @@ class NotificationsDeLUtilisateurTest {
     }
 
     @Test
+    @DisplayName("Un dossier soumis n'est pas un brouillon, même s'il est resté chez son auteur")
+    void dossierSoumis_pasUnBrouillon() {
+        mesDossiers(AvancementCircuit.EN_COURS);
+
+        // C'est le moteur qui tranche : le brouillon n'a franchi aucune étape. Le déduire d'un
+        // statut inscrit sur la fiche comptait pour brouillon un dossier renvoyé à son auteur.
+        assertThat(service.pourLAppelant()).isEmpty();
+    }
+
+    @Test
     @DisplayName("Rien en attente : la cloche ne rend aucune ligne")
     void rienEnAttente_aucuneLigne() {
-        when(nonConformiteRepository.countByCreatedByIdAndStatus(MOI, Status.DRAFT)).thenReturn(0L);
-
         assertThat(service.pourLAppelant()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Le résumé range chaque dossier dans une file et une seule")
+    void resume_filesDisjointes() {
+        UUID mien = UUID.randomUUID();
+        UUID aMoiDeDecider = UUID.randomUUID();
+        lenient().when(workflowClient.mesDossiersOuverts("NON_CONFORMITE")).thenReturn(Map.of(
+                UUID.randomUUID(), AvancementCircuit.NON_ENGAGE,
+                mien, AvancementCircuit.EN_COURS,
+                aMoiDeDecider, AvancementCircuit.EN_COURS));
+        when(workflowClient.ressourcesADecider("NON_CONFORMITE")).thenReturn(List.of(aMoiDeDecider));
+        when(workflowClient.ressourcesADecider("PLAN_ACTION")).thenReturn(List.of(UUID.randomUUID()));
+
+        NcNotificationsResumeDto resume = service.resume();
+
+        assertThat(resume.getBrouillons()).isEqualTo(1);
+        // Une non-conformité et un plan d'action, tous deux ouverts à sa décision.
+        assertThat(resume.getATraiter()).isEqualTo(2);
+        // Le dossier qu'il a soumis et qu'il doit lui-même décider n'attend personne : il ne
+        // compte pas deux fois.
+        assertThat(resume.getEnAttenteValidation()).isEqualTo(1);
+        assertThat(resume.getTotalAlertes()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("Le résumé rend des zéros plutôt que rien quand tout est traité")
+    void resume_toutTraite() {
+        NcNotificationsResumeDto resume = service.resume();
+
+        // La cloche se tait dans ce cas ; la pastille, elle, doit afficher zéro. C'est pourquoi
+        // l'écran ne peut pas recomposer ces nombres à partir des lignes.
+        assertThat(resume.getTotalAlertes()).isZero();
+        assertThat(resume.getBrouillons()).isZero();
+        assertThat(resume.getATraiter()).isZero();
+        assertThat(resume.getEnAttenteValidation()).isZero();
     }
 
     @Test
@@ -259,7 +312,7 @@ class NotificationsDeLUtilisateurTest {
     @Test
     @DisplayName("Chaque ligne dit de quel module elle vient")
     void chaqueLigne_porteSaSource() {
-        when(nonConformiteRepository.countByCreatedByIdAndStatus(MOI, Status.DRAFT)).thenReturn(1L);
+        mesDossiers(AvancementCircuit.NON_ENGAGE);
         mesPlans(planEcheant(LocalDate.now().minusDays(1)));
 
         // La cloche est unique, ses sources ne le sont pas : sans ce repère, l'écran ne saurait pas

@@ -2,6 +2,7 @@ package com.qualiapproche.workflow.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
+import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import com.qualiapproche.workflow.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
@@ -167,6 +168,36 @@ public class WorkflowController {
     public ResponseEntity<java.util.Map<UUID, WorkflowStateDto>> getWorkflowStates(
             @RequestBody List<UUID> resourceIds) {
         return ResponseEntity.ok(workflowService.getWorkflowStatesForResources(resourceIds));
+    }
+
+    /**
+     * Où en est chacune des ressources citées — non engagée, en cours, terminée — et rien d'autre.
+     *
+     * <p>Destiné aux tableaux de bord, qui comptent des dossiers sans en afficher aucun : leur
+     * rendre l'état complet aurait fait payer, pour un simple total, le prix d'une page de fiches.
+     * Deux requêtes, quel que soit le nombre de dossiers.</p>
+     *
+     * <p>C'est ce qui permet à un module de compter ses dossiers clos ou jamais soumis sans nommer
+     * d'étape : la règle reste au circuit, elle ne se recopie pas ailleurs.</p>
+     */
+    @PostMapping("/instances/avancement")
+    public ResponseEntity<java.util.Map<UUID, AvancementCircuit>> avancementDesRessources(
+            @RequestBody List<UUID> resourceIds) {
+        return ResponseEntity.ok(workflowService.avancementDesRessources(resourceIds));
+    }
+
+    /**
+     * Les dossiers d'une famille que l'appelant a ouverts et qui ne sont pas arrivés, chacun avec
+     * son avancement.
+     *
+     * <p>Pendant de {@code /instances/mine}, qui dit ce qu'il a à décider : celui-ci dit ce qu'il
+     * a déposé et qui attend. Les deux ensemble donnent à l'accueil ses pastilles sans qu'aucun
+     * module ait à nommer un statut de brouillon.</p>
+     */
+    @GetMapping("/instances/miennes")
+    public ResponseEntity<java.util.Map<UUID, AvancementCircuit>> mesDossiersOuverts(
+            @RequestParam("resourceType") String resourceType) {
+        return ResponseEntity.ok(workflowService.mesDossiersOuverts(resourceType));
     }
 
     /**

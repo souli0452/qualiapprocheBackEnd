@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.qualiapproche.common.dto.DocumentNotificationsResumeDto;
 import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.enumeration.GraviteNotification;
 import com.qualiapproche.common.enumeration.SourceNotification;
@@ -63,6 +64,34 @@ public class NotificationsController {
         return ResponseEntity.ok(ApiResponse.success(lignes));
     }
 
+    /**
+     * Les mêmes attentes en nombres, pour les pastilles de l'accueil.
+     *
+     * <p>Les deux premières files sont celles de la cloche, lues à la même source : l'écran
+     * recomposait ces totaux en relisant les lignes une à une, et n'y trouvait rien lorsqu'une
+     * file était vide — la ligne n'existe alors pas, là où la pastille doit afficher zéro. La
+     * troisième n'a pas de ligne : un document périmé n'attend aucune décision de circuit, il
+     * appelle une révision que personne n'a encore demandée.</p>
+     *
+     * <p>Les trois ne se recoupent pas — ce que le circuit ouvre sur un document, ce qu'il ouvre
+     * sur une demande, et ce qui est périmé — et le total en est la somme exacte. Une lecture
+     * indisponible laisse sa file à zéro sans emporter les autres.</p>
+     */
+    @Operation(summary = "Notifications documentaires de l'utilisateur connecté, en nombres")
+    @GetMapping("/resume")
+    public ResponseEntity<DocumentNotificationsResumeDto> resume() {
+        long documents = compte("Documents à traiter", this::documentsATraiter);
+        long demandes = compte("Demandes à instruire", this::demandesAInstruire);
+        long retard = compte("Documents en retard de révision", this::documentsEnRetardDeRevision);
+
+        return ResponseEntity.ok(DocumentNotificationsResumeDto.builder()
+                .totalAlertes(documents + demandes + retard)
+                .documentsATraiter(documents)
+                .demandesAInstruire(demandes)
+                .enRetardRevision(retard)
+                .build());
+    }
+
     private long documentsATraiter() {
         return documentService.aTraiterParLAppelant().size();
     }
@@ -71,20 +100,28 @@ public class NotificationsController {
         return demandeService.aTraiterParLAppelant().size();
     }
 
+    private long documentsEnRetardDeRevision() {
+        return documentService.compterEnRetardDeRevision();
+    }
+
+    /** Compte une source, et rend zéro plutôt qu'une erreur si elle est momentanément muette. */
+    private long compte(String titre, java.util.function.LongSupplier source) {
+        try {
+            return source.getAsLong();
+        } catch (Exception e) {
+            log.warn("Notifications documentaires : « {} » indisponible : {}", titre, e.getMessage());
+            return 0;
+        }
+    }
+
     /**
      * Compte une source et en fait une ligne, ou rien si elle est vide ou momentanément muette.
      *
      * @param nom le nom du dossier compté, au singulier, pour accorder la phrase
      */
     private java.util.Optional<NotificationDto> ligne(String code, String titre, String nom,
-                                                      java.util.function.LongSupplier compte) {
-        long nombre;
-        try {
-            nombre = compte.getAsLong();
-        } catch (Exception e) {
-            log.warn("Notifications documentaires : « {} » indisponible : {}", titre, e.getMessage());
-            return java.util.Optional.empty();
-        }
+                                                      java.util.function.LongSupplier source) {
+        long nombre = compte(titre, source);
         if (nombre == 0) {
             return java.util.Optional.empty();
         }

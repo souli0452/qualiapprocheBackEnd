@@ -3,6 +3,7 @@ package com.qualiapproche.amelioration.controller;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.qualiapproche.common.dto.PlanActionDto;
+import com.qualiapproche.common.utils.LotsDuMoteur;
 import com.qualiapproche.common.utils.StatutEnum;
 
 import java.io.IOException;
@@ -89,12 +90,6 @@ public class PlanActionController {
     }
 
     /**
-     * Taille maximale d'un lot demandé au moteur, alignée sur ce qu'il accepte. Au-delà, il refuse
-     * la demande entière, et la page perdrait toutes ses actions d'un coup.
-     */
-    private static final int TAILLE_LOT_ETATS = 200;
-
-    /**
      * Joint à chaque plan l'état de son circuit.
      *
      * <p>Sans lui, les écrans de traitement n'affichent aucune action et retombent sur des boutons
@@ -112,8 +107,8 @@ public class PlanActionController {
         }
 
         Map<UUID, WorkflowStateDto> etats = new HashMap<>();
-        for (int debut = 0; debut < identifiants.size(); debut += TAILLE_LOT_ETATS) {
-            List<UUID> lot = identifiants.subList(debut, Math.min(debut + TAILLE_LOT_ETATS, identifiants.size()));
+        for (int debut = 0; debut < identifiants.size(); debut += LotsDuMoteur.TAILLE_MAX) {
+            List<UUID> lot = identifiants.subList(debut, Math.min(debut + LotsDuMoteur.TAILLE_MAX, identifiants.size()));
             try {
                 Map<UUID, WorkflowStateDto> reponse = workflowClient.getWorkflowStates(lot);
                 if (reponse != null) {

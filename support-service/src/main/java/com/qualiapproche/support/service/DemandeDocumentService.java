@@ -418,15 +418,43 @@ public class DemandeDocumentService {
 
         Map<String, Object> statistiques = new LinkedHashMap<>();
         statistiques.put("total", (long) demandes.size());
-        // « En attente » compte ce qui appelle un geste : instruction en cours, ou aboutissement
-        // décidé mais non exécuté. C'est le seul chiffre sur lequel on agit.
         statistiques.put("enAttente", demandes.stream()
-                .filter(d -> "EN_COURS".equals(d.getEtat()) || "ACCEPTEE".equals(d.getEtat()))
+                .filter(DemandeDocumentService::appelleUnGeste)
                 .count());
         statistiques.put("parEtat", parEtat);
         statistiques.put("parType", parType);
         statistiques.put("parMois", parMois);
         return statistiques;
+    }
+
+    /**
+     * Total des demandes à portée de l'appelant, et celles qui appellent encore un geste.
+     *
+     * <p>Les deux nombres que la vue d'ensemble documentaire réclamait par un quatrième appel,
+     * alors qu'elle en tirait déjà trois du même écran. Même portée que {@link #mesDemandes()} :
+     * un chiffre affiché doit correspondre exactement à ce que la liste permet d'ouvrir.</p>
+     */
+    public EffectifsDesDemandes effectifs() {
+        List<DemandeDocumentDto> demandes = mesDemandes();
+        return new EffectifsDesDemandes(demandes.size(),
+                demandes.stream().filter(DemandeDocumentService::appelleUnGeste).count());
+    }
+
+    /** Ce que pèsent les demandes visibles de l'appelant. */
+    public record EffectifsDesDemandes(long total, long enAttente) {
+    }
+
+    /**
+     * La demande attend-elle encore quelque chose ?
+     *
+     * <p>Instruction en cours, ou aboutissement décidé mais non exécuté — une modification acceptée
+     * attend son fichier remplaçant. C'est le seul chiffre des demandes sur lequel on agit, et il
+     * n'a qu'une définition : deux écritures auraient fini par afficher deux totaux sur le même
+     * écran.</p>
+     */
+    private static boolean appelleUnGeste(DemandeDocumentDto demande) {
+        return EtatDemande.EN_COURS.name().equals(demande.getEtat())
+                || EtatDemande.ACCEPTEE.name().equals(demande.getEtat());
     }
 
     private DemandeDocumentDto versDto(DemandeDocument demande) {

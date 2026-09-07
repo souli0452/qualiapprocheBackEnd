@@ -15,6 +15,7 @@ import com.qualiapproche.support.service.QmsAuditLogService;
 import com.qualiapproche.support.service.QmsDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
+import com.qualiapproche.support.service.DemandeDocumentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -66,6 +67,7 @@ import org.springframework.data.domain.Pageable;
 public class QmsDocumentController {
 
     private final QmsDocumentService documentService;
+    private final DemandeDocumentService demandeService;
     private final QmsAuditLogService auditLogService;
     private final DocumentMapper documentMapper;
     private final WorkflowClient workflowClient;
@@ -362,12 +364,34 @@ public class QmsDocumentController {
     /**
      * Statistiques globales des documents QMS :
      * - total, répartition par type, par statut, par domaine, par service
-     * - compteurs de documents en retard, confidentiels, externes
+     * - compteurs de documents en retard, confidentiels, externes, en vigueur, en circuit
+     * - effectifs des demandes d'évolution
+     *
+     * <p>La vue d'ensemble réclamait quatre appels : les documents, leur répartition par statut,
+     * leur répartition par type, puis les demandes. Les trois premiers se servaient déjà du même
+     * effectif et le relisaient trois fois ; le quatrième vient d'ailleurs, et n'a que deux nombres
+     * à rendre. Tout tient ici.</p>
+     *
+     * <p>C'est le contrôleur qui joint les demandes, et non le service documentaire : celui des
+     * demandes s'appuie déjà sur lui pour savoir qui peut voir le suivi d'un document, et l'appeler
+     * en retour aurait fermé le cycle.</p>
+     *
+     * <p>Un incident sur les demandes ne fait pas disparaître les chiffres des documents : ils
+     * viennent de deux lectures indépendantes, et l'écran vaut mieux amputé qu'en erreur.</p>
      */
     @GetMapping("/stats")
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DocumentStatsDto> getDocumentStats() {
-        return ResponseEntity.ok(documentService.getDocumentStats());
+        DocumentStatsDto stats = documentService.getDocumentStats();
+        try {
+            DemandeDocumentService.EffectifsDesDemandes demandes = demandeService.effectifs();
+            stats.setDemandesTotal(demandes.total());
+            stats.setDemandesEnAttente(demandes.enAttente());
+        } catch (Exception e) {
+            log.warn("Effectifs des demandes indisponibles pour le tableau documentaire : {}",
+                    e.getMessage());
+        }
+        return ResponseEntity.ok(stats);
     }
 
     /**

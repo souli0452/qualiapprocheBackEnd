@@ -68,4 +68,48 @@ public class DocumentStatsDto {
             + "rédiger.",
             example = "23")
     private long documentsExternes;
+
+    /**
+     * Documents officiellement applicables.
+     *
+     * <p>Même règle que la répartition par statut, et non un second calcul : le statut affiché a
+     * une seule définition, et deux lectures parallèles auraient fini par annoncer des chiffres
+     * qui se contredisent sur le même écran.</p>
+     */
+    @Schema(description = "Documents validés, donc officiellement applicables. Se lit comme la "
+            + "part « VALIDE » de la répartition par statut — c'est la même règle, pas un second "
+            + "calcul.",
+            example = "112")
+    private long documentsEnVigueur;
+
+    @Schema(description = "Documents en cours de rédaction, de vérification ou d'approbation : "
+            + "leur statut affiché est le nom d'une étape de circuit. Aucune étape n'est nommée "
+            + "ici — le circuit est paramétrable, et les énumérer aurait faussé le compte à la "
+            + "première étape ajoutée.",
+            example = "21")
+    private long documentsEnCircuit;
+
+    @Schema(description = "Part des documents à jour de leur revue périodique, en pourcentage : "
+            + "l'effectif moins ceux dont la revue est échue, rapporté à l'effectif. Nul quand il "
+            + "n'y a aucun document.",
+            example = "95.5")
+    private Double tauxConformite;
+
+    /**
+     * Demandes d'évolution, jointes ici pour éviter un second appel.
+     *
+     * <p>La vue d'ensemble en réclamait quatre : les documents, leur répartition par statut, leur
+     * répartition par type, puis les demandes. Les trois premières se servent depuis le même
+     * effectif ; la quatrième vient d'ailleurs, et n'a que ces deux nombres à rendre.</p>
+     */
+    @Schema(description = "Total des demandes d'évolution à portée de l'appelant. Même portée que "
+            + "les documents : deux personnes de structures différentes n'y lisent pas le même "
+            + "chiffre.",
+            example = "18")
+    private long demandesTotal;
+
+    @Schema(description = "Demandes qui appellent encore un geste : en cours d'instruction, ou "
+            + "acceptées et non exécutées. C'est le seul chiffre des demandes sur lequel on agit.",
+            example = "4")
+    private long demandesEnAttente;
 }

@@ -1574,6 +1574,27 @@ public class QmsDocumentService {
         });
     }
 
+    /**
+     * Documents à portée de l'appelant dont la revue périodique est échue.
+     *
+     * <p>Compté en base, et non en reconstruisant le tableau de bord : la pastille de l'accueil
+     * n'a besoin que de ce nombre, et le calcul complet regroupe l'effectif entier selon quatre
+     * dimensions dont elle n'affiche aucune.</p>
+     *
+     * <p>Le drapeau est celui que pose la surveillance, non un calcul fait à la lecture : le
+     * tableau de bord et la pastille se déduisent ainsi de la même source et ne peuvent pas se
+     * contredire.</p>
+     */
+    public long compterEnRetardDeRevision() {
+        return documentRepository.count((root, cq, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            addVisibilityPredicates(predicates, root, cq, cb);
+            predicates.add(cb.isFalse(root.get("archived")));
+            predicates.add(cb.isTrue(root.get("enRetardRevision")));
+            return cb.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+
     private Map<String, Long> groupBy(List<DocumentQms> documents, DocumentStatDimension dimension) {
         return documents.stream().collect(Collectors.groupingBy(
                 doc -> {
@@ -1634,16 +1655,25 @@ public class QmsDocumentService {
      */
     public DocumentStatsDto getDocumentStats() {
         List<DocumentQms> documents = visibleDocuments(false);
+        long total = documents.size();
+        long enRetardRevision = documents.stream().filter(DocumentQms::isEnRetardRevision).count();
 
         return DocumentStatsDto.builder()
-                .totalDocuments(documents.size())
+                .totalDocuments(total)
                 .countByDocumentType(groupBy(documents, DocumentStatDimension.DOCUMENT_TYPE))
                 .countByStatus(groupBy(documents, DocumentStatDimension.STATUT))
                 .countByDomaine(groupBy(documents, DocumentStatDimension.DOMAINE))
                 .countByService(groupBy(documents, DocumentStatDimension.SERVICE))
-                .documentsEnRetardRevision(documents.stream().filter(DocumentQms::isEnRetardRevision).count())
+                .documentsEnRetardRevision(enRetardRevision)
                 .documentsConfidentiels(documents.stream().filter(DocumentQms::isConfidentiel).count())
                 .documentsExternes(documents.stream().filter(DocumentQms::isDocumentExterne).count())
+                // Les deux se lisent sur la même règle que la répartition par statut : elle a une
+                // seule définition, et un second calcul aurait fini par la contredire sur l'écran
+                // qui affiche les deux côte à côte.
+                .documentsEnVigueur(documents.stream().filter(DocumentStatDimension::estEnVigueur).count())
+                .documentsEnCircuit(documents.stream().filter(DocumentStatDimension::estEnCircuit).count())
+                .tauxConformite(total == 0 ? null
+                        : Math.round((total - enRetardRevision) * 1000.0 / total) / 10.0)
                 .build();
     }
 

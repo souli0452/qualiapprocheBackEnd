@@ -81,11 +81,35 @@ public interface WorkflowClient {
     java.util.List<UUID> ressourcesADecider(@RequestParam("resourceType") String resourceType);
 
     /**
+     * Les dossiers que l'appelant a ouverts et qui ne sont pas arrivés, chacun avec son avancement.
+     *
+     * <p>Pendant de {@link #ressourcesADecider} : celui-là dit ce qu'il a à décider, celui-ci ce
+     * qu'il a déposé et qui attend ailleurs — ou ce qu'il n'a jamais soumis. C'est ainsi que le
+     * module compte les brouillons sans connaître de statut « brouillon ».</p>
+     */
+    @GetMapping("/api/v1/workflows/instances/miennes")
+    Map<UUID, com.qualiapproche.common.enumeration.AvancementCircuit> mesDossiersOuverts(
+            @RequestParam("resourceType") String resourceType);
+
+    /**
      * États de plusieurs ressources en un appel : une page de N dossiers déclencherait sinon N
      * requêtes.
      */
     @PostMapping("/api/v1/workflows/instances/states")
     Map<UUID, WorkflowStateDto> getWorkflowStates(@RequestBody java.util.List<UUID> resourceIds);
+
+    /**
+     * Où en est chaque dossier — non engagé, en cours, terminé — sans le reste de son état.
+     *
+     * <p>Ce qu'il faut à un tableau de bord, qui compte des dossiers sans en afficher aucun.
+     * C'est aussi ce qui lui évite de nommer une étape : compter les dossiers clos en cherchant
+     * l'état {@code CLOTURE}, ou les brouillons en cherchant le statut {@code DRAFT}, aurait
+     * recopié ici une partie du circuit — et le chiffre serait devenu faux à la première étape
+     * ajoutée.</p>
+     */
+    @PostMapping("/api/v1/workflows/instances/avancement")
+    Map<UUID, com.qualiapproche.common.enumeration.AvancementCircuit> avancementDesRessources(
+            @RequestBody java.util.List<UUID> resourceIds);
 
     /**
      * Déclare ou retire un fait établi sur un dossier.

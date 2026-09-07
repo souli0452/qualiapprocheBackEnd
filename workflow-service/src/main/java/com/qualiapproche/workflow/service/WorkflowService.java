@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.service;
 
+import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.port.input.IWorkflowEnginePort;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
@@ -1275,6 +1276,119 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                     instances.get(entree.getKey()), entree.getValue(), actions, etapes, saisies));
         }
         return etats;
+    }
+
+    /**
+     * Où en est chacune des ressources citées, en deux requêtes quel qu'en soit le nombre.
+     *
+     * <p>Pendant allégé de {@link #getWorkflowStatesForResources} pour les tableaux de bord : ils
+     * comptent des dossiers, ils n'en affichent aucun. Leur rendre l'état complet — actions
+     * offertes, champs de saisie, valeurs recueillies — aurait fait payer, pour un simple total,
+     * le prix d'une page de fiches.</p>
+     *
+     * <p>C'est ce qui dispense les modules métier de nommer une étape. Compter les dossiers clos
+     * en cherchant l'état {@code CLOTURE}, ou les brouillons en cherchant le statut {@code DRAFT},
+     * revenait à recopier dans chaque module une partie du circuit : le chiffre devenait faux dès
+     * qu'une étape était ajoutée, renommée, ou qu'un second circuit servait la même famille de
+     * dossiers.</p>
+     *
+     * <p>Une ressource sans instance est rendue {@link AvancementCircuit#NON_ENGAGE} plutôt
+     * qu'omise : le tableau de bord compte alors ce qu'il a demandé, et non ce que le moteur
+     * connaît.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, AvancementCircuit> avancementDesRessources(List<UUID> resourceIds) {
+        Map<UUID, AvancementCircuit> avancements = new java.util.LinkedHashMap<>();
+        if (resourceIds == null || resourceIds.isEmpty()) {
+            return avancements;
+        }
+        List<UUID> demandees = resourceIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (demandees.size() > TAILLE_LOT_MAX) {
+            throw new BusinessException(
+                    "Trop de ressources demandées en une fois (" + demandees.size() + "). "
+                            + "Le maximum est de " + TAILLE_LOT_MAX + ".",
+                    HttpStatus.BAD_REQUEST);
+        }
+
+        Map<UUID, WorkflowValidationInstance> instances = dernieresInstances(demandees);
+
+        // L'instance naît avec le dossier : son existence ne dit pas qu'il a été soumis. Seule une
+        // décision enregistrée le dit — et c'est exactement ce qu'est un brouillon, un dossier que
+        // son auteur n'a pas encore remis au circuit.
+        java.util.Set<UUID> engagees = new java.util.HashSet<>(
+                instances.values().isEmpty()
+                        ? List.of()
+                        : historyRepository.instancesAyantUneDecision(
+                                instances.values().stream()
+                                        .map(WorkflowValidationInstance::getId)
+                                        .filter(Objects::nonNull)
+                                        .toList()));
+
+        for (UUID ressource : demandees) {
+            WorkflowValidationInstance instance = instances.get(ressource);
+            if (instance == null) {
+                avancements.put(ressource, AvancementCircuit.NON_ENGAGE);
+            } else if (instance.getStatus() == ValidationStatus.TERMINE) {
+                avancements.put(ressource, AvancementCircuit.TERMINE);
+            } else {
+                avancements.put(ressource, engagees.contains(instance.getId())
+                        ? AvancementCircuit.EN_COURS
+                        : AvancementCircuit.NON_ENGAGE);
+            }
+        }
+        return avancements;
+    }
+
+    /**
+     * Les dossiers d'une famille que l'appelant a ouverts et dont le circuit n'est pas terminé,
+     * avec, pour chacun, s'il l'a soumis ou s'il le garde encore.
+     *
+     * <p>C'est ce que réclame l'accueil : distinguer ce qu'on n'a jamais remis au circuit de ce
+     * qu'on lui a remis et qui attend quelqu'un d'autre. Le module métier ne peut pas y répondre
+     * sans relire tous les dossiers de la personne ; le moteur, lui, tient le créateur sur
+     * l'instance et n'a qu'à interroger les circuits ouverts.</p>
+     *
+     * <p>Les circuits terminés sont exclus : ils n'attendent plus rien, et les inclure aurait fait
+     * grandir la réponse à mesure que le compte vieillit, pour un écran qui ne s'intéresse qu'à ce
+     * qui est en cours.</p>
+     *
+     * <p>Un circuit ouvert avant que le créateur ne soit inscrit sur l'instance n'y figure pas :
+     * rien ne le rattache à personne. Ce sont des dossiers anciens, et pour l'essentiel déjà
+     * clos.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, AvancementCircuit> mesDossiersOuverts(String resourceType) {
+        String appelant = SecurityUtils.getCurrentUserId();
+        if (appelant == null || appelant.isBlank()) {
+            return Map.of();
+        }
+        List<WorkflowValidationInstance> ouverts = validationInstanceRepository
+                .findByResourceTypeAndCreateurIdAndStatus(
+                        TypeRessource.normaliser(resourceType), appelant, ValidationStatus.EN_COURS);
+        if (ouverts.isEmpty()) {
+            return Map.of();
+        }
+
+        java.util.Set<UUID> engages = new java.util.HashSet<>(
+                historyRepository.instancesAyantUneDecision(ouverts.stream()
+                        .map(WorkflowValidationInstance::getId)
+                        .filter(Objects::nonNull)
+                        .toList()));
+
+        Map<UUID, AvancementCircuit> dossiers = new java.util.LinkedHashMap<>();
+        for (WorkflowValidationInstance instance : ouverts) {
+            UUID ressource;
+            try {
+                ressource = UUID.fromString(instance.getResourceId());
+            } catch (IllegalArgumentException e) {
+                log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
+                continue;
+            }
+            dossiers.put(ressource, engages.contains(instance.getId())
+                    ? AvancementCircuit.EN_COURS
+                    : AvancementCircuit.NON_ENGAGE);
+        }
+        return dossiers;
     }
 
     /**
