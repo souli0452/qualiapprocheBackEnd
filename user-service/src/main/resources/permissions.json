@@ -538,5 +538,20 @@
     "label": "Voir la rubrique Configurations",
     "value": "menu-configuration",
     "module": "Menus"
+  },
+  {
+    "label": "Consulter son tableau de bord",
+    "value": "tableau-bord-personnel",
+    "module": "Tableaux de bord"
+  },
+  {
+    "label": "Consulter le tableau de bord d'une structure",
+    "value": "tableau-bord-structure",
+    "module": "Tableaux de bord"
+  },
+  {
+    "label": "Consulter le tableau de bord de l'organisme",
+    "value": "tableau-bord-organisme",
+    "module": "Tableaux de bord"
   }
 ]

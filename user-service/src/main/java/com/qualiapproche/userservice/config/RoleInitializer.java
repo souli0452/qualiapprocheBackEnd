@@ -2,6 +2,7 @@ package com.qualiapproche.userservice.config;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qualiapproche.common.utils.PermissionsTableauDeBord;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +71,9 @@ public class RoleInitializer implements CommandLineRunner {
                 "formation-read", "fournisseur-read", "prestataire-read", "produit-read",
                 "reglementation-read", "exigence-read",
                 "menu-accueil", "menu-gestion-documentaire", "menu-qualite",
-                "menu-ressources", "menu-actions"
+                "menu-ressources", "menu-actions",
+                // Le dénombrement de ses propres dossiers, et de rien d'autre.
+                PermissionsTableauDeBord.PERSONNEL
         ));
 
         creerSiAbsent("PILOTE", "Réceptionne, impute et valide les dossiers de son périmètre", Arrays.asList(
@@ -89,7 +92,10 @@ public class RoleInitializer implements CommandLineRunner {
                 "formation-read", "fournisseur-read", "prestataire-read", "produit-read",
                 "reglementation-read", "exigence-read", "structure-read", "departement-read",
                 "menu-accueil", "menu-gestion-documentaire", "menu-qualite",
-                "menu-ressources", "menu-actions", "menu-traitements"
+                "menu-ressources", "menu-actions", "menu-traitements",
+                // Le tableau de sa structure, en plus du sien. La structure regardée reste la
+                // sienne : c'est le service qui le borne, la permission ne le dit pas.
+                PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE
         ));
 
         // « Agent imputé » n'est pas un rôle : c'est une personne, désignée sur un dossier
@@ -128,8 +134,13 @@ public class RoleInitializer implements CommandLineRunner {
                 "formation-read", "fournisseur-read", "prestataire-read", "produit-read",
                 "structure-read", "departement-read", "type-processus-read", "config-global-read",
                 "menu-accueil", "menu-gestion-documentaire", "menu-qualite",
-                "menu-ressources", "menu-actions", "menu-traitements", "menu-configuration"
+                "menu-ressources", "menu-actions", "menu-traitements", "menu-configuration",
+                // Les trois portées : sa fonction est transverse aux structures.
+                PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE,
+                PermissionsTableauDeBord.ORGANISME
         ));
+
+        ouvrirLesTableauxDeBordAuxRolesExistants();
 
         log.info("Rôles standards : traitement terminé.");
     }
@@ -148,16 +159,66 @@ public class RoleInitializer implements CommandLineRunner {
      * qu'un administrateur a décidées.</p>
      */
     private void garantirLePouvoirDePoserUneLicence() {
-        appRoleRepository.findByName("SUPER_ADMIN").ifPresent(role -> {
-            if (role.getPermissions().contains(PERMISSION_LICENCE)) {
+        completer("SUPER_ADMIN",
+                "sans elle, aucune licence ne pouvait plus être installée sur cette instance",
+                PERMISSION_LICENCE);
+    }
+
+    /**
+     * Ouvre les tableaux de bord aux rôles déjà en base.
+     *
+     * <p>Les dotations ci-dessus ne valent que pour un rôle <b>créé</b> : sur toute installation en
+     * service, elles ne sont pas rejouées — c'est la règle, et elle est bonne, un droit accordé
+     * depuis l'écran d'administration disparaîtrait sinon au redémarrage. Mais une permission
+     * <b>nouvelle</b> n'atteindrait alors personne, et les tableaux de bord — jusqu'ici ouverts à
+     * tout porteur de {@code nc-read} — se seraient refermés sur tout le monde le jour de la mise
+     * à jour.</p>
+     *
+     * <p>Ajout <b>nommé</b>, jamais une remise à l'identique : seules les permissions citées sont
+     * posées, et uniquement celles qui manquent. Ce qu'un administrateur a réglé depuis l'écran
+     * reste intact, y compris s'il a délibérément retiré l'une d'elles à un rôle — auquel cas elle
+     * lui revient, ce que dit le journal.</p>
+     *
+     * <p>Chaque rôle reçoit exactement la portée qui est la sienne, et le super administrateur les
+     * trois : le dictionnaire lui est entièrement acquis à sa création, mais pas ce qui s'y ajoute
+     * ensuite.</p>
+     */
+    private void ouvrirLesTableauxDeBordAuxRolesExistants() {
+        String raison = "sans elle, le tableau de bord correspondant se refermait sur ce rôle";
+
+        completer("AGENT", raison, PermissionsTableauDeBord.PERSONNEL);
+        completer("PILOTE", raison,
+                PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE);
+        completer("RESPONSABLE_QUALITE", raison,
+                PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE,
+                PermissionsTableauDeBord.ORGANISME);
+        completer("SUPER_ADMIN", raison,
+                PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE,
+                PermissionsTableauDeBord.ORGANISME);
+    }
+
+    /**
+     * Ajoute à un rôle existant les permissions nommées qui lui manquent, et rien d'autre.
+     *
+     * <p>N'écrit que s'il manque quelque chose : un démarrage sur une base à jour ne touche aucune
+     * ligne. Un rôle absent est ignoré — une installation qui ne l'a pas voulu ne le verra pas
+     * apparaître par ce chemin.</p>
+     *
+     * @param raison ce que l'absence de ces permissions empêchait, pour le journal
+     */
+    private void completer(String role, String raison, String... permissions) {
+        appRoleRepository.findByName(role).ifPresent(existant -> {
+            List<String> manquantes = Arrays.stream(permissions)
+                    .filter(permission -> !existant.getPermissions().contains(permission))
+                    .toList();
+            if (manquantes.isEmpty()) {
                 return;
             }
-            List<String> permissions = new ArrayList<>(role.getPermissions());
-            permissions.add(PERMISSION_LICENCE);
-            role.setPermissions(permissions);
-            appRoleRepository.save(role);
-            log.info("Permission « {} » rendue au rôle SUPER_ADMIN : sans elle, aucune licence "
-                    + "ne pouvait plus être installée sur cette instance.", PERMISSION_LICENCE);
+            List<String> completees = new ArrayList<>(existant.getPermissions());
+            completees.addAll(manquantes);
+            existant.setPermissions(completees);
+            appRoleRepository.save(existant);
+            log.info("Permissions {} ajoutées au rôle {} : {}.", manquantes, role, raison);
         });
     }
 

@@ -930,6 +930,8 @@ public class NonConformiteServiceImpl
 
     @Override
     public NcDashboardDto getDashboardPilot(String structureId) {
+        exigerSonProprePerimetre(structureId, SecurityUtils.getCurrentUserStructureId(),
+                "Ce tableau de bord est celui d'une autre structure.");
         List<NonConformite> all = nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId, Pageable.unpaged())
                 .getContent();
         return buildDashboardDto(all);
@@ -937,8 +939,35 @@ public class NonConformiteServiceImpl
 
     @Override
     public NcDashboardDto getDashboardUser(String userId) {
+        exigerSonProprePerimetre(userId, SecurityUtils.getCurrentUserId(),
+                "Ce tableau de bord est celui d'une autre personne.");
         List<NonConformite> all = nonConformiteRepository.findAllByUserInvolved(userId, Pageable.unpaged()).getContent();
         return buildDashboardDto(all);
+    }
+
+    /**
+     * Refuse un tableau de bord demandé sur un périmètre qui n'est pas celui de l'appelant.
+     *
+     * <p>La permission dit ce qu'on peut consulter, elle ne dit pas <b>sur qui</b> : ces deux
+     * points d'entrée prennent leur périmètre dans l'URL, et rien ne le confrontait à l'appelant.
+     * Il suffisait donc de connaître l'identifiant d'une structure — ou d'un collègue — pour lire
+     * ses chiffres. Le tableau d'une personne dit ce qu'elle a déclaré et ce qui lui est imputé :
+     * ce n'est pas une donnée publique dans l'organisation.</p>
+     *
+     * <p>L'administration et la responsabilité qualité passent outre : leur fonction est transverse
+     * et c'est le sens même de leur portée. Voir, et non décider — l'habilitation des étapes reste
+     * entière.</p>
+     *
+     * <p>Refus en 403 et non en 404 : le périmètre demandé existe et l'appelant le sait, la
+     * dissimulation ne protégerait rien.</p>
+     */
+    private void exigerSonProprePerimetre(String demande, String sien, String refus) {
+        if (permissionChecker.detient(RolesPlateforme.PORTEE_GLOBALE.toArray(String[]::new))) {
+            return;
+        }
+        if (demande == null || sien == null || !demande.equals(sien)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, refus);
+        }
     }
 
     /**

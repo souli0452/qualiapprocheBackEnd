@@ -15,6 +15,7 @@ import com.qualiapproche.common.dto.NcCountsDto;
 import com.qualiapproche.common.dto.NcDashboardDto;
 import com.qualiapproche.common.dto.NcNotificationsResumeDto;
 import com.qualiapproche.common.utils.LotsDuMoteur;
+import com.qualiapproche.common.utils.PermissionsTableauDeBord;
 import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.enumeration.Status;
 import io.swagger.v3.oas.annotations.Operation;
@@ -569,23 +570,34 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     }
 
     // --- Dashboard endpoints ---
+    //
+    // Trois portées, trois habilitations (cf. PermissionsTableauDeBord). Elles s'ajoutent à la
+    // lecture des dossiers plutôt que de s'y substituer : « nc-read » donne accès aux dossiers que
+    // l'appelant a le droit de voir, un tableau de bord en rend le dénombrement. Les deux se
+    // confondaient, si bien que tout agent pouvait demander les chiffres de l'organisme entier.
+    //
+    // La permission dit ce que l'appelant peut consulter, jamais sur qui : la structure et la
+    // personne regardées sont bornées par le service, seul endroit qui le garantisse.
 
-    @Operation(summary = "Dashboard pour RQ", description = "Statistiques globales des NC pour le dashboard RQ")
-    @PreAuthorize("@perm.canRead(this)")
+    @Operation(summary = "Tableau de bord de l'organisme",
+            description = "Chiffres de toutes les structures. Réservé à la portée transverse.")
+    @PreAuthorize("@perm.detient('" + PermissionsTableauDeBord.ORGANISME + "')")
     @GetMapping("/dashboard/rq")
     public ResponseEntity<NcDashboardDto> getDashboardRQ() {
         return ResponseEntity.ok(nonConformiteService.getDashboardRQ());
     }
 
-    @Operation(summary = "Dashboard pour Pilote", description = "Statistiques des NC par structure pour le dashboard Pilote")
-    @PreAuthorize("@perm.canRead(this)")
+    @Operation(summary = "Tableau de bord d'une structure",
+            description = "Chiffres d'une structure. Bornée à celle de l'appelant, sauf portée globale.")
+    @PreAuthorize("@perm.detient('" + PermissionsTableauDeBord.STRUCTURE + "')")
     @GetMapping("/dashboard/pilot/{structureId}")
     public ResponseEntity<NcDashboardDto> getDashboardPilot(@PathVariable String structureId) {
         return ResponseEntity.ok(nonConformiteService.getDashboardPilot(structureId));
     }
 
-    @Operation(summary = "Dashboard pour Utilisateur", description = "Statistiques des NC liées à l'utilisateur (soumis ou imputé)")
-    @PreAuthorize("@perm.canRead(this)")
+    @Operation(summary = "Tableau de bord d'un agent",
+            description = "Chiffres des dossiers d'une personne. Borné à l'appelant, sauf portée globale.")
+    @PreAuthorize("@perm.detient('" + PermissionsTableauDeBord.PERSONNEL + "')")
     @GetMapping("/dashboard/user/{userId}")
     public ResponseEntity<NcDashboardDto> getDashboardUser(@PathVariable String userId) {
         return ResponseEntity.ok(nonConformiteService.getDashboardUser(userId));
