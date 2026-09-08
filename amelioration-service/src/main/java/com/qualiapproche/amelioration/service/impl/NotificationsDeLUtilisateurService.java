@@ -293,16 +293,36 @@ public class NotificationsDeLUtilisateurService {
      * <p>C'est le moteur qui distingue le brouillon du dossier soumis : le premier n'a franchi
      * aucune étape. Le déduire d'un statut {@code DRAFT} inscrit sur la fiche revenait à tenir ici
      * une seconde règle, qui se taisait dès qu'un dossier soumis était renvoyé à son auteur.</p>
+     *
+     * <p>Et qui existent encore ici. Même filtre que {@link #ressources}, pour la même raison :
+     * le moteur ne sait pas lesquels
+     * de ses dossiers ont été supprimés. Sans lui, un brouillon effacé restait compté parmi les
+     * brouillons, et un dossier supprimé après soumission parmi ceux en attente ailleurs — deux
+     * pastilles et un total qui annonçaient du travail sur des dossiers qu'aucun écran ne pouvait
+     * ouvrir. L'ordre du moteur est conservé.</p>
      */
     private Map<UUID, AvancementCircuit> mesDossiersOuverts() {
+        Map<UUID, AvancementCircuit> miens;
         try {
-            Map<UUID, AvancementCircuit> miens = workflowClient.mesDossiersOuverts(FAMILLE_NC);
-            return miens == null ? Map.of() : miens;
+            miens = workflowClient.mesDossiersOuverts(FAMILLE_NC);
         } catch (Exception e) {
             log.warn("Dossiers ouverts par l'appelant indisponibles, le moteur est injoignable : {}",
                     e.getMessage());
             return Map.of();
         }
+        if (miens == null || miens.isEmpty()) {
+            return Map.of();
+        }
+
+        java.util.Set<UUID> encoreLa = new java.util.HashSet<>(
+                nonConformiteRepository.idsExistantsParmi(miens.keySet()));
+        Map<UUID, AvancementCircuit> existants = new LinkedHashMap<>();
+        miens.forEach((id, avancement) -> {
+            if (encoreLa.contains(id)) {
+                existants.put(id, avancement);
+            }
+        });
+        return existants;
     }
 
     /**

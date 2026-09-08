@@ -238,6 +238,29 @@ class NotificationsDeLUtilisateurTest {
     }
 
     @Test
+    @DisplayName("Un dossier supprimé ne compte plus parmi les miens, brouillon ou en attente")
+    void resume_dossierOuvertSupprime_nEstPlusCompte() {
+        // mesDossiersOuverts venait du moteur sans relire la table : un brouillon effacé restait un
+        // brouillon, un dossier supprimé après soumission restait « en attente ailleurs », et le
+        // total les additionnait. Même filtre que pour les dossiers à décider.
+        UUID brouillonVivant = UUID.randomUUID();
+        UUID brouillonSupprime = UUID.randomUUID();
+        UUID soumisPuisSupprime = UUID.randomUUID();
+        lenient().when(workflowClient.mesDossiersOuverts("NON_CONFORMITE")).thenReturn(Map.of(
+                brouillonVivant, AvancementCircuit.NON_ENGAGE,
+                brouillonSupprime, AvancementCircuit.NON_ENGAGE,
+                soumisPuisSupprime, AvancementCircuit.EN_COURS));
+        when(nonConformiteRepository.idsExistantsParmi(anyCollection()))
+                .thenReturn(List.of(brouillonVivant));
+
+        NcNotificationsResumeDto resume = service.resume();
+
+        assertThat(resume.getBrouillons()).isEqualTo(1);
+        assertThat(resume.getEnAttenteValidation()).isZero();
+        assertThat(resume.getTotalAlertes()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("Le résumé rend des zéros plutôt que rien quand tout est traité")
     void resume_toutTraite() {
         NcNotificationsResumeDto resume = service.resume();
