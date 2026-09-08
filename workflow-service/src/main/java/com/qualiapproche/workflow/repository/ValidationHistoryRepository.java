@@ -28,4 +28,14 @@ public interface ValidationHistoryRepository extends JpaRepository<ValidationHis
     java.util.List<java.util.UUID> instancesAyantUneDecision(
             @org.springframework.data.repository.query.Param("instanceIds")
             java.util.Collection<java.util.UUID> instanceIds);
+
+    /**
+     * Efface les décisions d'une instance, avec les valeurs de champ qu'elles portent.
+     *
+     * <p>Sert la disparition d'un dossier supprimé chez son module. Les entités sont chargées
+     * avant d'être effacées — c'est ce qui fait jouer la cascade vers {@code fieldValues} ; un
+     * effacement en masse les laisserait derrière, et la contrainte de clé étrangère refuserait
+     * la suppression.</p>
+     */
+    void deleteByValidationInstance_Id(java.util.UUID instanceId);
 }

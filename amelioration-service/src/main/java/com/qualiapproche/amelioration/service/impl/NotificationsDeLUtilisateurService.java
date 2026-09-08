@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.common.dto.NcNotificationsResumeDto;
 import com.qualiapproche.common.dto.NotificationDto;
@@ -65,6 +66,7 @@ public class NotificationsDeLUtilisateurService {
     /** Nombre de jours avant l'échéance à partir duquel le plan est annoncé, à défaut de réglage. */
     private static final long SEUIL_DE_RAPPEL_PAR_DEFAUT = 2;
 
+    private final NonConformiteRepository nonConformiteRepository;
     private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
     private final ReglagesOrganisation reglagesOrganisation;
@@ -303,16 +305,38 @@ public class NotificationsDeLUtilisateurService {
         }
     }
 
-    /** Interroge le moteur, et rend une liste vide plutôt qu'une erreur s'il est hors d'atteinte. */
+    /**
+     * Les dossiers d'une famille que l'appelant a à décider, et qui existent encore ici.
+     *
+     * <p>Rend une liste vide plutôt qu'une erreur si le moteur est hors d'atteinte : la cloche
+     * n'est pas ce pour quoi un écran doit échouer.</p>
+     *
+     * <p><b>Le filtre d'existence est ce qui rend ces nombres vrais.</b> Une suppression de dossier
+     * ne parvenait pas au moteur, son instance y restait « en cours », et elle gonflait chacune des
+     * pastilles — celle des dossiers à traiter comme celle des dossiers en attente ailleurs — d'un
+     * dossier qu'aucun écran ne pouvait ouvrir. Posé ici, à l'endroit unique où les identifiants
+     * arrivent, il vaut pour tout ce que ce service compte.</p>
+     *
+     * <p>L'ordre du moteur est conservé : c'est lui qui ordonne les étapes annoncées.</p>
+     */
     private List<UUID> ressources(String typeDeRessource) {
+        List<UUID> ids;
         try {
-            List<UUID> ids = workflowClient.ressourcesADecider(typeDeRessource);
-            return ids == null ? List.of() : ids;
+            ids = workflowClient.ressourcesADecider(typeDeRessource);
         } catch (Exception e) {
             log.warn("Dossiers « à décider » ({}) indisponibles, le moteur est injoignable : {}",
                     typeDeRessource, e.getMessage());
             return List.of();
         }
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
+        java.util.Set<UUID> encoreLa = new java.util.HashSet<>(
+                FAMILLE_PLAN.equals(typeDeRessource)
+                        ? planActionRepository.idsExistantsParmi(ids)
+                        : nonConformiteRepository.idsExistantsParmi(ids));
+        return ids.stream().filter(encoreLa::contains).toList();
     }
 
     private static boolean renseigne(String valeur) {

@@ -150,11 +150,48 @@ class TableauDeBordNcTest {
     void parEtape_vientDuMoteur() {
         // Les libellés viennent du circuit : le module n'en connaît aucun, et une étape ajoutée
         // à l'éditeur apparaît dans le compte sans qu'une ligne change ici.
+        UUID r1 = UUID.randomUUID();
+        UUID r2 = UUID.randomUUID();
+        UUID i1 = UUID.randomUUID();
         when(workflowClient.mesDossiersParEtape("NON_CONFORMITE"))
-                .thenReturn(Map.of("Réception", 3L, "Imputation", 5L));
+                .thenReturn(Map.of("Réception", List.of(r1, r2), "Imputation", List.of(i1)));
+        existent(r1, r2, i1);
 
         assertThat(service.mesNonConformitesParEtape())
-                .containsExactlyInAnyOrderEntriesOf(Map.of("Réception", 3L, "Imputation", 5L));
+                .containsExactlyInAnyOrderEntriesOf(Map.of("Réception", 2L, "Imputation", 1L));
+    }
+
+    @Test
+    @DisplayName("Un dossier supprimé ici n'est plus compté, même si le moteur le tient encore")
+    void parEtape_dossierSupprime_nEstPlusCompte() {
+        // Le défaut que ce compte a porté : une suppression ne parvenait pas au moteur, son
+        // instance restait en cours, et le tableau de bord annonçait « Traitement 1 » quand la
+        // liste « à traiter » — qui, elle, relit la table — n'affichait rien.
+        UUID vivante = UUID.randomUUID();
+        UUID supprimee = UUID.randomUUID();
+        when(workflowClient.mesDossiersParEtape("NON_CONFORMITE"))
+                .thenReturn(Map.of("Traitement", List.of(vivante, supprimee)));
+        existent(vivante);
+
+        assertThat(service.mesNonConformitesParEtape())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("Traitement", 1L));
+    }
+
+    @Test
+    @DisplayName("Une étape dont tous les dossiers ont disparu ne s'affiche pas à zéro")
+    void parEtape_etapeVidee_disparaitDuCompte() {
+        // Zéro n'est pas une file de travail : l'écran annoncerait une étape qui n'attend
+        // personne, indiscernable d'une étape où il reste vraiment quelque chose à faire.
+        when(workflowClient.mesDossiersParEtape("NON_CONFORMITE"))
+                .thenReturn(Map.of("Traitement", List.of(UUID.randomUUID())));
+        existent();
+
+        assertThat(service.mesNonConformitesParEtape()).isEmpty();
+    }
+
+    /** Les seules non-conformités que la table contient encore, parmi celles que le moteur désigne. */
+    private void existent(UUID... ids) {
+        when(nonConformiteRepository.idsExistantsParmi(anyCollection())).thenReturn(List.of(ids));
     }
 
     @Test

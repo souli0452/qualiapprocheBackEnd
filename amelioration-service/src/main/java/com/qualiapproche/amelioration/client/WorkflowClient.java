@@ -5,6 +5,7 @@ import com.qualiapproche.common.dto.WorkflowStateDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
 import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -81,13 +82,26 @@ public interface WorkflowClient {
     java.util.List<UUID> ressourcesADecider(@RequestParam("resourceType") String resourceType);
 
     /**
-     * Combien de dossiers attendent l'appelant, par étape du circuit.
+     * Les dossiers qui attendent l'appelant, groupés par étape du circuit.
      *
      * <p>Les clés sont les libellés des étapes, tels que l'éditeur les a écrits : le module n'en
      * nomme aucune, et une étape ajoutée au circuit apparaît d'elle-même dans le compte.</p>
+     *
+     * <p>Le moteur rend les identifiants et non leur nombre : il ne sait pas lesquels de ces
+     * dossiers existent encore ici. Comptés tels quels, ils annonçaient des lignes que la liste
+     * « à traiter » — qui, elle, va les relire en base — n'affichait pas.</p>
      */
     @GetMapping("/api/v1/workflows/instances/mine/par-etape")
-    Map<String, Long> mesDossiersParEtape(@RequestParam("resourceType") String resourceType);
+    Map<String, java.util.List<UUID>> mesDossiersParEtape(@RequestParam("resourceType") String resourceType);
+
+    /**
+     * Dit au moteur qu'une ressource a été supprimée ici.
+     *
+     * <p>Sans cet appel l'instance restait « en cours » indéfiniment chez lui, orpheline de son
+     * dossier, et continuait d'alimenter tout ce qui se compte sans relire la table.</p>
+     */
+    @DeleteMapping("/api/v1/workflows/instances/{resourceId}")
+    void oublierRessource(@PathVariable("resourceId") UUID resourceId);
 
     /**
      * Dépose une notification dans la boîte de quelqu'un.

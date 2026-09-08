@@ -32,6 +32,15 @@ public interface WorkflowValidationInstanceRepository extends JpaRepository<Work
     List<WorkflowValidationInstance> findByResourceIdInOrderByStartedAtDesc(Collection<String> resourceIds);
 
     /**
+     * Toutes les instances d'une ressource, terminées comprises.
+     *
+     * <p>Sert l'effacement d'un dossier supprimé chez son module : il faut les prendre toutes, et
+     * non la dernière — un dossier rouvert en porte plusieurs, et n'en laisser qu'une derrière
+     * remettrait un fantôme dans les comptes.</p>
+     */
+    List<WorkflowValidationInstance> findByResourceId(String resourceId);
+
+    /**
      * Circuits en cours d'une famille de ressources.
      *
      * <p>Base du « ce que j'ai à décider » : seul un circuit en cours peut offrir une décision, et

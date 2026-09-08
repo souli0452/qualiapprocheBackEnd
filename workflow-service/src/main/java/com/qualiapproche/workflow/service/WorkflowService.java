@@ -1196,21 +1196,44 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     public List<UUID> ressourcesADeciderParLAppelant(String resourceType) {
         List<UUID> ressources = new java.util.ArrayList<>();
         for (WorkflowValidationInstance instance : instancesADeciderParLAppelant(resourceType)) {
-            try {
-                ressources.add(UUID.fromString(instance.getResourceId()));
-            } catch (IllegalArgumentException e) {
-                log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
+            UUID ressource = identifiantDe(instance);
+            if (ressource != null) {
+                ressources.add(ressource);
             }
         }
         return ressources;
     }
 
     /**
-     * Combien de dossiers d'une famille attendent l'appelant, étape par étape.
+     * L'identifiant de ressource porté par une instance, ou {@code null} s'il est inexploitable.
+     *
+     * <p>Extrait pour que la liste et le regroupement par étape écartent <b>les mêmes</b> dossiers.
+     * Chacun le faisait à sa façon : la liste taisait l'identifiant illisible, le compte le
+     * comptait quand même, et l'écart ne se voyait que sur un tableau de bord annonçant un dossier
+     * que la liste n'affichait pas.</p>
+     */
+    private UUID identifiantDe(WorkflowValidationInstance instance) {
+        try {
+            return UUID.fromString(instance.getResourceId());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
+            return null;
+        }
+    }
+
+    /**
+     * Les dossiers d'une famille qui attendent l'appelant, groupés par étape.
      *
      * <p>Ce que le compteur d'un tableau de bord demande, et que la liste des identifiants ne
      * savait pas dire sans que l'appelant redemande l'état de chaque dossier — une requête par
      * ligne affichée.</p>
+     *
+     * <p><b>Les identifiants, et non leur nombre.</b> Le moteur comptait lui-même, et son compte
+     * était faux dès qu'un dossier avait disparu du module qui le porte : une suppression ne le
+     * lui disant pas, l'instance restait en cours et gonflait le compteur d'un dossier que la
+     * liste, elle, ne pouvait pas afficher. Le moteur sait quels dossiers <b>il</b> tient ; seul
+     * le module sait lesquels existent encore. Le compte revient donc à celui qui peut le
+     * garantir, et l'écran ne peut plus annoncer une ligne qu'il n'affiche pas.</p>
      *
      * <p><b>Les clés viennent du circuit, jamais du code.</b> Aucune étape n'est nommée ici : le
      * libellé est celui que porte l'étape où le dossier se trouve, tel que l'éditeur l'a écrit.
@@ -1218,20 +1241,57 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * et un second circuit servant la même famille n'a pas à être prévu.</p>
      *
      * <p><b>La portée est celle de l'appelant, et elle n'est pas calculée ici.</b> Un dossier n'est
-     * compté que si le moteur lui reconnaît une décision possible : l'habilitation de l'étape, la
-     * structure du dossier et les permissions de portée y sont déjà toutes appliquées. Un agent
-     * compte donc les siens, un pilote ceux de sa structure, une fonction transverse ceux de
-     * l'organisme — sans qu'aucun rôle ne soit nommé.</p>
+     * retenu que si le moteur lui reconnaît une décision possible : l'habilitation de l'étape, la
+     * structure du dossier et les permissions de portée y sont déjà toutes appliquées, par le même
+     * {@link #instancesADeciderParLAppelant} que sert la liste « à traiter ». Un agent compte donc
+     * les siens, un pilote ceux de sa structure, une fonction transverse ceux de l'organisme —
+     * sans qu'aucun rôle ne soit nommé.</p>
      *
-     * <p>Ordonné par libellé : le compte doit être le même d'un appel à l'autre, et le circuit ne
+     * <p>Ordonné par libellé : le résultat doit être le même d'un appel à l'autre, et le circuit ne
      * porte pas d'ordre qui vaille au-delà d'une seule branche.</p>
      */
-    public Map<String, Long> dossiersADeciderParEtape(String resourceType) {
-        Map<String, Long> parEtape = new java.util.TreeMap<>();
+    @Transactional(readOnly = true)
+    public Map<String, List<UUID>> dossiersADeciderParEtape(String resourceType) {
+        Map<String, List<UUID>> parEtape = new java.util.TreeMap<>();
         for (WorkflowValidationInstance instance : instancesADeciderParLAppelant(resourceType)) {
-            parEtape.merge(libelleDeLEtape(instance), 1L, Long::sum);
+            UUID ressource = identifiantDe(instance);
+            if (ressource == null) {
+                continue;
+            }
+            parEtape.computeIfAbsent(libelleDeLEtape(instance), cle -> new java.util.ArrayList<>())
+                    .add(ressource);
         }
         return parEtape;
+    }
+
+    /**
+     * Oublie tout ce que le moteur tient sur une ressource que son module vient de supprimer.
+     *
+     * <p>Rien ne le lui disait : le dossier disparaissait du module et son instance restait « en
+     * cours » ici, indéfiniment. Elle continuait d'alimenter tout ce qui se compte sans relire la
+     * table du module — le tableau de bord par étape en premier, qui annonçait des dossiers que la
+     * liste « à traiter » n'affichait pas, puisqu'elle, va les relire.</p>
+     *
+     * <p>Supprime plutôt que de clore : {@code TERMINE} veut dire « le circuit est allé à son
+     * terme », et les tableaux de bord comptent ces dossiers-là parmi les clôturés. Un dossier
+     * effacé n'a pas été clôturé, il n'a plus eu lieu — le compter parmi les clôtures remplacerait
+     * une surévaluation par une autre. L'historique des décisions part avec l'instance : il ne
+     * renvoie plus à rien.</p>
+     *
+     * @return le nombre d'instances effacées, pour que l'appelant puisse le journaliser
+     */
+    @Transactional
+    public int oublierRessource(UUID resourceId) {
+        if (resourceId == null) {
+            return 0;
+        }
+        List<WorkflowValidationInstance> instances =
+                validationInstanceRepository.findByResourceId(resourceId.toString());
+        for (WorkflowValidationInstance instance : instances) {
+            historyRepository.deleteByValidationInstance_Id(instance.getId());
+        }
+        validationInstanceRepository.deleteAll(instances);
+        return instances.size();
     }
 
     /**

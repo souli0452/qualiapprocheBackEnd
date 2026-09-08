@@ -102,7 +102,9 @@ class WorkflowControllerAutorisationTest {
 
         @Bean
         WorkflowController workflowController(WorkflowService pService) {
-            return new WorkflowController(pService);
+            return new WorkflowController(pService,
+                    org.mockito.Mockito.mock(
+                            com.qualiapproche.workflow.service.NotificationsUtilisateurService.class));
         }
     }
 

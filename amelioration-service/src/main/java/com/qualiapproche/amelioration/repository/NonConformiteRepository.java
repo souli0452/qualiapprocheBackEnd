@@ -145,6 +145,17 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
         Page<NonConformite> findByIdIn(java.util.Collection<UUID> ids, Pageable pageable);
 
         /**
+         * Parmi les identifiants cités, ceux qui désignent encore une non-conformité.
+         *
+         * <p>Sert le compte par étape : le moteur désigne des dossiers dont il ignore s'ils
+         * existent toujours ici, et un dossier supprimé y restait compté. Rendue en une requête,
+         * pour toutes les étapes à la fois — les compter étape par étape aurait coûté une requête
+         * par ligne du tableau de bord.</p>
+         */
+        @Query("SELECT n.id FROM NonConformite n WHERE n.id IN :ids")
+        List<UUID> idsExistantsParmi(@Param("ids") java.util.Collection<UUID> ids);
+
+        /**
          * Non-conformités qu'un utilisateur a le droit de voir.
          *
          * <p>Celles de sa structure — émises par elle ou qui lui sont adressées — et les siennes :

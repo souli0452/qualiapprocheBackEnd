@@ -34,6 +34,16 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
 
     /** Actions désignées par le moteur comme ouvertes à une décision de l'appelant. */
     Page<PlanAction> findByIdIn(java.util.Collection<UUID> ids, Pageable pageable);
+
+    /**
+     * Parmi les identifiants cités, ceux qui désignent encore un plan d'action.
+     *
+     * <p>Le moteur désigne des dossiers dont il ignore s'ils existent toujours ici : un plan
+     * supprimé y laisse son instance en cours, et il restait compté sur les pastilles de
+     * l'accueil.</p>
+     */
+    @Query("SELECT p.id FROM PlanAction p WHERE p.id IN :ids")
+    java.util.List<UUID> idsExistantsParmi(@Param("ids") java.util.Collection<UUID> ids);
     @Query(value = "SELECT " +
             "EXTRACT(MONTH FROM created_at) AS mois, " +
             "status, " +

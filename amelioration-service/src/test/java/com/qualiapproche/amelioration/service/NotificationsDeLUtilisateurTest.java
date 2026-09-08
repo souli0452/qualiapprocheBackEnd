@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -26,6 +28,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.amelioration.entities.PlanAction;
+import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.amelioration.service.impl.NotificationsDeLUtilisateurService;
@@ -51,6 +54,7 @@ class NotificationsDeLUtilisateurTest {
     private static final String MOI = "agent-1";
     private static final String MON_COURRIEL = "agent-1@exemple.bf";
 
+    @Mock private NonConformiteRepository nonConformiteRepository;
     @Mock private PlanActionRepository planActionRepository;
     @Mock private WorkflowClient workflowClient;
     @Mock private ReglagesOrganisation reglagesOrganisation;
@@ -69,6 +73,12 @@ class NotificationsDeLUtilisateurTest {
                 .findPlanActionsByResponsableEmailAndStatus(MON_COURRIEL, StatutEnum.NON_TRAITER))
                 .thenReturn(List.of());
         lenient().when(reglagesOrganisation.entier(anyString(), anyLong())).thenReturn(2L);
+        // Par défaut, tout dossier que le moteur désigne existe encore : ces cas-là parlent de ce
+        // qui attend l'utilisateur, pas de ce qui a été supprimé. Le cas contraire le dit lui-même.
+        lenient().when(nonConformiteRepository.idsExistantsParmi(anyCollection()))
+                .thenAnswer(appel -> new ArrayList<UUID>(appel.getArgument(0)));
+        lenient().when(planActionRepository.idsExistantsParmi(anyCollection()))
+                .thenAnswer(appel -> new ArrayList<UUID>(appel.getArgument(0)));
     }
 
     @AfterEach
@@ -209,6 +219,22 @@ class NotificationsDeLUtilisateurTest {
         // compte pas deux fois.
         assertThat(resume.getEnAttenteValidation()).isEqualTo(1);
         assertThat(resume.getTotalAlertes()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("Un dossier supprimé ne compte plus, même si le moteur le tient encore")
+    void resume_dossierSupprime_nEstPlusCompte() {
+        // Une suppression ne parvenait pas au moteur : son instance restait en cours et gonflait
+        // la pastille d'un dossier qu'aucun écran ne pouvait ouvrir. Le filtre se pose là où les
+        // identifiants arrivent, donc il vaut pour la ligne de la cloche comme pour le nombre.
+        UUID vivante = UUID.randomUUID();
+        UUID supprimee = UUID.randomUUID();
+        when(workflowClient.ressourcesADecider("NON_CONFORMITE"))
+                .thenReturn(List.of(vivante, supprimee));
+        when(nonConformiteRepository.idsExistantsParmi(anyCollection()))
+                .thenReturn(List.of(vivante));
+
+        assertThat(service.resume().getATraiter()).isEqualTo(1);
     }
 
     @Test

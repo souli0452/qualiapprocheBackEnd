@@ -33,6 +33,13 @@ public interface NotificationUtilisateurRepository extends JpaRepository<Notific
     List<NotificationUtilisateur> findByResourceIdOrderByCreatedAtDesc(String resourceId);
 
     /**
+     * Retire les lignes qui désignent un dossier supprimé, chez tous ses destinataires.
+     *
+     * @return le nombre de lignes retirées
+     */
+    int deleteByResourceId(String resourceId);
+
+    /**
      * Marque lues toutes les non-lues d'une personne, en une requête.
      *
      * <p>Les charger pour les modifier une à une aurait coûté autant de requêtes que de lignes, sur

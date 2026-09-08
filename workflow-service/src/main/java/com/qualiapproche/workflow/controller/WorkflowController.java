@@ -4,8 +4,10 @@ import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.dto.WorkflowValidationRequestDto;
+import com.qualiapproche.workflow.service.NotificationsUtilisateurService;
 import com.qualiapproche.workflow.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -50,6 +52,7 @@ import com.qualiapproche.workflow.model.TypeRessource;
  */
 @RestController
 @RequestMapping("/api/v1/workflows")
+@Slf4j
 @RequiredArgsConstructor
 @RequirePermissions(
         create = {"workflow-write"},
@@ -67,6 +70,7 @@ import com.qualiapproche.workflow.model.TypeRessource;
 public class WorkflowController {
 
     private final WorkflowService workflowService;
+    private final NotificationsUtilisateurService notificationsUtilisateurService;
 
     @GetMapping
     public ResponseEntity<List<WorkflowDto>> getAllWorkflows() {
@@ -223,15 +227,45 @@ public class WorkflowController {
      * code, ni ici ni dans le service. Le compte ne porte que sur ce que l'appelant peut décider,
      * portée et habilitation déjà appliquées par le moteur.</p>
      *
+     * <p><b>Les identifiants, et non leur nombre.</b> Le compte appartient au module appelant :
+     * lui seul sait quels dossiers existent encore, et le moteur qui comptait pour lui annonçait
+     * des dossiers supprimés que la liste « à traiter » n'affichait pas. Voir
+     * {@link WorkflowService#dossiersADeciderParEtape}.</p>
+     *
      * <p>Rendue nue : {@code GlobalResponseHandler} l'enveloppe, et le décodeur Feign des services
      * appelants en réextrait {@code data}. L'envelopper ici aussi ferait décoder l'enveloppe comme
      * s'il s'agissait de la carte, et l'appelant recevrait un objet vide sans la moindre erreur.
      * Une carte n'est pas paginée : rien n'oblige à la protéger comme les {@code List}.</p>
      */
     @GetMapping("/instances/mine/par-etape")
-    public ResponseEntity<java.util.Map<String, Long>> mesDossiersParEtape(
+    public ResponseEntity<java.util.Map<String, List<UUID>>> mesDossiersParEtape(
             @RequestParam("resourceType") String resourceType) {
         return ResponseEntity.ok(workflowService.dossiersADeciderParEtape(resourceType));
+    }
+
+    /**
+     * Oublie tout ce que le moteur tient sur une ressource que son module vient de supprimer.
+     *
+     * <p>Rien ne le lui disait : le dossier disparaissait du module, son instance restait « en
+     * cours » ici, et continuait d'alimenter tout ce qui se compte sans relire la table du module.
+     * Le tableau de bord par étape en portait la marque — un dossier annoncé, jamais affiché.</p>
+     *
+     * <p>Réservé aux services : c'est au module qui détient le dossier de dire qu'il n'existe
+     * plus. Un utilisateur qui pourrait l'appeler effacerait le circuit d'un dossier bien vivant,
+     * et avec lui la trace de toutes les décisions déjà prises.</p>
+     *
+     * <p>Idempotent, et volontairement : une ressource inconnue du moteur n'est pas une erreur —
+     * un dossier supprimé avant d'être soumis n'a jamais eu d'instance, et le module ne doit pas
+     * avoir à le savoir pour appeler.</p>
+     */
+    @PreAuthorize("@perm.appelDeService()")
+    @DeleteMapping("/instances/{resourceId}")
+    public ResponseEntity<Void> oublierRessource(@PathVariable UUID resourceId) {
+        int instances = workflowService.oublierRessource(resourceId);
+        int lignes = notificationsUtilisateurService.oublierRessource(resourceId);
+        log.info("Ressource {} supprimée chez son module : {} instance(s) et {} ligne(s) de boîte "
+                + "de réception effacées.", resourceId, instances, lignes);
+        return ResponseEntity.noContent().build();
     }
 
     /**

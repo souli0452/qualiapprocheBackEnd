@@ -124,4 +124,19 @@ public class NotificationsUtilisateurService {
         String moi = SecurityUtils.getCurrentUserId();
         return moi == null ? 0 : repository.marquerToutesLues(moi);
     }
+
+    /**
+     * Retire de toutes les boîtes ce qui a été dit d'un dossier supprimé.
+     *
+     * <p>Une ligne survit à son dossier sans que rien ne la retire : elle reste dans la boîte,
+     * annonce une échéance ou une décision à prendre, et mène en la cliquant à un écran
+     * introuvable. Le geste est celui du module qui supprime le dossier, pas celui du
+     * destinataire — personne ne devrait avoir à faire le ménage d'un dossier qui n'existe plus.</p>
+     *
+     * @return le nombre de lignes retirées
+     */
+    @Transactional
+    public int oublierRessource(UUID resourceId) {
+        return resourceId == null ? 0 : repository.deleteByResourceId(resourceId.toString());
+    }
 }

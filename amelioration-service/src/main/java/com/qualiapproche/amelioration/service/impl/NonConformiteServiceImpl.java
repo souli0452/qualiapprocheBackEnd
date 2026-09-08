@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -333,6 +334,9 @@ public class NonConformiteServiceImpl
         // Vérifier si la non-conformité existe
         NonConformite existingNonConformite = nonConformiteRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + id));
+        // Relevé avant la saisie : c'est lui qui dira si l'imputation a changé, et donc s'il faut
+        // en avertir le moteur. Voir faireSuivreLImputation.
+        String agentAvant = existingNonConformite.getUserImputId();
         // Mise à jour des champs modifiables
         existingNonConformite.setEfficaciteId(findEfficaciteById(dto.getEfficaciteId()));
         existingNonConformite.setNiveauNonConformiteId(findNiveauNonConformiteById(dto.getNiveauNonConformiteId()));
@@ -358,6 +362,7 @@ public class NonConformiteServiceImpl
         // retire par ses propres points d'entrée, qui savent ce qu'un engagement interdit.
         // Sauvegarde de la mise à jour
         NonConformite updatedNonConformite = nonConformiteRepository.save(existingNonConformite);
+        faireSuivreLImputation(updatedNonConformite, agentAvant);
         // Retour DTO
         return populateAttachments(nonConformiteMapper.toDto(updatedNonConformite));
     }
@@ -390,6 +395,7 @@ public class NonConformiteServiceImpl
             NonConformite existingNonConformite = nonConformiteRepository.findById(dto.getId())
                     .orElseThrow(
                             () -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + dto.getId()));
+            String agentAvant = existingNonConformite.getUserImputId();
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
             existingNonConformite.setJustificationPilote(dto.getJustificationPilote());
             existingNonConformite.setPertinancePilote(dto.getPertinancePilote());
@@ -437,6 +443,7 @@ public class NonConformiteServiceImpl
             // identifiants. Une action se crée, se corrige et se retire par PlanActionService, qui
             // sait ce qu'un engagement interdit.
             nonConformiteRepository.save(existingNonConformite);
+            faireSuivreLImputation(existingNonConformite, agentAvant);
         });
         return dtos.stream().map(this::populateAttachments).toList();
     }
@@ -444,6 +451,7 @@ public class NonConformiteServiceImpl
     @Override
     public NonConformiteDto update(NonConformiteDto nonConformiteDto) {
         return nonConformiteRepository.findById(nonConformiteDto.getId()).map(nonConformiteExisted -> {
+            String agentAvant = nonConformiteExisted.getUserImputId();
             nonConformiteMapper.updateEntityFromDto(nonConformiteDto, nonConformiteExisted);
             // Les pièces jointes suivent la fiche, ici comme dans les deux autres points d'entrée
             // de mise à jour. Le mapper les ignore — à raison, la collection est en orphanRemoval
@@ -451,6 +459,7 @@ public class NonConformiteServiceImpl
             // partout signifiait qu'un fichier ajouté depuis un écran passant par ici était perdu
             // sans erreur, la réponse paraissant valide.
             ncFichierService.synchroniser(nonConformiteDto.getFichiers(), nonConformiteDto.getId());
+            faireSuivreLImputation(nonConformiteExisted, agentAvant);
             return populateAttachments(nonConformiteMapper.toDto((nonConformiteExisted)));
         }).orElseThrow(() -> new ResponseStatusException(HttpStatus.OK, "Aucune NonConformité trouvée."));
     }
@@ -549,22 +558,56 @@ public class NonConformiteServiceImpl
 
     @Override
 
+    @Transactional
     public void delete(UUID id) {
         if (nonConformiteRepository.existsById(id)) {
             nonConformiteRepository.deleteById(id);
+            oublierChezLeMoteur(id);
         } else {
             throw new ResponseStatusException(HttpStatus.OK, "Cette NonConformité n'existe pas.");
         }
     }
 
+    /**
+     * Suppression en lot, tout ou rien.
+     *
+     * <p>La boucle supprimait sans transaction : un identifiant invalide au milieu laissait
+     * supprimés tous ceux qui le précédaient, et l'appelant recevait une erreur qui ne disait pas
+     * lesquels. La liste est vérifiée d'abord, puis effacée.</p>
+     */
+    @Transactional
     public void deleteMultiple(List<NonConformiteDto> nonConformiteDtos) {
-        nonConformiteDtos.forEach(actualityDto -> {
-            if (!nonConformiteRepository.existsById(actualityDto.getId())) {
+        nonConformiteDtos.forEach(dto -> {
+            if (!nonConformiteRepository.existsById(dto.getId())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Actualité invalide, impossible de supprimer.");
             }
-            nonConformiteRepository.deleteById(actualityDto.getId());
         });
+        nonConformiteDtos.forEach(dto -> {
+            nonConformiteRepository.deleteById(dto.getId());
+            oublierChezLeMoteur(dto.getId());
+        });
+    }
+
+    /**
+     * Dit au moteur qu'une non-conformité n'existe plus.
+     *
+     * <p>Rien ne le lui disait : l'instance restait « en cours » chez lui, orpheline de son
+     * dossier, et continuait d'alimenter tout ce qui se compte sans relire la table — le tableau
+     * de bord par étape annonçait alors des dossiers que la liste « à traiter » n'affichait pas.</p>
+     *
+     * <p>Un moteur injoignable ne fait pas échouer la suppression : le dossier est déjà parti, et
+     * refuser après coup ne le ramènerait pas. L'appel vient donc <b>après</b> l'effacement — le
+     * faire avant reviendrait, si la suppression échouait ensuite, à détruire le circuit d'un
+     * dossier bien vivant et l'historique de ses décisions.</p>
+     */
+    private void oublierChezLeMoteur(UUID id) {
+        try {
+            workflowClient.oublierRessource(id);
+        } catch (Exception e) {
+            log.warn("Non-conformité {} supprimée, mais le moteur n'a pas pu l'oublier : {}. "
+                    + "Son instance restera comptée tant qu'elle n'est pas effacée.", id, e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -939,13 +982,40 @@ public class NonConformiteServiceImpl
      */
     @Override
     public Map<String, Long> mesNonConformitesParEtape() {
+        Map<String, List<UUID>> parEtape;
         try {
-            Map<String, Long> parEtape = workflowClient.mesDossiersParEtape("NON_CONFORMITE");
-            return parEtape != null ? parEtape : Map.of();
+            parEtape = workflowClient.mesDossiersParEtape("NON_CONFORMITE");
         } catch (Exception e) {
             log.warn("Compte par étape indisponible : {}", e.getMessage());
             return Map.of();
         }
+        if (parEtape == null || parEtape.isEmpty()) {
+            return Map.of();
+        }
+
+        // Le moteur désigne les dossiers, il ne les compte pas : une non-conformité supprimée ici
+        // laisse son instance en cours chez lui, et elle gonflait le compteur d'une ligne que la
+        // liste « à traiter » — qui, elle, relit la table — n'affichait pas. Une seule requête pour
+        // toutes les étapes : les compter étape par étape en aurait coûté une par ligne du tableau.
+        Set<UUID> designees = parEtape.values().stream()
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .collect(Collectors.toSet());
+        Set<UUID> existantes = new HashSet<>(nonConformiteRepository.idsExistantsParmi(designees));
+
+        Map<String, Long> compte = new java.util.TreeMap<>();
+        parEtape.forEach((etape, dossiers) -> {
+            if (dossiers == null) {
+                return;
+            }
+            long retenus = dossiers.stream().filter(existantes::contains).count();
+            // Une étape dont tous les dossiers ont disparu ne s'affiche pas à zéro : l'écran
+            // annoncerait une file de travail vide là où il n'y a rien à annoncer du tout.
+            if (retenus > 0) {
+                compte.put(etape, retenus);
+            }
+        });
+        return compte;
     }
 
     @Override
@@ -1466,6 +1536,46 @@ public class NonConformiteServiceImpl
         }
         nc.setUserImputId(agent);
         log.info("Non-conformité {} imputée à l'agent {}", nc.getId(), agent);
+    }
+
+    /**
+     * Fait suivre au moteur un changement d'agent imputé décidé hors du circuit.
+     *
+     * <p><b>Les étapes réservées au titulaire s'ouvrent à la personne que le <i>moteur</i>
+     * connaît</b>, pas à celle qu'affiche la fiche. Les deux se renseignent pourtant depuis la même
+     * décision d'imputation — {@code champTitulaire} d'un côté, {@code userImputId} de l'autre — et
+     * rien ne les rattachait ensuite : une réaffectation faite depuis la fiche changeait l'imputé
+     * sans que le moteur en sache rien. L'étape restait alors ouverte à celui qui ne répondait plus
+     * du dossier, cependant que les listes du module — qui lisent {@code userImputId} — le
+     * montraient au nouveau. Un dossier compté chez l'un, affiché chez l'autre.</p>
+     *
+     * <p>Le plan d'action tenait déjà les deux ensemble ; la non-conformité, non. Le refus en cas
+     * d'échec est repris de lui, et pour la même raison : un transfert de responsabilité à moitié
+     * fait est pire que pas de transfert du tout — la transaction est annulée, la fiche garde son
+     * imputé, et l'appelant sait que rien n'a bougé.</p>
+     *
+     * <p>Ne fait rien quand la saisie ne désigne personne : tous les écrans qui enregistrent une
+     * fiche ne portent pas l'imputation, et prendre leur silence pour un retrait déferait
+     * l'imputation du dossier <b>et</b> fermerait l'étape à tout le monde.</p>
+     *
+     * @param agentAvant l'imputé tel qu'il était avant la saisie
+     */
+    private void faireSuivreLImputation(NonConformite nc, String agentAvant) {
+        String maintenant = valeurRenseignee(nc.getUserImputId());
+        if (maintenant == null || maintenant.equals(agentAvant) || nc.getWorkflowId() == null) {
+            return;
+        }
+        try {
+            workflowClient.designerTitulaire(nc.getId(), maintenant);
+            log.info("Non-conformité {} : imputation transférée à {}, titulaire du circuit mis à jour.",
+                    nc.getId(), maintenant);
+        } catch (Exception e) {
+            log.error("Non-conformité {} : le transfert d'imputation à {} n'a pas pu être répercuté "
+                    + "sur le circuit : {}", nc.getId(), maintenant, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Le changement d'agent imputé n'a pas pu être répercuté sur le circuit : "
+                            + "il est annulé plutôt que laissé à moitié fait.");
+        }
     }
 
     private void appliquerDocumentDeRejet(NonConformite nc, String reference) {
