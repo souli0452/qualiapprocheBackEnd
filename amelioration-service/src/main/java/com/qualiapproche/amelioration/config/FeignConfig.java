@@ -2,6 +2,8 @@ package com.qualiapproche.amelioration.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.RequestInterceptor;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import feign.codec.Decoder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,38 @@ public class FeignConfig {
     private String tokenUri;
 
     /**
+     * En-tête des permissions applicatives, propagé aux appels entre services.
+     *
+     * <p>La gateway résout ces permissions une fois par requête entrante et les transmet dans
+     * {@code X-User-Permissions} ; le jeton Keycloak, lui, ne porte que des rôles techniques. Un
+     * appel de service à service ne passant pas par la gateway, l'en-tête se perdait en chemin :
+     * le moteur ne voyait aucune permission applicative sur les appels venus d'ici.</p>
+     *
+     * <p>Ce que cela a coûté, et qui ne se voyait pas : depuis que l'habilitation d'étape lit
+     * {@code portee-toutes-structures} et non plus le nom du rôle, le responsable qualité — dont
+     * le rôle porte bien la permission — était rabattu sur sa seule structure pour les
+     * non-conformités, alors que support-service, qui propage l'en-tête, la lui gardait pour les
+     * documents. Sa liste « à traiter » se vidait de tout ce qui venait d'ailleurs, sans un mot.
+     * Même sort pour {@code circuit-decider-partout}, dont dépend le déblocage d'un dossier
+     * sans titulaire.</p>
+     *
+     * <p>Propager la valeur reçue ne l'expose pas : la gateway écrase systématiquement tout
+     * {@code X-User-Permissions} venu du client. Ce qui circule ici est ce qu'elle a établi.</p>
+     */
+    private static final String PERMISSIONS_HEADER = "X-User-Permissions";
+
+    private void propagerLesPermissions(feign.RequestTemplate requestTemplate) {
+        var attributs = RequestContextHolder.getRequestAttributes();
+        if (!(attributs instanceof ServletRequestAttributes servlet)) {
+            return;
+        }
+        String permissions = servlet.getRequest().getHeader(PERMISSIONS_HEADER);
+        if (permissions != null && !permissions.isBlank()) {
+            requestTemplate.header(PERMISSIONS_HEADER, permissions);
+        }
+    }
+
+    /**
      * Chemins du moteur de workflow réservés aux services : déclarer un fait, redésigner un
      * titulaire. Ils sont appelés depuis des requêtes utilisateur — solder un plan déclare le fait
      * dans la foulée — mais l'acte est celui du <b>module</b>, pas de la personne : le jeton du
@@ -59,6 +93,7 @@ public class FeignConfig {
             if (requestTemplate.url().contains("/protocol/openid-connect/token")) {
                 return;
             }
+            propagerLesPermissions(requestTemplate);
 
             // Propager le token de l'utilisateur actuel s'il existe — sauf sur les chemins
             // techniques, où c'est l'identité du service qui est attendue.
