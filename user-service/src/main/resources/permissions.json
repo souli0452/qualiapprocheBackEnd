@@ -553,5 +553,20 @@
     "label": "Consulter le tableau de bord de l'organisme",
     "value": "tableau-bord-organisme",
     "module": "Tableaux de bord"
+  },
+  {
+    "label": "Voir les dossiers de toutes les structures",
+    "value": "portee-toutes-structures",
+    "module": "Portée"
+  },
+  {
+    "label": "Décider à n'importe quelle étape d'un circuit",
+    "value": "circuit-decider-partout",
+    "module": "Portée"
+  },
+  {
+    "label": "Voir les documents quel que soit leur classement",
+    "value": "document-hors-classement",
+    "module": "Documentaire"
   }
 ]

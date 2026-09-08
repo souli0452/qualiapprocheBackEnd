@@ -1,5 +1,6 @@
 package com.qualiapproche.userservice.config;
 
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.PermissionsTableauDeBord;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
@@ -35,11 +36,23 @@ class RoleInitializerTest {
 
     private static final String LICENCE = "licence-write";
 
-    /** Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire. */
     private static final String[] TABLEAUX_DE_BORD = {
             PermissionsTableauDeBord.PERSONNEL,
             PermissionsTableauDeBord.STRUCTURE,
             PermissionsTableauDeBord.ORGANISME};
+
+    /** Les portées, qui ont remplacé les listes de noms de rôles écrites dans le code. */
+    private static final String[] PORTEE = {
+            PermissionsPortee.TOUTES_STRUCTURES,
+            PermissionsPortee.DECIDER_PARTOUT,
+            PermissionsPortee.HORS_CLASSEMENT};
+
+    /** Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire. */
+    private static List<String> aJour() {
+        List<String> tout = new ArrayList<>(List.of(TABLEAUX_DE_BORD));
+        tout.addAll(List.of(PORTEE));
+        return tout;
+    }
 
     private AppRoleRepository repository;
     private RoleInitializer initialiseur;
@@ -52,14 +65,14 @@ class RoleInitializerTest {
         // rendus à jour de leurs tableaux de bord, pour qu'un cas ne réponde que de ce qu'il pose.
         when(repository.findByName(anyString())).thenReturn(Optional.of(AppRole.builder()
                 .name("rôle déjà en base")
-                .permissions(new ArrayList<>(List.of(TABLEAUX_DE_BORD)))
+                .permissions(new ArrayList<>(aJour()))
                 .build()));
         initialiseur = new RoleInitializer(repository);
     }
 
     /** Un SUPER_ADMIN déjà en base, à jour de ses tableaux de bord sauf mention contraire. */
     private AppRole superAdmin(String... permissions) {
-        List<String> dotation = new ArrayList<>(List.of(TABLEAUX_DE_BORD));
+        List<String> dotation = aJour();
         dotation.addAll(List.of(permissions));
         return role("SUPER_ADMIN", dotation);
     }
@@ -135,6 +148,26 @@ class RoleInitializerTest {
                 .contains(PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE)
                 .doesNotContain(PermissionsTableauDeBord.ORGANISME);
         assertThat(qualite.getPermissions()).contains(TABLEAUX_DE_BORD);
+    }
+
+    @Test
+    @DisplayName("Un rôle existant reçoit la portée qui remplaçait les tests sur son nom")
+    void portee_donneeAuxRolesExistants() {
+        // Sans ce rattrapage, la bascule des noms de rôles vers les permissions serait une
+        // régression silencieuse : le jour de la mise à jour, un responsable qualité déjà en base
+        // cesserait de voir les dossiers des autres structures.
+        AppRole qualite = role("RESPONSABLE_QUALITE", List.of("nc-read"));
+        AppRole admin = role("SUPER_ADMIN", List.of(LICENCE));
+
+        initialiseur.run();
+
+        // Voir n'est pas décider : le responsable qualité ne gagne pas le droit de décider partout
+        // en passant par ce chemin, ni celui de passer outre le classement des documents.
+        assertThat(qualite.getPermissions())
+                .contains("nc-read", PermissionsPortee.TOUTES_STRUCTURES)
+                .doesNotContain(PermissionsPortee.DECIDER_PARTOUT,
+                        PermissionsPortee.HORS_CLASSEMENT);
+        assertThat(admin.getPermissions()).contains(PORTEE);
     }
 
     @Test

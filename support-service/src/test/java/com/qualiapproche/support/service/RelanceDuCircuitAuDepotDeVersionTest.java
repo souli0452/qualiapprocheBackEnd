@@ -85,7 +85,7 @@ class RelanceDuCircuitAuDepotDeVersionTest {
                 mock(EtatsDuCircuitService.class));
 
         lenient().when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of(), java.util.Set.of()));
         lenient().when(niveauxService.peutVoir(any(), any())).thenReturn(true);
         lenient().when(typeService.getTypeByCode("PRO")).thenReturn(typeProcedure());
         lenient().when(storageService.uploadFile(any(), anyString(), anyString()))

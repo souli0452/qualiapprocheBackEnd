@@ -13,7 +13,7 @@ import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.enumeration.GraviteNotification;
 import com.qualiapproche.common.enumeration.SourceNotification;
 import com.qualiapproche.common.response.ApiResponse;
-import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.common.config.PermissionChecker;
 import com.qualiapproche.referentiel.service.LicenceInstalleeService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,10 +38,17 @@ public class NotificationsController {
     public static final String CODE_LICENCE_EXPIREE = "LICENCE_EXPIREE";
     public static final String CODE_LICENCE_BIENTOT_EXPIREE = "LICENCE_BIENTOT_EXPIREE";
 
-    /** Rôle qui peut renouveler : le même que celui que la relance quotidienne prévient. */
-    private static final String ROLE_ADMIN = "SUPER_ADMIN";
+    /**
+     * Permission de qui peut renouveler : la même que celle qu'exige la pose d'une licence.
+     *
+     * <p>Le test portait le nom du rôle {@code SUPER_ADMIN}. Les rôles se créent depuis l'écran
+     * d'administration et une organisation nomme les siens : l'avertissement d'expiration se
+     * destine à qui peut y remédier, ce que dit la permission et non un nom.</p>
+     */
+    private static final String PERMISSION_LICENCE = "licence-write";
 
     private final LicenceInstalleeService licenceInstalleeService;
+    private final PermissionChecker permissionChecker;
 
     /** Derniers jours, où le terme devient pressant. */
     @Value("${qualisira.licence.preavis-jours:3}")
@@ -68,7 +75,7 @@ public class NotificationsController {
     @Operation(summary = "Notifications de licence, pour qui peut la renouveler")
     @GetMapping
     public ResponseEntity<ApiResponse<List<NotificationDto>>> notifications() {
-        if (!SecurityUtils.hasRole(ROLE_ADMIN)) {
+        if (!permissionChecker.detient(PERMISSION_LICENCE)) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
         }
 

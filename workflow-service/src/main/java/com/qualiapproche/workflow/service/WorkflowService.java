@@ -1194,11 +1194,59 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      */
     @Transactional(readOnly = true)
     public List<UUID> ressourcesADeciderParLAppelant(String resourceType) {
+        List<UUID> ressources = new java.util.ArrayList<>();
+        for (WorkflowValidationInstance instance : instancesADeciderParLAppelant(resourceType)) {
+            try {
+                ressources.add(UUID.fromString(instance.getResourceId()));
+            } catch (IllegalArgumentException e) {
+                log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
+            }
+        }
+        return ressources;
+    }
+
+    /**
+     * Combien de dossiers d'une famille attendent l'appelant, étape par étape.
+     *
+     * <p>Ce que le compteur d'un tableau de bord demande, et que la liste des identifiants ne
+     * savait pas dire sans que l'appelant redemande l'état de chaque dossier — une requête par
+     * ligne affichée.</p>
+     *
+     * <p><b>Les clés viennent du circuit, jamais du code.</b> Aucune étape n'est nommée ici : le
+     * libellé est celui que porte l'étape où le dossier se trouve, tel que l'éditeur l'a écrit.
+     * Une étape ajoutée, renommée ou retirée se voit donc dans le compte sans qu'une ligne change,
+     * et un second circuit servant la même famille n'a pas à être prévu.</p>
+     *
+     * <p><b>La portée est celle de l'appelant, et elle n'est pas calculée ici.</b> Un dossier n'est
+     * compté que si le moteur lui reconnaît une décision possible : l'habilitation de l'étape, la
+     * structure du dossier et les permissions de portée y sont déjà toutes appliquées. Un agent
+     * compte donc les siens, un pilote ceux de sa structure, une fonction transverse ceux de
+     * l'organisme — sans qu'aucun rôle ne soit nommé.</p>
+     *
+     * <p>Ordonné par libellé : le compte doit être le même d'un appel à l'autre, et le circuit ne
+     * porte pas d'ordre qui vaille au-delà d'une seule branche.</p>
+     */
+    public Map<String, Long> dossiersADeciderParEtape(String resourceType) {
+        Map<String, Long> parEtape = new java.util.TreeMap<>();
+        for (WorkflowValidationInstance instance : instancesADeciderParLAppelant(resourceType)) {
+            parEtape.merge(libelleDeLEtape(instance), 1L, Long::sum);
+        }
+        return parEtape;
+    }
+
+    /**
+     * Les instances en cours d'une famille sur lesquelles l'appelant a une décision à prendre.
+     *
+     * <p>C'est le moteur qui répond, non un rapprochement d'états : une transition franchissable
+     * suppose l'habilitation de l'étape satisfaite, la structure du dossier vérifiée, et le
+     * dossier ni terminé ni bloqué.</p>
+     */
+    private List<WorkflowValidationInstance> instancesADeciderParLAppelant(String resourceType) {
         String famille = TypeRessource.normaliser(resourceType);
         List<WorkflowValidationInstance> enCours =
                 validationInstanceRepository.findByResourceTypeAndStatus(famille, ValidationStatus.EN_COURS);
 
-        List<UUID> ressources = new java.util.ArrayList<>();
+        List<WorkflowValidationInstance> aDecider = new java.util.ArrayList<>();
         for (WorkflowValidationInstance instance : enCours) {
             try {
                 rattacherEtat(instance);
@@ -1212,13 +1260,23 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         instance.getResourceId(), e.getMessage());
                 continue;
             }
-            try {
-                ressources.add(UUID.fromString(instance.getResourceId()));
-            } catch (IllegalArgumentException e) {
-                log.warn("Identifiant de ressource inexploitable sur l'instance {}", instance.getId());
-            }
+            aDecider.add(instance);
         }
-        return ressources;
+        return aDecider;
+    }
+
+    /**
+     * Le nom de l'étape où le dossier se trouve, tel qu'il s'affiche.
+     *
+     * <p>Repli sur le code quand l'étape n'a pas de libellé : mieux vaut une clé technique qu'un
+     * compte reversé sous {@code null}, où il se confondrait avec celui d'une autre étape muette.</p>
+     */
+    private String libelleDeLEtape(WorkflowValidationInstance instance) {
+        if (instance.getEtat() != null && instance.getEtat().getLibelle() != null
+                && !instance.getEtat().getLibelle().isBlank()) {
+            return instance.getEtat().getLibelle();
+        }
+        return instance.getEtatCode() != null ? instance.getEtatCode() : "Étape inconnue";
     }
 
     /**

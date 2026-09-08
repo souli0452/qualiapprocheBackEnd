@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.common.dto.WorkflowInstanceDto;
 import com.qualiapproche.common.dto.WorkflowSummaryDto;
@@ -80,7 +81,7 @@ class DemandeDocumentServiceTest {
         // Par défaut, l'appelant relève de la structure de la demande : les tests qui portent sur
         // l'aboutissement n'ont pas à se préoccuper de la portée.
         lenient().when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of(), java.util.Set.of()));
         authentifier(DEMANDEUR);
     }
 
@@ -137,9 +138,10 @@ class DemandeDocumentServiceTest {
         return document;
     }
 
-    private void profil(String structureId, String... roles) {
-        when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil(structureId, java.util.Set.of(roles)));
+    /** Un profil rattaché à une structure, porteur des permissions nommées. */
+    private void profil(String structureId, String... permissions) {
+        when(profilService.profilCourant()).thenReturn(new ProfilUtilisateurService.Profil(
+                structureId, java.util.Set.of(), java.util.Set.of(permissions)));
     }
 
     @Test
@@ -169,31 +171,33 @@ class DemandeDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("Le responsable qualité voit les demandes de toutes les structures")
-    void responsableQualite_voitToutesLesStructures() {
+    @DisplayName("La portée transverse donne accès aux demandes de toutes les structures")
+    void porteeTransverse_voitToutesLesStructures() {
         when(demandeRepository.findById(DEMANDE))
                 .thenReturn(Optional.of(demande(TypeDemande.SUPPRESSION, EtatDemande.EN_COURS)));
-        profil(AUTRE_STRUCTURE, "RESPONSABLE_QUALITE");
+        // La permission, et non le nom du rôle qui la porte : une organisation nomme ses rôles
+        // comme elle l'entend, et un « Coordonnateur qualité » doit voir la même chose.
+        profil(AUTRE_STRUCTURE, PermissionsPortee.TOUTES_STRUCTURES);
 
         assertThat(service.getById(DEMANDE)).isNotNull();
     }
 
     @Test
-    @DisplayName("Le super administrateur voit les demandes de toutes les structures")
-    void superAdmin_voitToutesLesStructures() {
+    @DisplayName("La portée transverse vaut sans être ni de la structure ni l'auteur")
+    void porteeTransverse_sansAppartenanceNiAuteur() {
         when(demandeRepository.findById(DEMANDE))
                 .thenReturn(Optional.of(demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS)));
-        // Ni de la structure de la demande, ni son auteur : seul son rôle le porte.
-        profil(AUTRE_STRUCTURE, "SUPER_ADMIN");
+        // Ni de la structure de la demande, ni son auteur : seule la permission le porte.
+        profil(AUTRE_STRUCTURE, PermissionsPortee.TOUTES_STRUCTURES);
         authentifier(TIERS);
 
         assertThat(service.getById(DEMANDE)).isNotNull();
     }
 
     @Test
-    @DisplayName("Le super administrateur liste les demandes de toutes les structures")
-    void superAdmin_listeToutesLesDemandes() {
-        profil(AUTRE_STRUCTURE, "SUPER_ADMIN");
+    @DisplayName("La portée transverse liste les demandes de toutes les structures")
+    void porteeTransverse_listeToutesLesDemandes() {
+        profil(AUTRE_STRUCTURE, PermissionsPortee.TOUTES_STRUCTURES);
         authentifier(TIERS);
         when(demandeRepository.findAllByOrderByCreatedAtDesc())
                 .thenReturn(java.util.List.of(demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS)));
@@ -356,7 +360,7 @@ class DemandeDocumentServiceTest {
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
         when(documentService.peutVoirLeSuiviInterne(document)).thenReturn(true);
         when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil("structure-1", java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil("structure-1", java.util.Set.of(), java.util.Set.of()));
         when(workflowClient.getActiveWorkflowByType(anyString())).thenReturn(null);
 
         assertThatThrownBy(() -> service.creer(DOCUMENT, TypeDemande.MODIFICATION, "Objectif", null, null))
@@ -445,7 +449,7 @@ class DemandeDocumentServiceTest {
         when(documentRepository.findById(DOCUMENT)).thenReturn(Optional.of(document));
         when(documentService.peutVoirLeSuiviInterne(document)).thenReturn(true);
         when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil("structure-1", java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil("structure-1", java.util.Set.of(), java.util.Set.of()));
 
         UUID circuit = UUID.randomUUID();
         WorkflowSummaryDto actif = new WorkflowSummaryDto();

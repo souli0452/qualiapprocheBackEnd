@@ -2,6 +2,7 @@ package com.qualiapproche.userservice.config;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.PermissionsTableauDeBord;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
@@ -137,10 +138,14 @@ public class RoleInitializer implements CommandLineRunner {
                 "menu-ressources", "menu-actions", "menu-traitements", "menu-configuration",
                 // Les trois portées : sa fonction est transverse aux structures.
                 PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE,
-                PermissionsTableauDeBord.ORGANISME
+                PermissionsTableauDeBord.ORGANISME,
+                // Voir les dossiers de toutes les structures. Voir, et non décider : il n'agit
+                // qu'aux étapes qui lui sont confiées, comme chacun.
+                PermissionsPortee.TOUTES_STRUCTURES
         ));
 
         ouvrirLesTableauxDeBordAuxRolesExistants();
+        donnerLaPorteeAuxRolesExistants();
 
         log.info("Rôles standards : traitement terminé.");
     }
@@ -195,6 +200,35 @@ public class RoleInitializer implements CommandLineRunner {
         completer("SUPER_ADMIN", raison,
                 PermissionsTableauDeBord.PERSONNEL, PermissionsTableauDeBord.STRUCTURE,
                 PermissionsTableauDeBord.ORGANISME);
+    }
+
+    /**
+     * Pose sur les rôles déjà en base les permissions de portée qui remplacent les tests de nom.
+     *
+     * <p>Jusqu'ici, voir les dossiers de toutes les structures et décider à n'importe quelle étape
+     * tenaient à deux listes de <b>noms de rôles</b> écrites dans le code. Elles ont été remplacées
+     * par {@link PermissionsPortee}, pour que ces privilèges s'accordent depuis l'écran à n'importe
+     * quel rôle — une organisation nomme les siens, et le code n'a pas à les connaître.</p>
+     *
+     * <p>Sans cette reprise, la bascule serait une régression silencieuse : le jour de la mise à
+     * jour, un responsable qualité déjà en base cesserait de voir les dossiers des autres
+     * structures, et l'administration ne pourrait plus débloquer un dossier sans titulaire. Les
+     * deux rôles semés les retrouvent donc ici.</p>
+     *
+     * <p><b>Ce que cette reprise ne peut pas faire :</b> un rôle créé depuis l'écran qui portait
+     * l'un de ces privilèges parce qu'il s'appelait {@code SUPERADMIN} ou {@code ADMIN} ne sera pas
+     * rattrapé — le code ne le connaît pas, et c'est précisément le but. Il faut lui accorder la
+     * permission depuis l'écran d'administration.</p>
+     */
+    private void donnerLaPorteeAuxRolesExistants() {
+        completer("RESPONSABLE_QUALITE",
+                "sans elle, il ne voyait plus que les dossiers de sa propre structure",
+                PermissionsPortee.TOUTES_STRUCTURES);
+        completer("SUPER_ADMIN",
+                "sans elles, l'administration ne débloquait plus un dossier sans titulaire, "
+                        + "ni ne reclassait un document devenu invisible de tous",
+                PermissionsPortee.TOUTES_STRUCTURES, PermissionsPortee.DECIDER_PARTOUT,
+                PermissionsPortee.HORS_CLASSEMENT);
     }
 
     /**

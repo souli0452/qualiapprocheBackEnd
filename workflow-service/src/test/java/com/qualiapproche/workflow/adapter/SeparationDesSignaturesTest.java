@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.workflow.core.model.Etat;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.model.Cosignataires;
@@ -44,6 +46,7 @@ class SeparationDesSignaturesTest {
 
     private RolesUtilisateurService rolesUtilisateurService;
     private WorkflowConditionAdapter adapter;
+    private PermissionChecker permissionChecker;
 
     @BeforeEach
     void setUp() {
@@ -51,8 +54,11 @@ class SeparationDesSignaturesTest {
         when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("PILOTE"));
         // Le mock rend null pour la structure de l'appelant : ces tests jugent la séparation des
         // signatures, pas la structure, et le contrôle de structure reste alors sans effet.
+        // Aucune permission de portée par défaut : ces tests jugent l'habilitation
+        // ordinaire, celle que l'étape exige.
+        permissionChecker = mock(PermissionChecker.class);
         adapter = new WorkflowConditionAdapter(rolesUtilisateurService,
-                mock(StructureUtilisateurService.class));
+                mock(StructureUtilisateurService.class), permissionChecker);
     }
 
     @AfterEach
@@ -165,7 +171,8 @@ class SeparationDesSignaturesTest {
     @DisplayName("L'administration passe outre : sinon un dossier resterait sans personne pour le décider")
     void administration_passeOutre() {
         authentifier(AUTEUR);
-        when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("PILOTE", "SUPER_ADMIN"));
+        when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("PILOTE"));
+        when(permissionChecker.detient(PermissionsPortee.DECIDER_PARTOUT)).thenReturn(true);
 
         assertThat(adapter.estAutorise(document(AUTEUR), verification("PILOTE", AUTEUR))).isTrue();
     }

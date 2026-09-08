@@ -81,6 +81,25 @@ public interface WorkflowClient {
     java.util.List<UUID> ressourcesADecider(@RequestParam("resourceType") String resourceType);
 
     /**
+     * Combien de dossiers attendent l'appelant, par étape du circuit.
+     *
+     * <p>Les clés sont les libellés des étapes, tels que l'éditeur les a écrits : le module n'en
+     * nomme aucune, et une étape ajoutée au circuit apparaît d'elle-même dans le compte.</p>
+     */
+    @GetMapping("/api/v1/workflows/instances/mine/par-etape")
+    Map<String, Long> mesDossiersParEtape(@RequestParam("resourceType") String resourceType);
+
+    /**
+     * Dépose une notification dans la boîte de quelqu'un.
+     *
+     * <p>Employé par les relances d'échéance, qui annoncent quelque chose sans qu'aucune transition
+     * de circuit ne soit franchie. La clé d'unicité du dépôt évite qu'un passage quotidien empile
+     * la même ligne tous les matins.</p>
+     */
+    @PostMapping("/api/v1/notifications/depot")
+    void deposerNotification(@RequestBody com.qualiapproche.common.dto.DepotNotificationDto depot);
+
+    /**
      * Les dossiers que l'appelant a ouverts et qui ne sont pas arrivés, chacun avec son avancement.
      *
      * <p>Pendant de {@link #ressourcesADecider} : celui-là dit ce qu'il a à décider, celui-ci ce

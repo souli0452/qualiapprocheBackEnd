@@ -84,6 +84,9 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
     Page<NonConformiteDto> findByStructure(String structureId, Pageable pageable);
     Page<NonConformiteDto> findByStructureAllUsers(String structureId, Pageable pageable);
 
+    /** Combien de non-conformités attendent l'appelant, par étape du circuit. */
+    java.util.Map<String, Long> mesNonConformitesParEtape();
+
     NcDashboardDto getDashboardRQ();
     NcDashboardDto getDashboardPilot(String structureId);
     NcDashboardDto getDashboardUser(String userId);

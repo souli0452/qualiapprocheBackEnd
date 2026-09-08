@@ -38,7 +38,7 @@ import org.springframework.data.domain.Pageable;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.common.dto.auth.KcResponseDto;
-import com.qualiapproche.common.utils.RolesPlateforme;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.userservice.client.StructureClient;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
@@ -559,7 +559,12 @@ public class KcUserService {
      * Structure que les destinataires doivent partager, ou {@code null} si rien ne restreint.
      *
      * <p>Décidée ici et non chez l'appelant : le rôle lui est parfois désigné par identifiant, et
-     * seul ce service sait le résoudre en nom pour reconnaître une portée globale.</p>
+     * seul ce service sait le résoudre pour lire ce qu'il détient.</p>
+     *
+     * <p>La portée se lit sur la <b>permission</b> du rôle, non sur son nom. Une organisation nomme
+     * ses rôles comme elle l'entend : un « Coordonnateur qualité » créé depuis l'écran était ignoré
+     * par une comparaison de noms, et ses destinataires restaient bornés à une structure alors que
+     * sa fonction ne l'est pas.</p>
      */
     private String structureExigee(List<UserRoleAssignment> affectations, String structureId) {
         if (structureId == null || structureId.isBlank()) {
@@ -568,9 +573,9 @@ public class KcUserService {
         boolean porteeGlobale = affectations.stream()
                 .map(UserRoleAssignment::getRole)
                 .filter(java.util.Objects::nonNull)
-                .map(com.qualiapproche.userservice.entities.AppRole::getName)
+                .map(com.qualiapproche.userservice.entities.AppRole::getPermissions)
                 .filter(java.util.Objects::nonNull)
-                .anyMatch(nom -> RolesPlateforme.PORTEE_GLOBALE.stream().anyMatch(nom::equalsIgnoreCase));
+                .anyMatch(permissions -> permissions.contains(PermissionsPortee.TOUTES_STRUCTURES));
         return porteeGlobale ? null : structureId.trim();
     }
 

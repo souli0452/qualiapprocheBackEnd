@@ -579,6 +579,20 @@ public class NonConformiteController extends AbstractController<NonConformiteDto
     // La permission dit ce que l'appelant peut consulter, jamais sur qui : la structure et la
     // personne regardées sont bornées par le service, seul endroit qui le garantisse.
 
+    @Operation(summary = "Mes non-conformités à traiter, par étape",
+            description = "Nombre de dossiers attendant l'appelant, regroupés par étape du circuit. "
+                    + "Les clés sont les libellés des étapes tels que l'éditeur les a écrits — "
+                    + "aucune n'est nommée dans le code. La portée est celle de l'appelant : le "
+                    + "moteur ne retient qu'un dossier dont il peut franchir une transition, ce qui "
+                    + "applique déjà l'habilitation de l'étape, la structure du dossier et les "
+                    + "permissions de portée.")
+    @PreAuthorize("@perm.detient('" + PermissionsTableauDeBord.PERSONNEL + "', '"
+            + PermissionsTableauDeBord.STRUCTURE + "', '" + PermissionsTableauDeBord.ORGANISME + "')")
+    @GetMapping("/dashboard/par-etape")
+    public ResponseEntity<java.util.Map<String, Long>> mesNonConformitesParEtape() {
+        return ResponseEntity.ok(nonConformiteService.mesNonConformitesParEtape());
+    }
+
     @Operation(summary = "Tableau de bord de l'organisme",
             description = "Chiffres de toutes les structures. Réservé à la portée transverse.")
     @PreAuthorize("@perm.detient('" + PermissionsTableauDeBord.ORGANISME + "')")

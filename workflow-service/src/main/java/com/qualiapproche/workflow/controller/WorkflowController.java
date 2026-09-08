@@ -213,6 +213,28 @@ public class WorkflowController {
     }
 
     /**
+     * Combien de dossiers attendent l'appelant, étape par étape.
+     *
+     * <p>Le compteur que {@code /instances/mine} ne savait pas donner : la liste des identifiants
+     * obligeait l'appelant à redemander l'état de chacun pour les regrouper, soit une requête par
+     * ligne affichée.</p>
+     *
+     * <p>Les clés sont les libellés que l'éditeur a donnés aux étapes : aucune n'est nommée dans le
+     * code, ni ici ni dans le service. Le compte ne porte que sur ce que l'appelant peut décider,
+     * portée et habilitation déjà appliquées par le moteur.</p>
+     *
+     * <p>Rendue nue : {@code GlobalResponseHandler} l'enveloppe, et le décodeur Feign des services
+     * appelants en réextrait {@code data}. L'envelopper ici aussi ferait décoder l'enveloppe comme
+     * s'il s'agissait de la carte, et l'appelant recevrait un objet vide sans la moindre erreur.
+     * Une carte n'est pas paginée : rien n'oblige à la protéger comme les {@code List}.</p>
+     */
+    @GetMapping("/instances/mine/par-etape")
+    public ResponseEntity<java.util.Map<String, Long>> mesDossiersParEtape(
+            @RequestParam("resourceType") String resourceType) {
+        return ResponseEntity.ok(workflowService.dossiersADeciderParEtape(resourceType));
+    }
+
+    /**
      * Faits connus, à proposer dans l'éditeur de circuits.
      *
      * <p>Enveloppé explicitement : {@code GlobalResponseHandler} pagine d'office toute réponse de

@@ -39,6 +39,7 @@ import com.qualiapproche.amelioration.service.impl.PlansActionDeLaNonConformiteS
 import com.qualiapproche.common.config.PermissionChecker;
 import com.qualiapproche.common.dto.NcDashboardDto;
 import com.qualiapproche.common.enumeration.AvancementCircuit;
+import com.qualiapproche.common.enumeration.Etat;
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.common.utils.StatutEnum;
 
@@ -46,10 +47,15 @@ import com.qualiapproche.common.utils.StatutEnum;
  * Les chiffres du tableau de bord des non-conformités.
  *
  * <p>Ce qui s'y joue : l'avancement vient du <b>moteur</b> et non d'un état inscrit sur le
- * dossier. Compter les dossiers clos en cherchant {@code Etat.CLOTURE}, ou les brouillons en
- * cherchant {@code Status.DRAFT}, revenait à tenir dans ce module une seconde table de règles —
+ * dossier. Compter les dossiers clos en rapprochant le libellé de l'étape, ou les brouillons en
+ * cherchant {@code Status.DRAFT}, reviendrait à tenir dans ce module une seconde table de règles —
  * fausse dès qu'une étape est ajoutée au circuit, muette pour un second circuit servant la même
  * famille de dossiers.</p>
+ *
+ * <p>Une seule exception, et elle ne contredit pas la règle : le dossier dont le moteur ne sait
+ * rien — ceux d'avant la bascule — est rattrapé sur {@code Etat.CLOTURE}, qui n'est pas une règle
+ * concurrente mais le code d'état que le moteur avait lui-même posé sur l'étape atteinte. Dès que
+ * le moteur répond, il tranche seul.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -96,6 +102,23 @@ class TableauDeBordNcTest {
         when(workflowClient.avancementDesRessources(anyList())).thenReturn(avancements);
     }
 
+    /**
+     * Un périmètre où le moteur ne connaît qu'une partie des dossiers.
+     *
+     * @param tous        les dossiers du périmètre, avec l'état qu'ils portent
+     * @param avancements ce que le moteur sait dire, qui peut n'en couvrir aucun
+     */
+    private void dossiers(List<NonConformite> tous, Map<UUID, AvancementCircuit> avancements) {
+        when(nonConformiteRepository.findAll()).thenReturn(tous);
+        when(workflowClient.avancementDesRessources(anyList())).thenReturn(avancements);
+    }
+
+    private static NonConformite dossier(UUID id, Etat etat) {
+        NonConformite nc = dossier(id);
+        nc.setEtatTraitement(etat);
+        return nc;
+    }
+
     private void actions(PlanAction... plans) {
         when(planActionRepository.findByNonConformeIdIn(anyCollection())).thenReturn(List.of(plans));
     }
@@ -120,6 +143,75 @@ class TableauDeBordNcTest {
         // Un dossier jamais soumis n'est ni en cours ni clos : la somme des deux est inférieure
         // au total, et c'est voulu.
         assertThat(tableau.getTauxResolution()).isEqualTo(33.3);
+    }
+
+    @Test
+    @DisplayName("Le compte par étape est celui du moteur, sans qu'aucune étape soit nommée ici")
+    void parEtape_vientDuMoteur() {
+        // Les libellés viennent du circuit : le module n'en connaît aucun, et une étape ajoutée
+        // à l'éditeur apparaît dans le compte sans qu'une ligne change ici.
+        when(workflowClient.mesDossiersParEtape("NON_CONFORMITE"))
+                .thenReturn(Map.of("Réception", 3L, "Imputation", 5L));
+
+        assertThat(service.mesNonConformitesParEtape())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("Réception", 3L, "Imputation", 5L));
+    }
+
+    @Test
+    @DisplayName("Moteur muet : une carte vide, et non un écran en erreur")
+    void parEtape_moteurMuet_carteVide() {
+        // Le reste de l'accueil ne dépend pas de lui : un compteur absent vaut mieux qu'une page
+        // qui ne s'affiche pas.
+        when(workflowClient.mesDossiersParEtape("NON_CONFORMITE"))
+                .thenThrow(new IllegalStateException("workflow-service injoignable"));
+
+        assertThat(service.mesNonConformitesParEtape()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Un dossier clos avant la bascule, que le moteur ignore, compte parmi les clôturés")
+    void dossierDAvantLaBascule_compteParmiLesClotures() {
+        UUID ancien = UUID.randomUUID();
+        UUID suiviParLeMoteur = UUID.randomUUID();
+        dossiers(List.of(dossier(ancien, Etat.CLOTURE), dossier(suiviParLeMoteur)),
+                Map.of(suiviParLeMoteur, AvancementCircuit.EN_COURS));
+        actions();
+
+        NcDashboardDto tableau = service.getDashboardRQ();
+
+        assertThat(tableau.getCloturees()).isEqualTo(1);
+        assertThat(tableau.getEnCours()).isEqualTo(1);
+        // Le moteur muet sur un dossier d'avant la bascule ne rend pas le compte incomplet : son
+        // sort est connu. Sans quoi le taux se serait tu sur toute base contenant de l'historique.
+        assertThat(tableau.getTauxResolution()).isEqualTo(50.0);
+    }
+
+    @Test
+    @DisplayName("Le moteur l'emporte sur l'état inscrit : un dossier rouvert est en cours, pas clos")
+    void moteurLEmporte_surLEtatInscrit() {
+        UUID rouvert = UUID.randomUUID();
+        dossiers(List.of(dossier(rouvert, Etat.CLOTURE)),
+                Map.of(rouvert, AvancementCircuit.EN_COURS));
+        actions();
+
+        NcDashboardDto tableau = service.getDashboardRQ();
+
+        assertThat(tableau.getEnCours()).isEqualTo(1);
+        assertThat(tableau.getCloturees()).isZero();
+    }
+
+    @Test
+    @DisplayName("Un dossier dont ni le moteur ni l'état ne disent rien laisse le taux muet")
+    void dossierInconnu_laisseLeTauxMuet() {
+        UUID inconnu = UUID.randomUUID();
+        UUID clos = UUID.randomUUID();
+        dossiers(List.of(dossier(inconnu), dossier(clos)), Map.of(clos, AvancementCircuit.TERMINE));
+        actions();
+
+        NcDashboardDto tableau = service.getDashboardRQ();
+
+        assertThat(tableau.getCloturees()).isEqualTo(1);
+        assertThat(tableau.getTauxResolution()).isNull();
     }
 
     @Test

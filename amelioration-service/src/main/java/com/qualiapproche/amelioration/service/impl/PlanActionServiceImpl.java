@@ -34,6 +34,8 @@ import com.qualiapproche.amelioration.repository.PlanActionRepository;
 import com.qualiapproche.amelioration.service.PlanActionService;
 
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
+import com.qualiapproche.common.dto.DepotNotificationDto;
+import com.qualiapproche.common.enumeration.GraviteNotification;
 import com.qualiapproche.common.utils.ClesReglages;
 import lombok.RequiredArgsConstructor;
 import com.qualiapproche.amelioration.client.UtilisateurClient;
@@ -59,6 +61,14 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PieceJointeStockageService fichierService;
     private final PlansActionDeLaNonConformiteService plansActionService;
     private final WorkflowClient workflowClient;
+
+    /**
+     * Repère stable de l'alerte d'échéance, partagé avec la cloche.
+     *
+     * <p>Le même que celui qu'emploie {@code NotificationsDeLUtilisateurService} : les deux
+     * dispositifs parlent de la même chose, et l'écran doit pouvoir les brancher au même endroit.</p>
+     */
+    private static final String CODE_ECHEANCE = "PLAN_ACTION_ECHEANCE_DEPASSEE";
     private final UtilisateurClient utilisateurClient;
 
     @Value("${frontend.url}")
@@ -525,7 +535,61 @@ public class PlanActionServiceImpl implements PlanActionService {
                         "alerteEpuise", action.getResponsableNomComplet(), action.getNumeroNc(),
                         String.valueOf(joursRestants));
             }
+
+            deposerLAlerte(action, joursRestants, link);
         }
+    }
+
+    /**
+     * Dépose l'alerte dans la boîte du responsable, en plus du courriel.
+     *
+     * <p>Second canal de la même relance : le courriel se perd dans une messagerie, la ligne reste
+     * à l'écran jusqu'à ce qu'on l'ait vue.</p>
+     *
+     * <p><b>Une seule ligne par action, quel que soit le nombre de passages.</b> La clé d'unicité
+     * porte l'identifiant de l'action et rien d'autre : le passage du lendemain réécrit le message
+     * — « 3 jours » devient « 2 jours » — au lieu d'ajouter une ligne. Et elle ne réveille pas :
+     * marquer lu doit faire taire l'alerte, sans quoi elle reviendrait chaque matin et le geste
+     * n'aurait aucun sens.</p>
+     *
+     * <p>Un moteur injoignable n'interrompt pas la relance : les courriels de la journée sont déjà
+     * partis, et les priver du reste pour une notification manquée serait un mauvais échange.</p>
+     */
+    private void deposerLAlerte(PlanAction action, long joursRestants, String lien) {
+        if (action.getResponsableId() == null) {
+            return;
+        }
+        try {
+            workflowClient.deposerNotification(DepotNotificationDto.builder()
+                    .destinataireId(action.getResponsableId().toString())
+                    .cleUnicite(CODE_ECHEANCE + ":" + action.getId())
+                    .code(CODE_ECHEANCE)
+                    .source("AMELIORATION")
+                    .titre("Plan d'action n° " + action.getNumeroOdre())
+                    .message(messageDEcheance(action, joursRestants))
+                    .resourceId(String.valueOf(action.getId()))
+                    .resourceType("PLAN_ACTION")
+                    .lien(lien)
+                    .gravite(joursRestants < 0 ? GraviteNotification.URGENT
+                            : joursRestants == 0 ? GraviteNotification.ATTENTION
+                            : GraviteNotification.INFO)
+                    .reveiller(false)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Alerte d'échéance non déposée pour le plan {} : {}", action.getId(), e.getMessage());
+        }
+    }
+
+    private String messageDEcheance(PlanAction action, long joursRestants) {
+        String nc = action.getNumeroNc() == null ? "" : " de la non-conformité " + action.getNumeroNc();
+        if (joursRestants < 0) {
+            return "L'action" + nc + " a dépassé son échéance de "
+                    + Math.abs(joursRestants) + " jour(s) et n'est pas soldée.";
+        }
+        if (joursRestants == 0) {
+            return "L'action" + nc + " arrive à échéance aujourd'hui.";
+        }
+        return "L'action" + nc + " arrive à échéance dans " + joursRestants + " jour(s).";
     }
 
     private static final List<String> MOIS = List.of(

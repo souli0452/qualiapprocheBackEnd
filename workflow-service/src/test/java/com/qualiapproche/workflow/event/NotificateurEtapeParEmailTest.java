@@ -69,12 +69,23 @@ class NotificateurEtapeParEmailTest {
     @org.mockito.Spy private com.qualiapproche.workflow.config.LienVersLeDossier lienVersLeDossier =
             new com.qualiapproche.workflow.config.LienVersLeDossier();
 
-    @InjectMocks private NotificateurEtapeParEmail notificateur;
+    private NotificateurEtapeParEmail notificateur;
 
     private WorkflowStep etape;
 
     @BeforeEach
     void setUp() {
+        // Construit à la main plutôt qu'injecté : la résolution des destinataires vit désormais
+        // dans son propre composant, partagé avec la notification déposée en base. Elle est réelle
+        // ici — et non bouchonnée — pour que ces cas continuent de juger la règle elle-même, qui
+        // est précisément ce qu'ils vérifient : la structure du dossier, le repli sur la courante,
+        // les désignations nominatives.
+        DestinatairesDeLEtape destinatairesDeLEtape = new DestinatairesDeLEtape(
+                destinatairesEtapeService, validationInstanceRepository, structureUtilisateurService);
+        notificateur = new NotificateurEtapeParEmail(emailTemplateRepository, notificationService,
+                destinatairesDeLEtape, destinatairesEtapeService, lienVersLeDossier,
+                validationInstanceRepository, structureUtilisateurService);
+
         etape = new WorkflowStep();
         etape.setId(2L);
         etape.setNomEtape("Vérification");

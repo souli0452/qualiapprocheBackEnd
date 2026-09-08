@@ -68,7 +68,7 @@ class FinDeCircuitDuDocumentTest {
                 mock(EtatsDuCircuitService.class));
 
         lenient().when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of(), java.util.Set.of()));
         lenient().when(niveauxService.peutVoir(any(), any())).thenReturn(true);
         lenient().when(documentRepository.save(any(DocumentQms.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -166,7 +166,7 @@ class FinDeCircuitDuDocumentTest {
         // Un compte de service n'est rattaché à aucune structure et ne porte aucun rôle métier :
         // c'est très exactement ce qui le privait de portée sur le document.
         when(profilService.profilCourant())
-                .thenReturn(new ProfilUtilisateurService.Profil(null, java.util.Set.of()));
+                .thenReturn(new ProfilUtilisateurService.Profil(null, java.util.Set.of(), java.util.Set.of()));
 
         Jwt jeton = Jwt.withTokenValue("jeton-de-service")
                 .header("alg", "none")

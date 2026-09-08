@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
@@ -43,6 +45,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
 
     private final RolesUtilisateurService rolesUtilisateurService;
     private final com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
+    private final PermissionChecker permissionChecker;
 
     /**
      * Habilitation qui ne désigne pas un rôle mais la personne à qui le dossier est confié.
@@ -89,8 +92,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         Set<String> rolesUtilisateur = rolesUtilisateurService.rolesDeLUtilisateurCourant();
         String attendu = requiredRole.trim().toUpperCase();
 
-        if (peutDeciderPartout(rolesUtilisateur)
-                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+        if (peutDeciderPartout()) {
             return true;
         }
 
@@ -125,8 +127,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         if (structureDossier == null || structureDossier.isBlank()) {
             return true;
         }
-        if (rolesUtilisateur.stream().anyMatch(RolesPlateforme.PORTEE_GLOBALE::contains)
-                || RolesPlateforme.PORTEE_GLOBALE.stream().anyMatch(SecurityUtils::hasRole)) {
+        if (voitToutesLesStructures()) {
             return true;
         }
         // Le jeton d'abord, user-service à défaut : le royaume Keycloak ne mappe pas l'attribut
@@ -150,8 +151,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      * débloquer un dossier dont le titulaire est absent, parti, ou n'existe plus.</p>
      */
     private boolean estLeTitulaire(ExecutionContext<IWorkflowData> pContexte) {
-        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
-                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+        if (peutDeciderPartout()) {
             return true;
         }
 
@@ -186,8 +186,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      * dossier dont l'auteur a quitté l'organisation.</p>
      */
     private boolean estLeCreateur(ExecutionContext<IWorkflowData> pContexte) {
-        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
-                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+        if (peutDeciderPartout()) {
             return true;
         }
 
@@ -248,8 +247,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
             return false;
         }
 
-        if (peutDeciderPartout(rolesUtilisateurService.rolesDeLUtilisateurCourant())
-                || RolesPlateforme.DECIDE_PARTOUT.stream().anyMatch(SecurityUtils::hasRole)) {
+        if (peutDeciderPartout()) {
             log.warn("Le dossier {} est décidé par son auteur {} à une étape qui l'en écarte : "
                     + "l'administration passe outre.", instance.getResourceId(), appelant);
             return false;
@@ -297,12 +295,27 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
     /**
      * L'appelant peut-il décider à n'importe quelle étape ?
      *
-     * <p>L'administration seule, pour débloquer un dossier que son étape courante n'attribue à
-     * personne de disponible. Le responsable qualité en a été retiré : il voit tous les dossiers,
-     * mais n'agit qu'aux étapes qui lui sont confiées — sans quoi l'habilitation portée par les
-     * étapes n'aurait plus de sens à son égard.</p>
+     * <p>Le moyen de débloquer un dossier que son étape courante n'attribue à personne de
+     * disponible. Voir tous les dossiers ne le donne pas : ce sont deux permissions distinctes, et
+     * les confondre rouvrirait toutes les décisions de tous les dossiers à qui n'a besoin que de
+     * les lire.</p>
+     *
+     * <p>Le test portait sur des noms de rôles — {@code SUPER_ADMIN} — écrits dans le code. Une
+     * organisation nomme ses rôles comme elle l'entend : le privilège s'accorde désormais depuis
+     * l'écran d'administration, à n'importe lequel d'entre eux.</p>
      */
-    private boolean peutDeciderPartout(Set<String> rolesUtilisateur) {
-        return rolesUtilisateur.stream().anyMatch(RolesPlateforme.DECIDE_PARTOUT::contains);
+    private boolean peutDeciderPartout() {
+        return permissionChecker.detient(PermissionsPortee.DECIDER_PARTOUT);
+    }
+
+    /**
+     * L'appelant voit-il les dossiers de toutes les structures ?
+     *
+     * <p>Dispense de la comparaison de structure : une fonction transverse décide dans la structure
+     * où le dossier se trouve, quelle qu'elle soit. Elle ne dispense pas de porter le rôle que
+     * l'étape exige — c'est {@link #peutDeciderPartout()} qui en dispense, et lui seul.</p>
+     */
+    private boolean voitToutesLesStructures() {
+        return permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES);
     }
 }

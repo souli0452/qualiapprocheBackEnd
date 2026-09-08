@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
@@ -39,13 +41,18 @@ class HabilitationParStructureTest {
     private RolesUtilisateurService rolesUtilisateurService;
     private com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
     private WorkflowConditionAdapter adapter;
+    private PermissionChecker permissionChecker;
 
     @BeforeEach
     void setUp() {
         rolesUtilisateurService = mock(RolesUtilisateurService.class);
         when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("PILOTE"));
         structureUtilisateurService = mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class);
-        adapter = new WorkflowConditionAdapter(rolesUtilisateurService, structureUtilisateurService);
+        // Aucune permission de portée par défaut : ces tests jugent l'habilitation
+        // ordinaire, celle que l'étape exige.
+        permissionChecker = mock(PermissionChecker.class);
+        adapter = new WorkflowConditionAdapter(rolesUtilisateurService, structureUtilisateurService,
+                permissionChecker);
     }
 
     @AfterEach
@@ -146,9 +153,11 @@ class HabilitationParStructureTest {
         authentifier(AUTRE_STRUCTURE);
         when(rolesUtilisateurService.rolesDeLUtilisateurCourant())
                 .thenReturn(Set.of("RESPONSABLE_QUALITE"));
+        when(permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)).thenReturn(true);
 
-        // Le rôle est transverse par définition : borné à sa structure, le responsable qualité
-        // n'aurait plus validé que les dossiers venant de la sienne.
+        // La portée est transverse par définition : bornée à sa structure, la fonction qualité
+        // n'aurait plus validé que les dossiers venant de la sienne. Elle porte tout de même le
+        // rôle que l'étape exige — voir partout ne dispense pas d'être habilité à l'étape.
         assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
                 transitionReserveeAuRole("RESPONSABLE_QUALITE"))).isTrue();
     }
@@ -157,7 +166,9 @@ class HabilitationParStructureTest {
     @DisplayName("L'administration passe outre la structure comme le reste")
     void administration_passeOutre() {
         authentifier(AUTRE_STRUCTURE);
-        when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("SUPER_ADMIN"));
+        // Décider partout, ce qui emporte l'étape et la structure — à la différence de la seule
+        // portée de lecture, qui ne dispense que de la structure.
+        when(permissionChecker.detient(PermissionsPortee.DECIDER_PARTOUT)).thenReturn(true);
 
         assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
                 transitionReserveeAuRole("PILOTE"))).isTrue();

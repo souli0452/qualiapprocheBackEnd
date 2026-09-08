@@ -47,7 +47,7 @@ import com.qualiapproche.common.base.Participants;
 import com.qualiapproche.common.service.AbstractService;
 import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.utils.LotsDuMoteur;
-import com.qualiapproche.common.utils.RolesPlateforme;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.SecurityUtils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
@@ -473,7 +473,7 @@ public class NonConformiteServiceImpl
      * transverse. Voir, et non décider — l'habilitation des étapes, elle, reste entière.</p>
      */
     private Page<NonConformite> visiblesParLAppelant(Pageable pageable) {
-        if (permissionChecker.detient(RolesPlateforme.PORTEE_GLOBALE.toArray(String[]::new))) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
             return nonConformiteRepository.findAll(pageable);
         }
         return nonConformiteRepository.findVisiblesPar(
@@ -922,6 +922,32 @@ public class NonConformiteServiceImpl
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
+    /**
+     * Combien de non-conformités attendent l'appelant, étape par étape.
+     *
+     * <p>Demandé au moteur, qui seul sait qui peut décider quoi. Le module ne nomme aucune étape :
+     * les clés sont les libellés que porte le circuit, de sorte qu'une étape ajoutée, renommée ou
+     * retirée se voie dans le compte sans qu'une ligne change ici.</p>
+     *
+     * <p>La portée n'est pas calculée non plus : le moteur ne retient qu'un dossier dont l'appelant
+     * peut franchir une transition, ce qui applique déjà l'habilitation de l'étape, la structure du
+     * dossier et les permissions de portée. Un agent compte les siens, un pilote ceux de sa
+     * structure, une fonction transverse ceux de l'organisme — sans qu'aucun rôle soit nommé.</p>
+     *
+     * <p>Moteur muet : une carte vide plutôt qu'une erreur. Le reste de l'accueil ne dépend pas de
+     * lui, et un écran en erreur vaut moins qu'un compteur absent.</p>
+     */
+    @Override
+    public Map<String, Long> mesNonConformitesParEtape() {
+        try {
+            Map<String, Long> parEtape = workflowClient.mesDossiersParEtape("NON_CONFORMITE");
+            return parEtape != null ? parEtape : Map.of();
+        } catch (Exception e) {
+            log.warn("Compte par étape indisponible : {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
     @Override
     public NcDashboardDto getDashboardRQ() {
         List<NonConformite> all = nonConformiteRepository.findAll();
@@ -962,7 +988,7 @@ public class NonConformiteServiceImpl
      * dissimulation ne protégerait rien.</p>
      */
     private void exigerSonProprePerimetre(String demande, String sien, String refus) {
-        if (permissionChecker.detient(RolesPlateforme.PORTEE_GLOBALE.toArray(String[]::new))) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
             return;
         }
         if (demande == null || sien == null || !demande.equals(sien)) {
@@ -974,10 +1000,21 @@ public class NonConformiteServiceImpl
      * Les chiffres d'un périmètre de dossiers.
      *
      * <p>L'avancement — en cours, clôturés — est demandé au moteur, dossier par dossier mais en
-     * lots. Le déduire de {@code Etat.CLOTURE} ou de {@code Status.DRAFT} revenait à tenir ici une
-     * seconde table de règles : elle aurait cessé d'être exacte à la première étape ajoutée au
-     * circuit, et n'aurait rien su dire d'un second circuit servant la même famille de dossiers.
+     * lots. Le déduire du libellé de l'étape ou de {@code Status.DRAFT} reviendrait à tenir ici une
+     * seconde table de règles : elle cesserait d'être exacte à la première étape ajoutée au
+     * circuit, et ne saurait rien dire d'un second circuit servant la même famille de dossiers.
      * C'est la même raison qui a fait passer les listes « à traiter » par le moteur.</p>
+     *
+     * <p>Un dossier sur lequel le moteur ne dit rien — ceux d'avant la bascule, qui n'ont pas
+     * d'instance de circuit — est rattrapé sur {@code Etat.CLOTURE}. Ce n'est pas une règle
+     * concurrente : ce champ reçoit {@code Etat.valueOf(etatCode)}, le code d'état que le circuit
+     * porte sur l'étape atteinte, et rien d'autre. Le lire, c'est lire la décision du moteur depuis
+     * la ligne où il l'a écrite, faute de pouvoir la lui redemander. Le moteur reste interrogé en
+     * premier et tranche seul dès qu'il répond, de sorte qu'un dossier rouvert compte bien parmi
+     * les dossiers en cours malgré l'état qu'il conserve.</p>
+     *
+     * <p>Sans ce rattrapage, les dossiers clôturés avant la bascule ne figuraient nulle part :
+     * comptés dans le total, absents des deux compteurs.</p>
      *
      * <p>Le respect des délais, lui, se lit sur les actions correctives : c'est leur échéance qui
      * est tenue ou non, la non-conformité n'en porte aucune.</p>
@@ -1000,8 +1037,26 @@ public class NonConformiteServiceImpl
                 .toList();
 
         Map<UUID, AvancementCircuit> avancements = avancementDesDossiers(dossiers);
-        long enCours = avancements.values().stream().filter(a -> a == AvancementCircuit.EN_COURS).count();
-        long cloturees = avancements.values().stream().filter(a -> a == AvancementCircuit.TERMINE).count();
+
+        long enCours = 0;
+        long cloturees = 0;
+        long sansAvancement = 0;
+        for (NonConformite nc : ncs) {
+            AvancementCircuit avancement = avancements.get(nc.getId());
+            if (avancement != null) {
+                // Le moteur a répondu : il tranche seul. NON_ENGAGE en est une — le dossier n'est
+                // ni en cours ni clos, mais il est renseigné et ne manque donc pas au compte.
+                if (avancement == AvancementCircuit.TERMINE) {
+                    cloturees++;
+                } else if (avancement == AvancementCircuit.EN_COURS) {
+                    enCours++;
+                }
+            } else if (nc.getEtatTraitement() == Etat.CLOTURE) {
+                cloturees++;
+            } else {
+                sansAvancement++;
+            }
+        }
 
         RespectDesEcheances echeances = respectDesEcheances(dossiers);
 
@@ -1009,7 +1064,7 @@ public class NonConformiteServiceImpl
         // Le moteur muet sur une partie du périmètre laisse les comptes incomplets. Le taux, lui,
         // est rendu nul plutôt que faux : c'est le chiffre qui se lit comme un jugement, et
         // l'annoncer sur un dénominateur amputé aurait affirmé une contre-performance imaginaire.
-        boolean avancementComplet = avancements.size() == dossiers.size();
+        boolean avancementComplet = sansAvancement == 0;
 
         return NcDashboardDto.builder()
                 .totalNC(total)
@@ -1296,7 +1351,7 @@ public class NonConformiteServiceImpl
      */
     @Override
     protected Specification<NonConformite> bornesDeVisibilite() {
-        if (permissionChecker.detient(RolesPlateforme.PORTEE_GLOBALE.toArray(String[]::new))) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
             return (root, query, cb) -> cb.conjunction();
         }
         return NonConformiteSpecification.visiblesPar(

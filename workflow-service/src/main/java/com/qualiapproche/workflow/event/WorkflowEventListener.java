@@ -64,6 +64,7 @@ public class WorkflowEventListener {
     private final WorkflowFieldValueRepository fieldValueRepository;
     private final WorkflowNotificationService notificationService;
     private final NotificateurEtapeParEmail notificateurParEmail;
+    private final NotificateurEnBase notificateurEnBase;
 
     /**
      * Enregistre la notification à remettre, dans la transaction de la transition : les deux sont
@@ -100,7 +101,12 @@ public class WorkflowEventListener {
             notificationService.remettre(notificationId);
         }
 
-        etapeAtteinte(event.getEtatApres()).ifPresent(step -> notificateurParEmail.notifier(step, event));
+        etapeAtteinte(event.getEtatApres()).ifPresent(step -> {
+            notificateurParEmail.notifier(step, event);
+            // Second canal du même événement : la ligne déposée dans la boîte de ceux qui doivent
+            // agir. Les destinataires sont résolus une seule fois, par DestinatairesDeLEtape.
+            notificateurEnBase.notifier(step, event);
+        });
     }
 
     private WorkflowValidationInstance instanceConcernee(TransitionFranchieEvent event) {

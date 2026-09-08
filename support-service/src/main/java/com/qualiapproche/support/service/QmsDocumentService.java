@@ -940,16 +940,13 @@ public class QmsDocumentService {
     /**
      * Voit-on l'ensemble des documents, toutes structures confondues ?
      *
-     * <p>Deux sources, parce que le rôle peut venir de deux endroits : les rôles techniques portés
-     * par le jeton Keycloak, et les rôles applicatifs que détient user-service. Un super
-     * administrateur n'a pas nécessairement de rôle technique correspondant — s'en tenir au jeton
-     * le ramenait au rang d'utilisateur ordinaire, borné à sa propre structure.</p>
+     * <p>Une seule source désormais : la permission que user-service résout pour ce compte. Le
+     * test empilait trois noms de rôles techniques du jeton — {@code ADMIN}, {@code MANAGE},
+     * {@code SUPER_ADMIN} — parce qu'aucun n'était sûr d'y figurer. Aucun ne l'est en effet : les
+     * rôles se créent depuis l'écran, et leurs noms n'appartiennent pas au code.</p>
      */
     private boolean voitTout(ProfilUtilisateurService.Profil profil) {
-        return SecurityUtils.hasRole("ADMIN")
-                || SecurityUtils.hasRole("MANAGE")
-                || SecurityUtils.hasRole("SUPER_ADMIN")
-                || profil.voitToutesLesStructures();
+        return profil.voitToutesLesStructures();
     }
 
     private Portee porteeSur(DocumentQms document) {
@@ -1119,7 +1116,7 @@ public class QmsDocumentService {
     @Transactional
     public String reclasser(UUID documentId, String niveauId, String niveauLibelle) {
         ProfilUtilisateurService.Profil profil = profilUtilisateurService.profilCourant();
-        if (!profil.estAdministrateur() && !profil.estResponsableQualite()) {
+        if (!profil.estAdministrateur() && !profil.detient("niveau-confidentialite-write")) {
             throw new AccessDeniedException(
                     "Le niveau de confidentialité d'un document ne se change qu'au titre de la "
                             + "qualité ou de l'administration générale.");
@@ -1848,7 +1845,9 @@ public class QmsDocumentService {
      */
     public List<SharedDocumentDto> getSharedDocuments(String userId) {
         String currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isAdmin = SecurityUtils.hasRole("ADMIN") || SecurityUtils.hasRole("MANAGE");
+        // Consulter ce qui est partagé avec quelqu'un d'autre relève de l'administration des
+        // comptes, non d'un nom de rôle technique que le jeton peut ou non porter.
+        boolean isAdmin = profilUtilisateurService.profilCourant().detient("MANAGE_USER");
 
         if (!isAdmin && !userId.equals(currentUserId)) {
             throw new AccessDeniedException(

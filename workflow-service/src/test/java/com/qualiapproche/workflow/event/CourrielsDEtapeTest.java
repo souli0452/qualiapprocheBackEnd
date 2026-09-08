@@ -117,8 +117,14 @@ class CourrielsDEtapeTest {
         liens.setBaseUrl("https://qualisira.horeb.tech");
         liens.setLiens(Map.of("NON_CONFORMITE", "/non-conformite/suivi?ncId={resourceId}",
                 "DOCUMENT", "/gestion-documentaire/documents?documentId={resourceId}"));
+        // La résolution des destinataires vit désormais dans son propre composant, partagé avec la
+        // notification déposée en base. Elle est construite pour de vrai — et non bouchonnée — pour
+        // que ces cas continuent de juger la règle elle-même, et non un mock qui la reproduirait.
+        DestinatairesDeLEtape destinatairesDeLEtape = new DestinatairesDeLEtape(
+                destinatairesEtapeService, instances,
+                org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
         notificateur = new NotificateurEtapeParEmail(gabarits, notificationService,
-                destinatairesEtapeService, liens, instances,
+                destinatairesDeLEtape, destinatairesEtapeService, liens, instances,
                 org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
     }
 

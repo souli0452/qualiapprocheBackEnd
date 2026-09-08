@@ -66,7 +66,8 @@ class FinDeCircuitParEtapeSansSuiteTest {
 
         listener = new WorkflowEventListener(stepRepository, transitionRepository,
                 validationInstanceRepository, historyRepository, fieldValueRepository,
-                notificationService, mock(NotificateurEtapeParEmail.class));
+                notificationService, mock(NotificateurEtapeParEmail.class),
+                mock(NotificateurEnBase.class));
 
         when(historyRepository.findTopByValidationInstanceOrderByDecisionDateDesc(any()))
                 .thenReturn(Optional.empty());

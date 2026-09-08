@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.support.client.UserClient;
 import lombok.RequiredArgsConstructor;
@@ -33,19 +34,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProfilUtilisateurService {
 
-    /** Rôle qui voit l'ensemble des documents soumis, toutes structures confondues. */
-    public static final String RESPONSABLE_QUALITE = "RESPONSABLE_QUALITE";
-
-    /**
-     * Rôles d'administration générale, qui voient également tout.
-     *
-     * <p>{@code SUPER_ADMIN} y figure sous ses deux orthographes : user-service accepte les deux
-     * et normalise vers la première, mais un compte affecté avant cette normalisation peut porter
-     * l'autre.</p>
-     */
-    private static final Set<String> ROLES_ADMINISTRATION =
-            Set.of("SUPER_ADMIN", "SUPERADMIN", "ADMIN");
-
     private final UserClient userClient;
 
     @Value("${support.profil.cache-seconds:60}")
@@ -59,43 +47,53 @@ public class ProfilUtilisateurService {
     /**
      * Profil réduit à ce dont dépend la visibilité.
      *
+     * <p>Il porte les <b>permissions</b> et non plus des noms de rôles. Les rôles se créent depuis
+     * l'écran d'administration : une organisation nomme les siens, et un test sur
+     * {@code "RESPONSABLE_QUALITE"} ou {@code "ADMIN"} ignorait tout d'un rôle équivalent portant
+     * un autre nom — lequel se voyait borné à sa propre structure sans que rien ne l'explique.</p>
+     *
+     * <p>Les <b>noms de rôles</b> y restent, mais pour une seule chose : le classement des
+     * documents compare aux rôles qu'un administrateur a inscrits sur un niveau de confidentialité.
+     * Ces noms-là sont de la <i>donnée</i>, choisis dans l'écran et comparés à eux-mêmes — rien à
+     * voir avec un nom écrit en dur dans le code, qui lui décidait à la place de l'administrateur.
+     * Aucune décision d'habilitation ne se prend plus sur {@code roles}.</p>
+     *
      * @param structureId structure de rattachement, ou {@code null} si l'utilisateur n'en a pas
-     * @param roles       rôles applicatifs, en majuscules
+     * @param roles       noms des rôles portés, pour la seule comparaison au classement documentaire
+     * @param permissions permissions applicatives détenues, telles que user-service les sert
      */
-    public record Profil(String structureId, Set<String> roles) {
+    public record Profil(String structureId, Set<String> roles, Set<String> permissions) {
 
-        public boolean estResponsableQualite() {
-            return roles.contains(RESPONSABLE_QUALITE);
+        public boolean detient(String permission) {
+            return permissions.contains(permission);
         }
 
         /**
          * Voit-il l'ensemble des structures ?
          *
-         * <p>Le responsable qualité, parce que sa fonction le suppose ; l'administration générale,
-         * parce qu'elle administre. Ce test manquait pour {@code SUPER_ADMIN} : seuls les rôles
-         * techniques du jeton — {@code ADMIN}, {@code MANAGE} — étaient consultés, si bien qu'un
-         * super administrateur dont le jeton ne portait pas l'un d'eux était traité comme un
-         * utilisateur ordinaire et ne voyait que sa propre structure.</p>
+         * <p>Une seule permission le dit désormais, accordée depuis l'écran à qui de droit. Elle
+         * remplace une liste de noms — {@code RESPONSABLE_QUALITE}, {@code SUPER_ADMIN},
+         * {@code SUPERADMIN}, {@code ADMIN} — dont l'orthographe même trahissait la fragilité.</p>
          */
         public boolean voitToutesLesStructures() {
-            return estResponsableQualite()
-                    || roles.stream().anyMatch(ROLES_ADMINISTRATION::contains);
+            return detient(PermissionsPortee.TOUTES_STRUCTURES);
         }
 
         /**
          * Relève-t-il de l'administration générale ?
          *
-         * <p>Seul ce rôle échappe au classement des documents. Le responsable qualité, lui, y est
-         * soumis : il voit toutes les structures, pas tous les classements. Cette dispense-ci
-         * existe pour qu'un document mal classé — sur un rôle que plus personne ne détient —
-         * reste réparable ; sans elle, plus personne ne pourrait ni le voir ni le reclasser.</p>
+         * <p>Seule cette permission échappe au classement des documents. Voir toutes les structures
+         * ne l'emporte pas : le responsable qualité voit toutes les structures, pas tous les
+         * classements. La dispense existe pour qu'un document mal classé — sur un rôle que plus
+         * personne ne détient — reste réparable ; sans elle, plus personne ne pourrait ni le voir
+         * ni le reclasser.</p>
          */
         public boolean estAdministrateur() {
-            return roles.stream().anyMatch(ROLES_ADMINISTRATION::contains);
+            return detient(PermissionsPortee.HORS_CLASSEMENT);
         }
 
         static Profil vide() {
-            return new Profil(null, Set.of());
+            return new Profil(null, Set.of(), Set.of());
         }
     }
 
@@ -158,20 +156,29 @@ public class ProfilUtilisateurService {
             String structureId = (structure == null || structure.toString().isBlank())
                     ? null : structure.toString().trim();
 
+            // Les permissions décident ; les noms de rôles ne servent plus qu'à se comparer aux
+            // rôles qu'un administrateur a inscrits sur un niveau de confidentialité.
             Object roles = reponse.get("roles") != null ? reponse.get("roles") : reponse.get("appRoles");
-            Set<String> nomsDeRoles = (roles instanceof List<?> liste)
-                    ? liste.stream()
-                            .filter(java.util.Objects::nonNull)
-                            .map(r -> r.toString().trim().toUpperCase())
-                            .filter(r -> !r.isEmpty())
-                            .collect(Collectors.toSet())
-                    : Set.of();
+            Set<String> nomsDeRoles = textes(roles, true);
+            Set<String> permissions = textes(reponse.get("permissions"), false);
 
-            return new Profil(structureId, nomsDeRoles);
+            return new Profil(structureId, nomsDeRoles, permissions);
         } catch (Exception e) {
             log.error("Profil de {} introuvable auprès de user-service : {}", userId, e.getMessage());
             return null;
         }
+    }
+
+    /** Les chaînes non vides d'une liste servie par user-service, éventuellement normalisées. */
+    private static Set<String> textes(Object brut, boolean enMajuscules) {
+        if (!(brut instanceof List<?> liste)) {
+            return Set.of();
+        }
+        return liste.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(v -> enMajuscules ? v.toString().trim().toUpperCase() : v.toString().trim())
+                .filter(v -> !v.isEmpty())
+                .collect(Collectors.toSet());
     }
 
     private void purgerSiNecessaire() {

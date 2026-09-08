@@ -1,5 +1,6 @@
 package com.qualiapproche.support.service;
 
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.support.client.UserClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,9 +24,14 @@ import static org.mockito.Mockito.when;
 
 /**
  * La visibilité d'un document repose entièrement sur ce profil : la structure de rattachement de
- * l'appelant et ses rôles. Ce que ces tests fixent, c'est surtout le comportement en cas de
- * défaillance — un profil qui reviendrait « vide » de façon inattendue restreint l'accès, un profil
- * qui reviendrait à tort avec le rôle qualité l'ouvrirait en grand.
+ * l'appelant et ses <b>permissions</b>. Ce que ces tests fixent, c'est surtout le comportement en
+ * cas de défaillance — un profil qui reviendrait « vide » de façon inattendue restreint l'accès, un
+ * profil qui reviendrait à tort avec la portée transverse l'ouvrirait en grand.
+ *
+ * <p>Deux cas ont disparu avec la bascule des noms de rôles vers les permissions : la
+ * reconnaissance de « responsable_qualite » quelle que soit la casse, et celle de « SUPERADMIN »
+ * sans souligné. Ils n'existaient que parce que le code comparait des noms — une orthographe de
+ * plus, un cas de test de plus. Une permission n'a qu'une écriture.</p>
  */
 class ProfilUtilisateurServiceTest {
 
@@ -61,62 +67,60 @@ class ProfilUtilisateurServiceTest {
     }
 
     @Test
-    @DisplayName("Structure et rôles sont lus depuis user-service")
-    void profil_litStructureEtRoles() {
+    @DisplayName("Structure, rôles et permissions sont lus depuis user-service")
+    void profil_litStructureRolesEtPermissions() {
         when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
                 "structure", STRUCTURE,
-                "roles", List.of("PILOTE", "AGENT")));
+                "roles", List.of("PILOTE", "AGENT"),
+                "permissions", List.of("nc-read", "document-read")));
 
         ProfilUtilisateurService.Profil profil = service.profilCourant();
 
         assertThat(profil.structureId()).isEqualTo(STRUCTURE);
+        // Les noms de rôles restent lus, pour la seule comparaison au classement documentaire.
         assertThat(profil.roles()).containsExactlyInAnyOrder("PILOTE", "AGENT");
-        assertThat(profil.estResponsableQualite()).isFalse();
+        assertThat(profil.permissions()).containsExactlyInAnyOrder("nc-read", "document-read");
+        assertThat(profil.voitToutesLesStructures()).isFalse();
     }
 
     @Test
-    @DisplayName("Le responsable qualité est reconnu, quelle que soit la casse")
-    void profil_reconnaitLeResponsableQualite() {
+    @DisplayName("La permission ouvre la portée transverse, quel que soit le nom du rôle qui la porte")
+    void permission_ouvreLaPorteeTransverse() {
+        // Le nom du rôle n'entre plus en ligne de compte : une organisation nomme les siens, et
+        // celui-ci n'est aucun de ceux que le code connaissait.
         when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
                 "structure", STRUCTURE,
-                "roles", List.of("responsable_qualite")));
-
-        assertThat(service.profilCourant().estResponsableQualite()).isTrue();
-    }
-
-    @Test
-    @DisplayName("Le super administrateur voit toutes les structures")
-    void superAdmin_voitTout() {
-        when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
-                "structure", STRUCTURE, "roles", List.of("SUPER_ADMIN")));
-
-        // Le test ne portait que sur les rôles techniques du jeton — ADMIN, MANAGE — si bien
-        // qu'un super administrateur sans l'un d'eux était borné à sa propre structure.
-        assertThat(service.profilCourant().voitToutesLesStructures()).isTrue();
-    }
-
-    @Test
-    @DisplayName("« SUPERADMIN » sans souligné est reconnu de la même façon")
-    void superAdmin_orthographeSansSouligne() {
-        when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
-                "structure", STRUCTURE, "roles", List.of("superadmin")));
+                "roles", List.of("COORDONNATEUR_QUALITE"),
+                "permissions", List.of(PermissionsPortee.TOUTES_STRUCTURES)));
 
         assertThat(service.profilCourant().voitToutesLesStructures()).isTrue();
     }
 
     @Test
-    @DisplayName("Le responsable qualité voit toutes les structures ; un agent, non")
-    void porteeSelonLeRole() {
+    @DisplayName("Un rôle jadis privilégié par son nom ne l'est plus sans la permission")
+    void nomDeRoleSeul_nOuvrePlusRien() {
+        // Le cœur de la bascule : porter le nom ne suffit plus, c'est la dotation qui décide.
         when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
-                "structure", STRUCTURE, "roles", List.of("RESPONSABLE_QUALITE")));
-        assertThat(service.profilCourant().voitToutesLesStructures()).isTrue();
+                "structure", STRUCTURE,
+                "roles", List.of("SUPER_ADMIN", "RESPONSABLE_QUALITE"),
+                "permissions", List.of("nc-read")));
 
-        service = new ProfilUtilisateurService(client);
-        ReflectionTestUtils.setField(service, "retentionSecondes", 60L);
-        ReflectionTestUtils.setField(service, "tailleMax", 100);
-        when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
-                "structure", STRUCTURE, "roles", List.of("AGENT", "PILOTE")));
         assertThat(service.profilCourant().voitToutesLesStructures()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Voir toutes les structures n'emporte pas la dispense de classement")
+    void porteeTransverse_neDispensePasDuClassement() {
+        // Le responsable qualité voit toutes les structures, pas tous les classements : deux
+        // permissions distinctes, et les confondre ouvrirait les documents réservés.
+        when(client.getUserById(UTILISATEUR)).thenReturn(Map.of(
+                "structure", STRUCTURE,
+                "permissions", List.of(PermissionsPortee.TOUTES_STRUCTURES)));
+
+        ProfilUtilisateurService.Profil profil = service.profilCourant();
+
+        assertThat(profil.voitToutesLesStructures()).isTrue();
+        assertThat(profil.estAdministrateur()).isFalse();
     }
 
     @Test
@@ -129,7 +133,7 @@ class ProfilUtilisateurServiceTest {
         // Structure nulle : la clause de visibilité s'y réduit d'elle-même, et l'utilisateur
         // retombe sur ses propres documents et ses partages nominatifs.
         assertThat(profil.structureId()).isNull();
-        assertThat(profil.estResponsableQualite()).isFalse();
+        assertThat(profil.voitToutesLesStructures()).isFalse();
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.adapter;
 
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
@@ -43,6 +45,7 @@ class HabilitationParDesignationTest {
 
     private RolesUtilisateurService rolesUtilisateurService;
     private WorkflowConditionAdapter adapter;
+    private PermissionChecker permissionChecker;
 
     @BeforeEach
     void setUp() {
@@ -50,8 +53,12 @@ class HabilitationParDesignationTest {
         when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("AGENT"));
         // Structure inconnue de part et d'autre : ces tests jugent les désignations, pas la
         // structure — le mock rend null, ce qui laisse le contrôle de structure sans effet.
+        // Aucune permission de portée par défaut : ces tests jugent l'habilitation
+        // ordinaire, celle que l'étape exige.
+        permissionChecker = mock(PermissionChecker.class);
         adapter = new WorkflowConditionAdapter(rolesUtilisateurService,
-                mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
+                mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class),
+                permissionChecker);
     }
 
     @AfterEach
@@ -144,7 +151,9 @@ class HabilitationParDesignationTest {
     @DisplayName("L'administration passe outre : c'est ainsi qu'on débloque le dossier d'un partant")
     void administration_passeOutre() {
         authentifier(TIERS);
-        when(rolesUtilisateurService.rolesDeLUtilisateurCourant()).thenReturn(Set.of("SUPER_ADMIN"));
+        // La permission, non le nom du rôle : c'est ce qu'un rôle détient qui le dispense, de
+        // sorte qu'une organisation puisse confier ce déblocage au rôle de son choix.
+        when(permissionChecker.detient(PermissionsPortee.DECIDER_PARTOUT)).thenReturn(true);
 
         assertThat(adapter.estAutorise(dossier(CREATEUR, null), transition("@CREATEUR"))).isTrue();
     }
