@@ -1,6 +1,7 @@
 package com.qualiapproche.workflow.adapter;
 
 import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.ClesReglages;
 import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.RolesPlateforme;
 import com.qualiapproche.common.utils.SecurityUtils;
@@ -46,6 +47,7 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
     private final RolesUtilisateurService rolesUtilisateurService;
     private final com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
     private final PermissionChecker permissionChecker;
+    private final com.qualiapproche.workflow.service.ReglagesOrganisation reglagesOrganisation;
 
     /**
      * Habilitation qui ne désigne pas un rôle mais la personne à qui le dossier est confié.
@@ -114,7 +116,9 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      * <p>En sont dispensés : les porteurs d'un rôle à portée globale — l'administration et la
      * responsabilité qualité couvrent la plateforme par définition, et le circuit peut désigner
      * leur rôle par un identifiant que ce service ne sait pas résoudre en nom, d'où la
-     * reconnaissance par les rôles de l'appelant ; les dossiers sans structure inscrite —
+     * reconnaissance par les rôles de l'appelant ; le responsable qualité que désigne le
+     * paramétrage, reconnu à son courriel — voir {@link #estLeResponsableQualiteDesigne} ; les
+     * dossiers sans structure inscrite —
      * antérieurs à la colonne, ou ouverts par un déclarant sans structure ; et les appelants dont
      * le jeton ne porte pas de structure — on ne compare pas à l'inconnu.</p>
      */
@@ -316,6 +320,37 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      * l'étape exige — c'est {@link #peutDeciderPartout()} qui en dispense, et lui seul.</p>
      */
     private boolean voitToutesLesStructures() {
-        return permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES);
+        return permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)
+                || estLeResponsableQualiteDesigne();
+    }
+
+    /**
+     * L'appelant est-il le responsable qualité que désigne le paramétrage ?
+     *
+     * <p>Le responsable qualité couvre l'organisme entier : sa structure d'affectation ne dit rien
+     * de son périmètre. Il se reconnaissait à son nom de rôle, puis à la permission
+     * {@code portee-toutes-structures} depuis que les habilitations se lisent sur les permissions.
+     * Un rôle créé sur mesure, ou un royaume où le rattrapage des permissions n'a pas eu lieu, l'a
+     * fait retomber dans sa structure : plus aucun dossier d'ailleurs ne lui était proposé, sans
+     * que rien ne le dise.</p>
+     *
+     * <p>Le paramétrage de l'organisation le désigne déjà par son courriel — c'est ainsi que les
+     * courriels d'étape le trouvent. La même désignation vaut ici : celui dont le courriel est
+     * inscrit là est le responsable qualité, quel que soit le nom de son rôle. <b>Seule la
+     * structure est levée</b> : le rôle qu'exige l'étape reste exigé, il décide sur ce que son
+     * rôle ouvre, partout.</p>
+     *
+     * <p>Comparaison sans casse ni espaces : le courriel du jeton vient du royaume, celui du
+     * paramétrage d'une saisie, et les deux ne se ressemblent qu'à ces détails près. Un
+     * paramétrage muet, ou un référentiel injoignable — {@code valeur} rend alors ce qu'il tenait
+     * en cache, ou rien —, ne désigne personne.</p>
+     */
+    private boolean estLeResponsableQualiteDesigne() {
+        String courriel = SecurityUtils.getCurrentUserEmail();
+        if (courriel == null || courriel.isBlank()) {
+            return false;
+        }
+        String designe = reglagesOrganisation.valeur(ClesReglages.RESPONSABLE_QUALITE_EMAIL);
+        return designe != null && designe.trim().equalsIgnoreCase(courriel.trim());
     }
 }

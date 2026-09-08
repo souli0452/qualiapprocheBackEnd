@@ -42,6 +42,7 @@ class HabilitationParStructureTest {
     private com.qualiapproche.workflow.service.StructureUtilisateurService structureUtilisateurService;
     private WorkflowConditionAdapter adapter;
     private PermissionChecker permissionChecker;
+    private com.qualiapproche.workflow.service.ReglagesOrganisation reglagesOrganisation;
 
     @BeforeEach
     void setUp() {
@@ -51,8 +52,9 @@ class HabilitationParStructureTest {
         // Aucune permission de portée par défaut : ces tests jugent l'habilitation
         // ordinaire, celle que l'étape exige.
         permissionChecker = mock(PermissionChecker.class);
+        reglagesOrganisation = mock(com.qualiapproche.workflow.service.ReglagesOrganisation.class);
         adapter = new WorkflowConditionAdapter(rolesUtilisateurService, structureUtilisateurService,
-                permissionChecker);
+                permissionChecker, reglagesOrganisation);
     }
 
     @AfterEach
@@ -172,5 +174,58 @@ class HabilitationParStructureTest {
 
         assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
                 transitionReserveeAuRole("PILOTE"))).isTrue();
+    }
+    /** Le même appelant, mais avec un courriel dans son jeton. */
+    private void authentifierAvecCourriel(String structureId, String courriel) {
+        Jwt.Builder jwt = Jwt.withTokenValue("jeton")
+                .header("alg", "none")
+                .subject("utilisateur")
+                .issuedAt(java.time.Instant.EPOCH)
+                .expiresAt(java.time.Instant.EPOCH.plusSeconds(3600))
+                .claim("email", courriel);
+        if (structureId != null) {
+            jwt.claim("structure_id", structureId);
+        }
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(jwt.build(), null, java.util.List.of()));
+        when(structureUtilisateurService.structureDeLUtilisateurCourant()).thenReturn(structureId);
+    }
+
+    @Test
+    @DisplayName("Le responsable qualité du paramétrage décide hors de sa structure, sur ce que son rôle ouvre")
+    void responsableQualiteDuParametrage_decidePartout_surSonRole() {
+        // Le RQ couvre l'organisme : sa structure ne dit rien de son périmètre. Il se reconnaît au
+        // courriel du paramétrage, non à une permission que son rôle — parfois créé sur mesure —
+        // ne porte pas forcément. Seule la structure est levée : le rôle de l'étape reste exigé.
+        when(reglagesOrganisation.valeur(com.qualiapproche.common.utils.ClesReglages.RESPONSABLE_QUALITE_EMAIL))
+                .thenReturn("rq@exemple.bf");
+        authentifierAvecCourriel(AUTRE_STRUCTURE, "RQ@Exemple.bf ");
+
+        assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
+                transitionReserveeAuRole("PILOTE"))).isTrue();
+        assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
+                transitionReserveeAuRole("RESPONSABLE_QUALITE"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("Un autre courriel que celui du paramétrage reste borné à sa structure")
+    void autreCourriel_resteBorneASaStructure() {
+        when(reglagesOrganisation.valeur(com.qualiapproche.common.utils.ClesReglages.RESPONSABLE_QUALITE_EMAIL))
+                .thenReturn("rq@exemple.bf");
+        authentifierAvecCourriel(AUTRE_STRUCTURE, "pilote@exemple.bf");
+
+        assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
+                transitionReserveeAuRole("PILOTE"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("Paramétrage muet : personne n'est le responsable qualité par son courriel")
+    void parametrageMuet_personneNEstDesigne() {
+        when(reglagesOrganisation.valeur(com.qualiapproche.common.utils.ClesReglages.RESPONSABLE_QUALITE_EMAIL))
+                .thenReturn(null);
+        authentifierAvecCourriel(AUTRE_STRUCTURE, "rq@exemple.bf");
+
+        assertThat(adapter.estAutorise(dossierDansLaStructure(STRUCTURE_DU_DOSSIER),
+                transitionReserveeAuRole("PILOTE"))).isFalse();
     }
 }

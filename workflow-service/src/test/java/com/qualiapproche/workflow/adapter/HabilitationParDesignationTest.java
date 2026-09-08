@@ -58,7 +58,7 @@ class HabilitationParDesignationTest {
         permissionChecker = mock(PermissionChecker.class);
         adapter = new WorkflowConditionAdapter(rolesUtilisateurService,
                 mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class),
-                permissionChecker);
+                permissionChecker, org.mockito.Mockito.mock(com.qualiapproche.workflow.service.ReglagesOrganisation.class));
     }
 
     @AfterEach

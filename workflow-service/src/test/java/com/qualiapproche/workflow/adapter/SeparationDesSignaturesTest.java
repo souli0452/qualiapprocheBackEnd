@@ -58,7 +58,7 @@ class SeparationDesSignaturesTest {
         // ordinaire, celle que l'étape exige.
         permissionChecker = mock(PermissionChecker.class);
         adapter = new WorkflowConditionAdapter(rolesUtilisateurService,
-                mock(StructureUtilisateurService.class), permissionChecker);
+                mock(StructureUtilisateurService.class), permissionChecker, org.mockito.Mockito.mock(com.qualiapproche.workflow.service.ReglagesOrganisation.class));
     }
 
     @AfterEach
