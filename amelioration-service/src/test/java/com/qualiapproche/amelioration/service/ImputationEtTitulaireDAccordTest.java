@@ -18,7 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -93,15 +92,9 @@ class ImputationEtTitulaireDAccordTest {
         nc.setWorkflowId(UUID.randomUUID());
         when(nonConformiteRepository.findById(ncId)).thenReturn(Optional.of(nc));
         when(nonConformiteRepository.save(any(NonConformite.class))).thenAnswer(a -> a.getArgument(0));
-        // Le mapper est simulé. On lui fait porter la seule valeur qui se joue ici — sans quoi la
-        // fiche ne changerait pas d'imputé, et le cas ne testerait rien. Et un retour non nul, sans
-        // quoi « Optional.map » rendrait vide et le point d'entrée croirait le dossier introuvable.
-        doAnswer(appel -> {
-            NonConformiteDto saisie = appel.getArgument(0);
-            NonConformite cible = appel.getArgument(1);
-            cible.setUserImputId(saisie.getUserImputId());
-            return null;
-        }).when(nonConformiteMapper).updateEntityFromDto(any(NonConformiteDto.class), any(NonConformite.class));
+        // Le mapper est simulé et n'inscrit rien — l'imputation ne passe plus par lui, c'est le
+        // service qui l'applique. Un retour non nul tout de même, sans quoi « Optional.map »
+        // rendrait vide et le point d'entrée croirait le dossier introuvable.
         when(nonConformiteMapper.toDto(any(NonConformite.class))).thenReturn(new NonConformiteDto());
         return nc;
     }
@@ -136,14 +129,32 @@ class ImputationEtTitulaireDAccordTest {
     }
 
     @Test
-    @DisplayName("Une saisie qui ne porte pas d'imputation ne redésigne personne")
+    @DisplayName("Une saisie sans imputation ne désimpute pas la fiche et ne redésigne personne")
     void imputationAbsente_laisseeEnPlace() {
         // Tous les écrans qui enregistrent une fiche ne montrent pas l'imputation. Prendre leur
-        // silence pour un retrait déferait l'imputation du dossier et fermerait l'étape à tous.
-        dossierImpute(ANCIEN);
+        // silence pour un retrait désimputait le dossier — le mapper recopiait le null — et aurait
+        // fermé l'étape à tous si le moteur l'avait appris. Absent n'est pas vide.
+        NonConformite nc = dossierImpute(ANCIEN);
 
         reaffecter(null);
 
+        assertThat(nc.getUserImputId()).isEqualTo(ANCIEN);
+        verify(workflowClient, never()).designerTitulaire(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("La fiche complète enregistrée sans imputation garde son agent elle aussi")
+    void ficheCompleteSansImputation_agentConserve() throws Exception {
+        // La voie principale de mise à jour écrivait l'imputation sans condition, y compris à null,
+        // là où ses champs voisins sont gardés par un « si renseigné ». Même règle sur les trois
+        // voies : c'est une seule décision, elle ne peut pas dépendre de l'écran qui enregistre.
+        NonConformite nc = dossierImpute(ANCIEN);
+        NonConformiteDto saisie = new NonConformiteDto();
+        saisie.setId(ncId);
+
+        service.updateNonConformite(ncId, saisie);
+
+        assertThat(nc.getUserImputId()).isEqualTo(ANCIEN);
         verify(workflowClient, never()).designerTitulaire(any(), anyString());
     }
 

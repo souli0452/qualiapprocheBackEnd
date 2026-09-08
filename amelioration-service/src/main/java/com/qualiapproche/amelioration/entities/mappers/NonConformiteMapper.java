@@ -27,5 +27,11 @@ public interface NonConformiteMapper extends EntityMapper<NonConformiteDto, NonC
     @Mapping(target = "fichiers", ignore = true)
     @Mapping(target = "docRejet", ignore = true)
     @Mapping(target = "planActions", ignore = true)
+    // L'imputation ne se recopie pas depuis la fiche : absent n'est pas vide, et le mapper
+    // recopierait un null. C'est le service qui l'inscrit, seulement quand la saisie désigne
+    // quelqu'un — voir NonConformiteServiceImpl#appliquerLImputationSaisie.
+    @Mapping(target = "userImputId", ignore = true)
+    @Mapping(target = "userImputFullName", ignore = true)
+    @Mapping(target = "userImputeEmail", ignore = true)
     void updateEntityFromDto(NonConformiteDto dto, @MappingTarget NonConformite entity);
 }

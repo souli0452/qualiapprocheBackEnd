@@ -349,8 +349,7 @@ public class NonConformiteServiceImpl
         existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
         existingNonConformite.setActionLibelle(dto.getActionLibelle());
 
-        existingNonConformite.setUserImputId(dto.getUserImputId());
-        existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
+        appliquerLImputationSaisie(existingNonConformite, dto);
         appliquerLesParticipants(existingNonConformite, dto);
         // Mettre à jour les fichiers s'ils sont fournis
         ncFichierService.synchroniser(dto.getFichiers(), id);
@@ -365,6 +364,30 @@ public class NonConformiteServiceImpl
         faireSuivreLImputation(updatedNonConformite, agentAvant);
         // Retour DTO
         return populateAttachments(nonConformiteMapper.toDto(updatedNonConformite));
+    }
+
+    /**
+     * Inscrit l'agent imputé que la saisie désigne — et seulement si elle en désigne un.
+     *
+     * <p><b>Absent n'est pas vide</b>, comme pour les participants et les pièces jointes : tous les
+     * écrans qui enregistrent une fiche ne portent pas l'imputation, et l'écrire telle quelle
+     * désimputait le dossier à chaque enregistrement venu d'un écran qui l'ignorait. Le moteur,
+     * lui, n'en savait rien : l'étape restait réservée à un titulaire que la fiche n'affichait
+     * plus, et personne ne comprenait pourquoi le dossier n'apparaissait dans aucune liste.</p>
+     *
+     * <p>Retirer une imputation est une décision du circuit, pas l'effet de bord d'une fiche
+     * enregistrée. Le courriel n'est repris que s'il est fourni : les écrans qui désignent l'agent
+     * ne le connaissent pas tous, et l'effacer ferait taire les relances.</p>
+     */
+    private void appliquerLImputationSaisie(NonConformite nc, NonConformiteDto dto) {
+        if (valeurRenseignee(dto.getUserImputId()) == null) {
+            return;
+        }
+        nc.setUserImputId(dto.getUserImputId());
+        nc.setUserImputFullName(dto.getUserImputFullName());
+        if (dto.getUserImputeEmail() != null) {
+            nc.setUserImputeEmail(dto.getUserImputeEmail());
+        }
     }
 
     /**
@@ -417,9 +440,7 @@ public class NonConformiteServiceImpl
                 existingNonConformite.setOrigineServiceLibelleCourt(dto.getOrigineServiceLibelleCourt());
             }
 
-            existingNonConformite.setUserImputId(dto.getUserImputId());
-            existingNonConformite.setUserImputeEmail(dto.getUserImputeEmail());
-            existingNonConformite.setUserImputFullName(dto.getUserImputFullName());
+            appliquerLImputationSaisie(existingNonConformite, dto);
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
             existingNonConformite.setActionPreventive(dto.getActionPreventive());
             existingNonConformite.setPertinanceRsSuivi(dto.getPertinanceRsSuivi());
@@ -453,6 +474,7 @@ public class NonConformiteServiceImpl
         return nonConformiteRepository.findById(nonConformiteDto.getId()).map(nonConformiteExisted -> {
             String agentAvant = nonConformiteExisted.getUserImputId();
             nonConformiteMapper.updateEntityFromDto(nonConformiteDto, nonConformiteExisted);
+            appliquerLImputationSaisie(nonConformiteExisted, nonConformiteDto);
             // Les pièces jointes suivent la fiche, ici comme dans les deux autres points d'entrée
             // de mise à jour. Le mapper les ignore — à raison, la collection est en orphanRemoval
             // et les réécrire depuis ce que l'écran renvoie les détruirait — mais les ignorer
