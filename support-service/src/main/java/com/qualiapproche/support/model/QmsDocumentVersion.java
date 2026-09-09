@@ -45,6 +45,7 @@ public class QmsDocumentVersion {
     @Column(nullable = false)
     private String createdBy;
 
+    @Column(columnDefinition = "TEXT")
     private String comment;
 
     @Column(nullable = false)

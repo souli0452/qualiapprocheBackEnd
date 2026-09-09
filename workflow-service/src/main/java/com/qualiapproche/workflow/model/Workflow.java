@@ -30,6 +30,7 @@ public class Workflow extends AuditEntity {
     @Column(nullable = false)
     private String nom; // ex: Validation Standard, Validation Complète
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(nullable = false)

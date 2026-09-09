@@ -5,6 +5,7 @@ import com.qualiapproche.common.base.AuditEntity;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,6 +28,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 public class Audite extends AuditEntity {
 
     private String libelleAudite;
+    @Column(columnDefinition = "TEXT")
     private String descriptionAudite;
     private String resultatAudite;
     private String statutAudite;

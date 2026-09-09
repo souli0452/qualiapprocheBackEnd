@@ -2,6 +2,7 @@ package com.qualiapproche.amelioration.entities;
 
 import com.qualiapproche.common.base.AuditEntity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ManyToMany;
 import lombok.AllArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class Evaluation extends AuditEntity {
 
     private String libelle;
+    @Column(columnDefinition = "TEXT")
     private String description;
     private String typeEvaluation;
 

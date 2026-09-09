@@ -29,6 +29,7 @@ public class AppRole extends AuditEntity {
     @Column(nullable = false)
     private String name;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @ElementCollection(fetch = FetchType.EAGER)

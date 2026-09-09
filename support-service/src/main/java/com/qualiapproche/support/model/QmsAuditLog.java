@@ -38,5 +38,6 @@ public class QmsAuditLog {
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
+    @Column(columnDefinition = "TEXT")
     private String details;
 }

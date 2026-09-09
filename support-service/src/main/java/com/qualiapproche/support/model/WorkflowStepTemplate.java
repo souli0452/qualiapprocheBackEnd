@@ -48,5 +48,6 @@ public class WorkflowStepTemplate extends AuditEntity {
     @Column(nullable = false)
     private String responsableRole;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 }

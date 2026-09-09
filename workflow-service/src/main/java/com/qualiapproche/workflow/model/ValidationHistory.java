@@ -47,6 +47,14 @@ public class ValidationHistory {
     @Column(nullable = false)
     private String decision;
 
+    /**
+     * Ce que le décideur a écrit en franchissant l'étape.
+     *
+     * <p>En {@code text} : la saisie était bornée à 255 caractères par le défaut de la
+     * colonne, et une motivation un peu argumentée était refusée par la base — au moment de
+     * décider, quand elle est le plus longue à réécrire.</p>
+     */
+    @Column(columnDefinition = "TEXT")
     private String comments;
 
     @Column(nullable = false)

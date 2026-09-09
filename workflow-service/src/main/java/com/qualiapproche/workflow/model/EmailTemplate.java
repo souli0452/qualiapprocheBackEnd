@@ -36,7 +36,7 @@ public class EmailTemplate extends AuditEntity {
     @Column(name = "body", columnDefinition = "TEXT", nullable = false)
     private String body;
 
-    @Column(name = "description", length = 500)
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
 }

@@ -88,7 +88,7 @@ public class NotificationUtilisateur extends AuditEntity {
      * <p>Composée par le producteur, pas par l'écran : c'est le serveur qui connaît le nombre de
      * dossiers et qui accorde le français.</p>
      */
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String message;
 
     /** Le dossier concerné, pour que l'écran sache où emmener. */

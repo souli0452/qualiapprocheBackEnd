@@ -48,6 +48,7 @@ public class DocumentQms extends AuditEntity {
 
     private String reference;    // Référence officielle interne
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(nullable = false)

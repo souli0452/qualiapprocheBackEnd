@@ -66,6 +66,8 @@ public class WorkflowStep {
     private int stepOrder;
 
     private String responsableRole;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "etat_traitement")

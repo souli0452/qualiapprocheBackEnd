@@ -69,7 +69,7 @@ public class DemandeDocument extends AuditEntity {
     @Column(nullable = false, length = 1000)
     private String objectif;
 
-    @Column(length = 4000)
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     /** Structure et demandeur : pris de l'utilisateur connecté, jamais saisis. */
@@ -89,7 +89,7 @@ public class DemandeDocument extends AuditEntity {
 
     private LocalDateTime dateDecision;
     /** Motif de la décision finale, repris du commentaire porté par la dernière transition. */
-    @Column(length = 2000)
+    @Column(columnDefinition = "TEXT")
     private String motifDecision;
 
     private LocalDateTime dateExecution;

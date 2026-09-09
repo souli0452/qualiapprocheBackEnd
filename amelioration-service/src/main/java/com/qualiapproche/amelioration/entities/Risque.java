@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.entities;
 import com.qualiapproche.common.base.AuditEntity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -26,10 +27,12 @@ import lombok.experimental.SuperBuilder;
 public class Risque extends AuditEntity {
 
     private String libelle;
+    @Column(columnDefinition = "TEXT")
     private String description;
     private String niveau;
     private StatutRisque statut;
     private String plantAttenuation;
+    @Column(columnDefinition = "TEXT")
     private String commentaireRisque;
     private String evidenceRisque;
     // @lombok.Getter @lombok.Setter private LocalDateTime dateIdentificationRisque;

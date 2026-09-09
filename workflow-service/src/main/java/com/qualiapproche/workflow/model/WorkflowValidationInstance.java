@@ -61,7 +61,7 @@ public class WorkflowValidationInstance implements IWorkflowData {
     @Column(name = "etat_code", nullable = false)
     private String etatCode;
 
-    @Column(name = "observation", length = 2000)
+    @Column(name = "observation", columnDefinition = "TEXT")
     private String observation;
 
     /**

@@ -29,6 +29,7 @@ public class NiveauNonConformite extends AuditEntity {
 
     private String libelle;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     /**
