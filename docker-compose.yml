@@ -1,0 +1,358 @@
+# Stack locale QualiSira — voir DOCKER.md.
+#
+#   cp .env.example .env   puis renseigner les secrets (DB_PASSWORD, KC_CLIENT_SECRET,
+#   MINIO_ACCESS_KEY, MINIO_SECRET_KEY, QUALISIRA_CLE_PUBLIQUE, IA_API_KEY)
+#   docker compose up -d
+#
+# Les variables d'infrastructure (URL internes au réseau, hôtes des conteneurs) sont fixées
+# ici dans `environment:` ; elles priment sur `env_file`, qui ne sert qu'à véhiculer les
+# secrets et les réglages applicatifs du .env.
+
+name: qualisira
+
+networks:
+  qualisira-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  minio-data:
+
+# Socle commun des services Spring : même réseau, mêmes dépendances de démarrage,
+# mêmes variables d'infrastructure. Chaque service n'ajoute que sa variable DB_URL_*.
+x-env-spring: &env-spring
+  EUREKA_URL: http://discovery:8761/eureka/
+  # Keycloak tourne sur l'hôte (déjà installé, realm « quali » configuré) : les conteneurs
+  # l'atteignent via host.docker.internal. issuer-uri et token-uri portent la MÊME URL, sans
+  # quoi le `iss` du jeton ne correspond pas à l'issuer-uri et le JWT est rejeté. Un Keycloak
+  # conteneurisé reste disponible via le profil « keycloak-local » (voir DOCKER.md) — penser
+  # alors à réaligner ces trois URL sur http://keycloak:8080.
+  KC_ISSUER_URI: http://host.docker.internal:8080/realms/quali
+  KC_TOKEN_URI: http://host.docker.internal:8080/realms/quali/protocol/openid-connect/token
+  KC_SERVER_URL: http://host.docker.internal:8080
+  MAIL_HOST: mailhog
+  MAIL_PORT: "1025"
+  MAIL_SSL: "false"
+  MAIL_STARTTLS: "false"
+  # Mailhog accepte n'importe quels identifiants SMTP : un mot de passe quelconque suffit.
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-qualisira-local}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+
+x-dependances: &dependances
+  postgres:
+    condition: service_healthy
+  discovery:
+    condition: service_started
+
+services:
+
+  # ------------------------------------------------------------------ infrastructure
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant — renseigner .env}
+    # Les bases de chaque service sont créées au premier démarrage du volume.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # Keycloak conteneurisé, OPTIONNEL : par défaut la stack utilise le Keycloak de l'hôte
+  # (http://host.docker.internal:8080). Pour un environnement 100 % conteneurisé :
+  #   docker compose --profile keycloak-local up -d
+  # et réaligner KC_ISSUER_URI / KC_TOKEN_URI / KC_SERVER_URL sur http://keycloak:8080
+  # dans l'ancre x-env-spring (avec « 127.0.0.1 keycloak » dans /etc/hosts pour le navigateur).
+  keycloak:
+    profiles: ["keycloak-local"]
+    image: quay.io/keycloak/keycloak:26.0
+    # start-dev : HTTP en clair, sans certificat — réservé au local.
+    # --import-realm : importe les exports éventuels de docker/keycloak/import ;
+    # dossier vide = démarrage normal, sans import. Voir DOCKER.md pour l'export du realm.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Compte d'administration du dev local, volontairement simple (voir DOCKER.md).
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://keycloak:8080
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/keycloak/import:/opt/keycloak/data/import:ro
+    # L'image n'embarque ni curl ni wget : on interroge le port de management (9000)
+    # avec le descripteur /dev/tcp de bash.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf "GET /health/ready HTTP/1.0\r\n\r\n" >&3 && read -r ligne <&3 && [[ "$$ligne" == *" 200 "* ]]'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  minio:
+    # MinIO ne publie plus sur Docker Hub : les images officielles sont sur quay.io.
+    image: quay.io/minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY manquant — renseigner .env (8 caractères minimum pour le mot de passe)}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY manquant — renseigner .env}
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # Crée le bucket attendu par support-service et amelioration-service, puis s'arrête.
+  minio-init:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+        && mc mb --ignore-existing "local/$$MINIO_BUCKET_NAME"
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-quali-sira}
+    networks: [qualisira-net]
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # interface web
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ plateforme
+
+  discovery:
+    build:
+      context: .
+      dockerfile: Dockerfile.discovery
+    environment:
+      EUREKA_HOSTNAME: discovery
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8761'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ services métier
+  # Aucun port publié : la passerelle est le seul point d'entrée.
+
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_USER: jdbc:postgresql://postgres:5432/qualisira_user
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  referentiel-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.referentiel
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_REFERENTIEL: jdbc:postgresql://postgres:5432/qualisira_referentiel
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  amelioration-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.amelioration
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_AMELIORATION: jdbc:postgresql://postgres:5432/qualisira_amelioration
+      MINIO_URL: http://minio:9000
+    depends_on:
+      <<: *dependances
+      minio-init:
+        condition: service_completed_successfully
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  support-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.support
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_SUPPORT: jdbc:postgresql://postgres:5432/qualisira_supportdb
+      MINIO_URL: http://minio:9000
+    depends_on:
+      <<: *dependances
+      minio-init:
+        condition: service_completed_successfully
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  evaluation-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.evaluation
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_EVALUATION: jdbc:postgresql://postgres:5432/bd_quali_sira_evaluation
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  realisation-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.realisation
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_REALISATION: jdbc:postgresql://postgres:5432/bd_quali_sira_realisation
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  planification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.planification
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_PLANIFICATION: jdbc:postgresql://postgres:5432/bd_quali_sira_planification
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  contexte-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.contexte
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_CONTEXTE: jdbc:postgresql://postgres:5432/bd_quali_sira_contexte
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  workflow-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.workflow
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_WORKFLOW: jdbc:postgresql://postgres:5432/qualisira_workflowdb
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  ia-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ia
+    env_file: .env
+    environment:
+      <<: *env-spring
+      DB_URL_IA: jdbc:postgresql://postgres:5432/qualisira_ia
+    depends_on: *dependances
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ passerelle
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    env_file: .env
+    environment:
+      EUREKA_URL: http://discovery:8761/eureka/
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4200}
+    ports:
+      - "8088:8088"
+    depends_on:
+      discovery:
+        condition: service_started
+      user-service:
+        condition: service_started
+      referentiel-service:
+        condition: service_started
+      amelioration-service:
+        condition: service_started
+      support-service:
+        condition: service_started
+      evaluation-service:
+        condition: service_started
+      realisation-service:
+        condition: service_started
+      planification-service:
+        condition: service_started
+      contexte-service:
+        condition: service_started
+      workflow-service:
+        condition: service_started
+      ia-service:
+        condition: service_started
+    networks: [qualisira-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ frontal
+  # Profil « front » : démarré seulement avec `docker compose --profile front up -d`.
+  # Le dépôt frontal doit être cloné à côté de celui-ci (../FrontQualiApproche).
+  # L'URL de l'API, figée dans le bundle au build, est remplacée par API_URL via une
+  # substitution dans le Dockerfile du frontal.
+
+  frontend:
+    profiles: ["front"]
+    build:
+      context: ../FrontQualiApproche
+      args:
+        API_URL: http://localhost:8088
+    ports:
+      - "4200:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks: [qualisira-net]
+    restart: unless-stopped

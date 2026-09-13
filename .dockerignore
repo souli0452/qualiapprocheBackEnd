@@ -1,0 +1,9 @@
+# Allège le contexte de build des Dockerfiles (COPY . . à la racine).
+.git
+**/target
+.idea
+.vscode
+.claude
+**/.DS_Store
+docker
+*.png
