@@ -81,11 +81,9 @@ public class WorkflowStateDto {
             example = "true")
     private boolean ecarteCommeAuteur;
 
-    @Schema(description = "Décisions que l'étape offre à l'appelant, une fois retirées celles "
-            + "que son habilitation lui refuse. L'état du dossier, lui, n'en retire aucune : une "
-            + "décision que le dossier n'admet pas encore figure ici avec « conditionRemplie » à "
-            + "faux, à montrer en expliquant ce qui manque. Vide ne veut pas dire que le dossier "
-            + "est arrêté, mais qu'un autre est attendu.")
+    @Schema(description = "Décisions que l'appelant peut prendre ici et maintenant, une fois "
+            + "retirées celles que son habilitation ou l'état du dossier lui refuse. Vide ne veut "
+            + "pas dire que le dossier est arrêté, mais qu'un autre est attendu.")
     @Builder.Default
     private List<WorkflowActionDto> allowedActions = new ArrayList<>();
 
@@ -103,11 +101,11 @@ public class WorkflowStateDto {
     /**
      * Décisions que l'étape prévoit mais que le dossier n'admet pas encore, faute d'un fait établi.
      *
-     * <p>Les mêmes décisions figurent dans {@link #allowedActions} avec
-     * {@code conditionRemplie = false} dès lors que l'appelant est habilité à les prendre : le
-     * bouton s'affiche, et c'est sa demande qui sera refusée. Cette liste-ci ne filtre pas par
-     * rôle — ce n'est pas une question d'habilitation, c'est le dossier qui n'est pas prêt — et
-     * renseigne donc aussi celui qui doit agir ailleurs pour lever l'attente.</p>
+     * <p>Le moteur les retire simplement des actions offertes : la clôture d'une non-conformité
+     * dont les actions correctives ne sont pas soldées n'apparaît nulle part, et le responsable
+     * qualité voit un dossier arrêté sans que rien ne lui dise ce qu'il attend. Ce n'est pas une
+     * question d'habilitation — c'est le dossier qui n'est pas prêt — et cela concerne donc tout
+     * le monde, pas seulement celui qui décidera.</p>
      */
     @Schema(description = "Décisions que l'étape prévoit mais qu'une condition non remplie retient. "
             + "Elles sont rendues à tous, sans égard au rôle : la raison de l'attente intéresse "
@@ -228,34 +226,5 @@ public class WorkflowStateDto {
                 example = "APPROUVE",
                 allowableValues = {"APPROUVE", "REJETE", "CLOTURE"})
         private String decision;
-
-        /**
-         * Le dossier admet-il cette action en l'état ?
-         *
-         * <p>Vrai pour toute action sans condition. Faux quand la transition exige un fait que le
-         * dossier n'a pas encore : l'action est <b>tout de même offerte</b> — la masquer laissait
-         * l'utilisateur devant un dossier arrêté sans bouton ni raison — mais elle sera refusée si
-         * elle est demandée, avec {@link #conditionLibelle} pour motif. À l'écran : un bouton qui
-         * dit pourquoi il ne passera pas encore, plutôt qu'un bouton absent.</p>
-         */
-        @Schema(description = "Le dossier admet-il cette action en l'état ? Faux, l'action reste "
-                + "offerte mais sera refusée : montrez-la en expliquant ce qui manque, ne la "
-                + "masquez pas.",
-                example = "true")
-        @Builder.Default
-        private boolean conditionRemplie = true;
-
-        /** Nom du fait exigé par la transition, ou {@code null}. Repère technique. */
-        @Schema(description = "Nom du fait que la transition exige du dossier, tel que le module "
-                + "métier le déclare. Repère technique, à ne montrer qu'à défaut d'explication.",
-                example = "PLANS_ACTION_SOLDES")
-        private String condition;
-
-        /** Ce que la condition veut dire, en clair, tel que l'auteur du circuit l'a écrit. */
-        @Schema(description = "Ce que la condition veut dire, en clair. C'est le texte à montrer "
-                + "quand l'action n'est pas encore admise, et celui que le refus reprendra.",
-                example = "toutes les actions correctives du dossier ont été réalisées, vérifiées "
-                        + "et reconnues efficaces")
-        private String conditionLibelle;
     }
 }

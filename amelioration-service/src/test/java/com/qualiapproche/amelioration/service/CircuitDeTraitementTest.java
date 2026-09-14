@@ -76,7 +76,7 @@ class CircuitDeTraitementTest {
     }
 
     private void decision(Map<String, String> champs) {
-        service.updateWorkflowState(ncId, "EN_COURS", "Validation RQ", "VALIDATION_RQ", champs, null);
+        service.updateWorkflowState(ncId, "EN_COURS", "Validation RQ", "VALIDATION_RQ", champs);
     }
 
     @Test

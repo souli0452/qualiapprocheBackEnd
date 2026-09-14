@@ -47,10 +47,7 @@ public class AmeliorationInternalCallbackController {
                 (String) payload.get("status"),
                 (String) payload.get("statusName"),
                 (String) payload.get("etatCode"),
-                champsSaisis(payload),
-                // Le point de contrôle franchi, et non l'étape atteinte : c'est lui qui dit ce que
-                // la décision vient de vérifier, et donc ce qu'il y a lieu d'en faire.
-                (String) payload.get("conditionFranchie"));
+                champsSaisis(payload));
 
         return ResponseEntity.ok().build();
     }

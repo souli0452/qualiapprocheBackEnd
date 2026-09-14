@@ -21,9 +21,7 @@ public enum ModuleAbonnement {
     FORMATION,
     REGLEMENTATION,
     EVALUATION,
-    CONTEXTE,
-    /** Assistant rédactionnel IA : génération et verdicts des suggestions (ia-service). */
-    ASSISTANT_IA
+    CONTEXTE
 }
 // Le plan d'action ne se souscrit pas : il relève du traitement des non-conformités, et donc du
 // module NON_CONFORMITE. Un module PLAN_ACTION figurait ici, qu'aucune licence n'a jamais porté ;

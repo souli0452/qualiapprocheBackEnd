@@ -1,2 +1,0 @@
-# Conserver ce dossier dans git. Y déposer l'export du realm `quali`
-# (quali-realm.json) pour qu'il soit importé au démarrage de Keycloak — voir DOCKER.md.

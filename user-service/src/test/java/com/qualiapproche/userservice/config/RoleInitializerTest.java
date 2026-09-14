@@ -47,20 +47,10 @@ class RoleInitializerTest {
             PermissionsPortee.DECIDER_PARTOUT,
             PermissionsPortee.HORS_CLASSEMENT};
 
-    /** L'assistant IA, dernier module entré au dictionnaire et rattrapé au démarrage. */
-    private static final String[] ASSISTANT_IA = {"assistant-ia-read", "assistant-ia-write"};
-
-    /**
-     * Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire.
-     *
-     * <p>À compléter de chaque nouvel ajout nommé, sans quoi les cas qui vérifient qu'<b>on
-     * n'écrit rien</b> voient l'enregistrement d'un autre rattrapage et échouent sur un reproche
-     * qui n'est pas le leur.</p>
-     */
+    /** Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire. */
     private static List<String> aJour() {
         List<String> tout = new ArrayList<>(List.of(TABLEAUX_DE_BORD));
         tout.addAll(List.of(PORTEE));
-        tout.addAll(List.of(ASSISTANT_IA));
         return tout;
     }
 
@@ -112,23 +102,6 @@ class RoleInitializerTest {
         assertThat(enregistre.getValue().getPermissions())
                 .contains(LICENCE)
                 .contains("nc-read", "structure-write");
-    }
-
-    @Test
-    @DisplayName("Un SUPER_ADMIN d'avant l'assistant IA le reçoit au démarrage")
-    void assistantIaManquant_estOuvert() {
-        // Le dictionnaire s'enrichit d'un module entier : une installation en service n'y aurait
-        // jamais eu accès, le démarrage ne réappliquant pas les dotations.
-        AppRole superAdmin = superAdmin(LICENCE);
-        superAdmin.getPermissions().removeAll(List.of(ASSISTANT_IA));
-
-        initialiseur.run();
-
-        ArgumentCaptor<AppRole> enregistre = ArgumentCaptor.forClass(AppRole.class);
-        verify(repository).save(enregistre.capture());
-        assertThat(enregistre.getValue().getPermissions())
-                .contains(ASSISTANT_IA)
-                .contains(LICENCE);
     }
 
     @Test

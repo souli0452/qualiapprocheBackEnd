@@ -146,7 +146,6 @@ public class RoleInitializer implements CommandLineRunner {
 
         ouvrirLesTableauxDeBordAuxRolesExistants();
         donnerLaPorteeAuxRolesExistants();
-        ouvrirLAssistantIaAuSuperAdmin();
 
         log.info("Rôles standards : traitement terminé.");
     }
@@ -230,21 +229,6 @@ public class RoleInitializer implements CommandLineRunner {
                         + "ni ne reclassait un document devenu invisible de tous",
                 PermissionsPortee.TOUTES_STRUCTURES, PermissionsPortee.DECIDER_PARTOUT,
                 PermissionsPortee.HORS_CLASSEMENT);
-    }
-
-    /**
-     * Ouvre l'assistant IA au super administrateur des installations déjà en service.
-     *
-     * <p>Le dictionnaire s'enrichit d'un module entier ({@code assistant-ia-read},
-     * {@code assistant-ia-write}) : un rôle SUPER_ADMIN <b>créé</b> désormais le reçoit en entier,
-     * mais celui déjà en base n'y aurait jamais eu accès — le démarrage ne réapplique pas les
-     * dotations — et personne n'aurait pu solliciter l'assistant avant qu'un administrateur passe
-     * par l'écran. Même reprise que pour la licence : ajout nommé, jamais de remise à l'identique.</p>
-     */
-    private void ouvrirLAssistantIaAuSuperAdmin() {
-        completer("SUPER_ADMIN",
-                "sans elles, l'assistant IA restait fermé même au super administrateur de cette instance",
-                "assistant-ia-read", "assistant-ia-write");
     }
 
     /**

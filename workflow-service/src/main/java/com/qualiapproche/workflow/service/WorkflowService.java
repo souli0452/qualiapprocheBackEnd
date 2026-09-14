@@ -9,7 +9,6 @@ import com.qualiapproche.workflow.dto.WorkflowDto;
 import com.qualiapproche.workflow.dto.WorkflowStepDto;
 import com.qualiapproche.workflow.dto.WorkflowTransitionDto;
 import com.qualiapproche.workflow.event.CatalogueWorkflowModifieEvent;
-import com.qualiapproche.workflow.event.TransitionFranchieEvent;
 import com.qualiapproche.workflow.model.Cosignataires;
 import com.qualiapproche.workflow.model.FieldType;
 import com.qualiapproche.workflow.model.SourceDeChoix;
@@ -137,7 +136,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         verifierUniciteDeLaCible(workflow, null);
 
         attribuerCodesEtapes(workflow);
-        resolveTransitions(workflow, dto, EtapesRetirees.aucune());
+        resolveTransitions(workflow, dto);
         horodaterModification(workflow);
 
         workflow = workflowRepository.save(workflow);
@@ -162,8 +161,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         existing.setCibleId(WorkflowMapper.cibleNormalisee(dto.getCibleId()));
         verifierUniciteDeLaCible(existing, existing.getId());
 
-        EtapesRetirees retirees = mergeSteps(existing, dto);
-        resolveTransitions(existing, dto, retirees);
+        mergeSteps(existing, dto);
+        resolveTransitions(existing, dto);
         horodaterModification(existing);
 
         workflowRepository.save(existing);
@@ -174,17 +173,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     /**
      * Supprime un circuit, à condition qu'aucun dossier ne soit en cours dessus.
      *
-     * <p>La suppression était inconditionnelle : elle laissait les instances en cours
-     * définitivement inexploitables — le moteur ne peut plus résoudre leur circuit, et toute
-     * lecture d'état comme toute décision échouait dès lors en erreur serveur, sans issue possible
-     * pour l'utilisateur.</p>
-     *
-     * <p>C'est ici, et ici seulement, que des dossiers en cours font obstacle. Retirer une
-     * <b>étape</b> lors d'une modification est permis, parce que les dossiers qui s'y trouvent
-     * peuvent être ramenés sur une étape voisine — voir
-     * {@link #replacerLesDossiersDesEtapesRetirees}. Supprimer le circuit entier ne laisse
-     * aucune étape où les replacer : il n'y a rien à leur proposer, et le refus reste la seule
-     * réponse honnête.</p>
+     * <p>La suppression était inconditionnelle, alors même que {@code mergeSteps} refuse déjà de
+     * retirer une simple étape portant des instances actives. L'incohérence était coûteuse :
+     * supprimer un circuit laissait ses instances en cours définitivement inexploitables — le
+     * moteur ne peut plus résoudre leur workflow, et toute lecture d'état comme toute décision
+     * échouait dès lors en erreur serveur, sans issue possible pour l'utilisateur.</p>
      */
     @Transactional
     public void deleteWorkflow(UUID id) {
@@ -300,7 +293,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     }
 
     /** Normalise un code : majuscules, séparateurs réduits au souligné, longueur bornée. */
-    private static String normaliserCode(String valeur) {
+    private String normaliserCode(String valeur) {
         if (valeur == null || valeur.isBlank()) {
             return "ETAPE";
         }
@@ -333,8 +326,30 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * ({@code WorkflowValidationInstance.etatCode}). Les étapes retirées ne sont autorisées
      * que si aucune instance active n'y est actuellement rattachée.
      */
-    private EtapesRetirees mergeSteps(Workflow existing, WorkflowDto dto) {
+    private void mergeSteps(Workflow existing, WorkflowDto dto) {
         List<WorkflowStepDto> incomingSteps = dto.getSteps() != null ? dto.getSteps() : List.of();
+
+        java.util.Set<Long> incomingIds = incomingSteps.stream()
+                .map(WorkflowStepDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        List<Long> removedStepIds = existing.getSteps().stream()
+                .map(WorkflowStep::getId)
+                .filter(stepId -> !incomingIds.contains(stepId))
+                .toList();
+
+        if (!removedStepIds.isEmpty()) {
+            List<String> removedCodes = removedStepIds.stream().map(String::valueOf).toList();
+            boolean hasActiveInstances = validationInstanceRepository
+                    .existsByEtatCodeInAndStatus(removedCodes, ValidationStatus.EN_COURS);
+            if (hasActiveInstances) {
+                throw new BusinessException(
+                        "Impossible de supprimer une ou plusieurs étapes : des dossiers sont actuellement en cours sur ces étapes. "
+                                + "Terminez-les ou migrez-les avant de modifier la structure de ce workflow.",
+                        HttpStatus.CONFLICT);
+            }
+        }
 
         Map<Long, WorkflowStep> existingById = existing.getSteps().stream()
                 .filter(s -> s.getId() != null)
@@ -401,260 +416,51 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
             merged.add(step);
         }
 
-        EtapesRetirees retirees = EtapesRetirees.entre(existing.getSteps(), merged);
-        replacerLesDossiersDesEtapesRetirees(merged, retirees);
-        retirerLesActionsQuiNeMenentNullePart(merged, retirees);
+        refuserLaSuppressionDEtapesOccupees(existing, merged);
 
         existing.getSteps().clear();
         existing.getSteps().addAll(merged);
         // Les étapes ajoutées lors de cette modification n'ont pas encore de code.
         attribuerCodesEtapes(existing);
-        return retirees;
     }
 
     /**
-     * Les étapes que cet enregistrement retire du circuit, retenues par identifiant et par code.
+     * Interdit la suppression d'une étape où des dossiers se trouvent.
      *
-     * <p>Elles concernent deux choses qui échouaient l'une et l'autre : les <b>dossiers</b> qui s'y
-     * trouvaient, et les <b>actions des autres étapes</b> qui y menaient.</p>
+     * <p>La collection des étapes est en {@code orphanRemoval} : une étape absente de ce que
+     * l'éditeur renvoie est <b>supprimée</b>. Les dossiers en cours désignent pourtant leur étape
+     * courante par son identifiant — ils se retrouvaient rattachés à une étape disparue, refusés
+     * ensuite par {@code rattacherEtat} et bloqués sans issue : plus aucune décision ne pouvait les
+     * faire avancer, ni en arrière ni en avant.</p>
+     *
+     * <p>La suppression du circuit entier est déjà protégée de la même façon. Il n'y avait aucune
+     * raison que sa modification le soit moins : elle détruit tout autant.</p>
      */
-    private record EtapesRetirees(Map<Long, WorkflowStep> parId, java.util.Set<String> codes) {
+    private void refuserLaSuppressionDEtapesOccupees(Workflow existing, List<WorkflowStep> conservees) {
+        java.util.Set<Long> gardees = conservees.stream()
+                .map(WorkflowStep::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-        static EtapesRetirees aucune() {
-            return new EtapesRetirees(Map.of(), java.util.Set.of());
-        }
-
-        static EtapesRetirees entre(List<WorkflowStep> avant, List<WorkflowStep> conservees) {
-            java.util.Set<Long> gardees = conservees.stream()
-                    .map(WorkflowStep::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-            Map<Long, WorkflowStep> retirees = avant.stream()
-                    .filter(step -> step.getId() != null && !gardees.contains(step.getId()))
-                    .collect(Collectors.toMap(WorkflowStep::getId, step -> step, (a, b) -> a));
-            java.util.Set<String> codes = retirees.values().stream()
-                    .map(WorkflowStep::getCode)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-            return new EtapesRetirees(retirees, codes);
-        }
-
-        boolean vide() {
-            return parId.isEmpty();
-        }
-
-        boolean contient(WorkflowStep etape) {
-            return etape != null && etape.getId() != null && parId.containsKey(etape.getId());
-        }
-
-        /** La destination que ce DTO désigne est-elle une étape que l'on vient de retirer ? */
-        boolean estDesigneePar(WorkflowTransitionDto transitionDto) {
-            if (transitionDto.getToStepId() != null && parId.containsKey(transitionDto.getToStepId())) {
-                return true;
-            }
-            String code = transitionDto.getToStepCode();
-            return code != null && !code.isBlank() && codes.contains(normaliserCode(code));
-        }
-    }
-
-    /**
-     * Replace les dossiers dont l'étape vient d'être retirée du circuit.
-     *
-     * <p><b>La suppression n'est plus refusée.</b> Elle l'était dès qu'un dossier se trouvait sur
-     * l'étape visée, et le refus se lisait sur les instances du moteur — non sur la table du
-     * module. Un dossier supprimé chez lui sans que le moteur en soit averti laissait une instance
-     * « en cours » qui interdisait la modification du circuit pour toujours, sans que rien ne dise
-     * de quel dossier il s'agissait ni qu'il n'existait plus. L'administrateur ne pouvait ni
-     * corriger son circuit, ni comprendre ce qui l'en empêchait.</p>
-     *
-     * <p>Le motif du refus reste pourtant réel : la collection des étapes est en
-     * {@code orphanRemoval}, une étape absente de ce que l'éditeur renvoie est <b>supprimée</b>, et
-     * les dossiers en cours désignent leur étape courante par son identifiant. Laissés là, ils se
-     * retrouveraient rattachés à une étape disparue, refusés par {@code rattacherEtat} et bloqués
-     * sans issue — plus aucune décision ne pourrait les faire avancer, ni en arrière ni en
-     * avant.</p>
-     *
-     * <p>D'où le replacement plutôt que le refus : chaque dossier est ramené sur la <b>dernière
-     * étape conservée qui précède</b> celle qu'on retire, à défaut sur la première du circuit.
-     * Il retrouve ainsi un point de décision qui existe, dont le responsable peut le réorienter.
-     * Le franchissement est inscrit à son historique, pour que ce déplacement ne soit pas une
-     * chose qui lui est arrivée sans trace.</p>
-     *
-     * <p>Ce que le replacement ne touche pas : les faits déclarés sur le dossier et son titulaire.
-     * Ils ne dépendent pas de l'étape, et les effacer ferait redemander ce qui a déjà été
-     * établi.</p>
-     *
-     * <p>La suppression du <b>circuit entier</b>, elle, reste refusée tant qu'il porte des dossiers
-     * en cours : il n'y a alors aucune étape où les replacer.</p>
-     */
-    private void replacerLesDossiersDesEtapesRetirees(List<WorkflowStep> conservees,
-                                                     EtapesRetirees retirees) {
-        if (retirees.vide()) {
-            return;
-        }
-        Map<Long, WorkflowStep> supprimees = retirees.parId();
-
-        List<String> codes = supprimees.keySet().stream().map(String::valueOf).toList();
-        List<WorkflowValidationInstance> dossiers = validationInstanceRepository
-                .findByEtatCodeInAndStatus(codes, ValidationStatus.EN_COURS);
-        if (dossiers.isEmpty()) {
-            return;
-        }
-
-        // Les étapes nouvelles n'ont pas encore d'identifiant : aucun dossier n'a pu s'y trouver,
-        // et rien ne pourrait y être replacé avant l'enregistrement.
-        List<WorkflowStep> survivantes = conservees.stream()
-                .filter(step -> step.getId() != null)
-                .sorted(java.util.Comparator.comparingInt(WorkflowStep::getStepOrder))
+        List<WorkflowStep> supprimees = existing.getSteps().stream()
+                .filter(step -> step.getId() != null && !gardees.contains(step.getId()))
                 .toList();
-
-        for (WorkflowValidationInstance dossier : dossiers) {
-            WorkflowStep retiree = supprimees.get(identifiantNumerique(dossier.getEtatCode()));
-            WorkflowStep repli = etapeDeRepli(survivantes, retiree);
-            if (repli == null) {
-                // Aucune étape ne subsiste : le circuit est vidé de sa substance. Le dossier reste
-                // où il est, faute de meilleure place, et le journal le nomme pour qu'on puisse le
-                // reprendre à la main.
-                log.error("Dossier {} laissé sur l'étape retirée « {} » : ce circuit ne conserve "
-                                + "aucune étape où le replacer.",
-                        dossier.getResourceId(), retiree != null ? retiree.getNomEtape() : dossier.getEtatCode());
-                continue;
-            }
-            String etatAvant = dossier.getEtatCode();
-            String motif = motifDuReplacement(retiree, dossier, repli);
-            inscrireLeReplacement(dossier, etatAvant, retiree, repli, motif);
-            dossier.setEtatCode(String.valueOf(repli.getId()));
-            validationInstanceRepository.save(dossier);
-            annoncerLeReplacement(dossier, etatAvant, repli, motif);
-            log.warn("Dossier {} replacé de l'étape retirée « {} » vers « {} ».",
-                    dossier.getResourceId(),
-                    retiree != null ? retiree.getNomEtape() : etatAvant,
-                    repli.getNomEtape());
-        }
-    }
-
-    /**
-     * Retire des étapes conservées les actions qui menaient à une étape que l'on vient d'enlever.
-     *
-     * <p><b>C'est ce qui rendait la suppression d'une étape impossible, dossiers ou pas.</b>
-     * {@code workflow_transition.to_step_id} référence {@code workflow_step} sans effacement en
-     * cascade : une action d'une <i>autre</i> étape pointant vers celle qu'on retire empêchait sa
-     * suppression au moment du vidage. Selon ce que l'éditeur renvoyait, l'administrateur recevait
-     * une erreur de contrainte — donc un 500 illisible — ou le refus « aucune étape de ce circuit
-     * ne porte le code X ». Or presque toute étape d'un circuit est la destination d'une autre :
-     * le traitement est visé par l'imputation, par la validation qui le renvoie, par la
-     * contre-validation qui le renvoie aussi. Retirer une étape du milieu était donc à peu près
-     * toujours impossible.</p>
-     *
-     * <p>Ces actions sont <b>supprimées</b>, et non redirigées ni rendues terminales. Une action
-     * n'existait que pour mener là où elle menait : la rediriger inventerait un acheminement que
-     * personne n'a demandé, et la rendre terminale changerait « renvoyer au traitement » en
-     * « clore le dossier » — le contraire de ce qu'elle disait. Mieux vaut une étape à laquelle on
-     * n'accède plus, que l'éditeur montre, qu'une action qui ment sur ce qu'elle fait.</p>
-     */
-    private void retirerLesActionsQuiNeMenentNullePart(List<WorkflowStep> conservees,
-                                                       EtapesRetirees retirees) {
-        if (retirees.vide()) {
+        if (supprimees.isEmpty()) {
             return;
         }
-        for (WorkflowStep etape : conservees) {
-            if (etape.getTransitions() == null || etape.getTransitions().isEmpty()) {
-                continue;
-            }
-            List<WorkflowTransition> vers = etape.getTransitions().stream()
-                    .filter(transition -> retirees.contient(transition.getToStep()))
-                    .toList();
-            if (vers.isEmpty()) {
-                continue;
-            }
-            // orphanRemoval sur la collection : les retirer de la liste les efface en base, ce qui
-            // libère la référence et permet enfin à l'étape visée de disparaître.
-            etape.getTransitions().removeAll(vers);
-            vers.forEach(transition -> log.warn(
-                    "Action « {} » de l'étape « {} » supprimée : elle menait à l'étape « {} », "
-                            + "que cette modification retire du circuit.",
-                    transition.getLabel() != null ? transition.getLabel() : transition.getCode(),
-                    etape.getNomEtape(),
-                    transition.getToStep() != null ? transition.getToStep().getNomEtape() : "?"));
+
+        List<String> codes = supprimees.stream().map(step -> String.valueOf(step.getId())).toList();
+        if (!validationInstanceRepository.existsByEtatCodeInAndStatus(codes, ValidationStatus.EN_COURS)) {
+            return;
         }
-    }
 
-    /**
-     * Où ramener un dossier dont l'étape est retirée : la dernière étape conservée qui la précède,
-     * à défaut la première du circuit.
-     *
-     * <p>En arrière plutôt qu'en avant : avancer un dossier reviendrait à tenir pour acquise une
-     * décision que personne n'a prise. Le ramener au point de décision précédent ne lui fait rien
-     * gagner qu'il n'ait déjà obtenu, et laisse à celui qui y décide le soin de le réorienter.</p>
-     */
-    private WorkflowStep etapeDeRepli(List<WorkflowStep> survivantes, WorkflowStep retiree) {
-        if (survivantes.isEmpty()) {
-            return null;
-        }
-        if (retiree == null) {
-            return survivantes.get(0);
-        }
-        return survivantes.stream()
-                .filter(step -> step.getStepOrder() < retiree.getStepOrder())
-                .reduce((premiere, suivante) -> suivante)
-                .orElse(survivantes.get(0));
-    }
-
-    /** Ce qui sera lu du replacement : dans l'historique, dans le courriel, dans la boîte. */
-    private String motifDuReplacement(WorkflowStep retiree, WorkflowValidationInstance dossier,
-                                      WorkflowStep repli) {
-        String nomRetiree = retiree != null && retiree.getNomEtape() != null
-                ? retiree.getNomEtape() : dossier.getEtatCode();
-        return "L'étape « " + nomRetiree + " » a été retirée du circuit de validation. "
-                + "Le dossier est ramené à l'étape « " + repli.getNomEtape() + " ».";
-    }
-
-    /** Inscrit le replacement à l'historique du dossier, au nom de qui a modifié le circuit. */
-    private void inscrireLeReplacement(WorkflowValidationInstance dossier, String etatAvant,
-                                       WorkflowStep retiree, WorkflowStep repli, String motif) {
-        ValidationHistory ligne = ValidationHistory.builder()
-                .validationInstance(dossier)
-                .stepCode(etatAvant)
-                .stepName(retiree != null && retiree.getNomEtape() != null
-                        ? retiree.getNomEtape() : etatAvant)
-                .decision("Étape retirée du circuit")
-                .comments(motif)
-                .validatorUserId(getCurrentUserId())
-                .validatorFullName(getCurrentUserFullName())
-                .decisionDate(LocalDateTime.now())
-                .build();
-        historyRepository.save(ligne);
-        // « repli » n'est pas relu ici : il est déjà dans le motif, que la ligne porte.
-    }
-
-    /**
-     * Annonce le replacement comme n'importe quel changement d'étape.
-     *
-     * <p>Le dossier a changé d'étape sans que personne ne l'ait décidé : sans cette annonce, le
-     * module qui le détient continuerait d'afficher l'étape d'avant — celle qui n'existe plus — et
-     * la personne désormais attendue ne saurait pas qu'on l'attend. C'est précisément ce que le
-     * franchissement d'une transition publie déjà ; il n'y avait pas de raison qu'un déplacement
-     * décidé par l'administrateur soit plus discret qu'une décision d'utilisateur.</p>
-     *
-     * <p>Aucun code de transition : ce n'est pas une décision, et l'historique le dit ainsi. Les
-     * écouteurs y sont préparés — la charge utile porte alors {@code decision} et
-     * {@code conditionFranchie} à vide, et l'étape atteinte fournit le reste.</p>
-     *
-     * <p>Publié après l'enregistrement du dossier, et consommé après le commit de la modification
-     * du circuit : un circuit dont l'enregistrement échouerait ensuite n'aura prévenu personne.</p>
-     */
-    private void annoncerLeReplacement(WorkflowValidationInstance dossier, String etatAvant,
-                                       WorkflowStep repli, String motif) {
-        eventPublisher.publishEvent(new TransitionFranchieEvent(
-                WorkflowValidationInstance.class.getName(),
-                dossier.getId().toString(),
-                dossier.getWorkflowCode(),
-                null,
-                etatAvant,
-                String.valueOf(repli.getId()),
-                getCurrentUserId(),
-                motif,
-                null));
+        String noms = supprimees.stream()
+                .map(step -> step.getNomEtape() != null ? step.getNomEtape() : step.getCode())
+                .collect(Collectors.joining(", "));
+        throw new BusinessException(
+                "Impossible de supprimer l'étape « " + noms + " » : des dossiers s'y trouvent "
+                        + "actuellement. Faites-les avancer avant de retirer cette étape du circuit.",
+                HttpStatus.CONFLICT);
     }
 
     /**
@@ -865,7 +671,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      * {@code mergeSteps} écarte au passage les doublons : les deux listes pouvaient diverger et
      * décaler les destinations. L'appariement se fait maintenant par identité d'étape.</p>
      */
-    private void resolveTransitions(Workflow workflow, WorkflowDto dto, EtapesRetirees retirees) {
+    private void resolveTransitions(Workflow workflow, WorkflowDto dto) {
         if (workflow.getSteps() == null || dto.getSteps() == null) {
             return;
         }
@@ -876,35 +682,11 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 continue;
             }
 
-            List<WorkflowTransition> conservees = new java.util.ArrayList<>();
             for (WorkflowTransition transition : step.getTransitions()) {
                 WorkflowTransitionDto transitionDto = dtoDeLaTransition(stepDto, transition);
                 if (transitionDto != null) {
-                    // L'éditeur peut renvoyer une action vers l'étape qu'il vient lui-même de
-                    // retirer : la liste des étapes et celle des actions sont deux volets du même
-                    // formulaire, et rien n'oblige l'écran à défaire le second en touchant au
-                    // premier. Lui opposer « aucune étape ne porte ce code » reviendrait à refuser
-                    // une suppression que l'appelant a bel et bien demandée.
-                    if (retirees.estDesigneePar(transitionDto)) {
-                        log.warn("Action « {} » de l'étape « {} » supprimée : sa destination est "
-                                        + "retirée du circuit par cette même modification.",
-                                transitionDto.getLabel() != null
-                                        ? transitionDto.getLabel() : transitionDto.getCode(),
-                                step.getNomEtape());
-                        continue;
-                    }
                     transition.setToStep(etapeDestination(workflow, transitionDto));
-                } else if (retirees.contient(transition.getToStep())) {
-                    // Action que l'éditeur n'a pas renvoyée et qui pointe encore vers l'étape
-                    // retirée : sans cela, sa référence survivrait et empêcherait l'effacement.
-                    continue;
                 }
-                conservees.add(transition);
-            }
-
-            if (conservees.size() != step.getTransitions().size()) {
-                step.getTransitions().clear();
-                step.getTransitions().addAll(conservees);
             }
         }
     }
@@ -1261,11 +1043,6 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                         // valent que pour elle. L'identifiant de transition ne le dirait pas : il
                         // change d'une installation à l'autre.
                         .actionCode(codeDe(transitionsParId.get(identifiantNumerique(t.getCode()))))
-                        // L'action est offerte même si le dossier ne l'admet pas encore : l'écran
-                        // la montre et dit ce qui manque, au lieu de ne rien montrer du tout.
-                        .condition(t.getConditionRequise())
-                        .conditionLibelle(t.getConditionLibelle())
-                        .conditionRemplie(conditionRemplie(instance, t.getConditionRequise()))
                         .build())
                 .toList();
 
@@ -1331,21 +1108,15 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .collect(Collectors.toMap(WorkflowTransition::getId, t -> t));
     }
 
-    /** Le dossier porte-t-il le fait qu'une transition exige ? Sans condition, rien ne retient. */
-    private boolean conditionRemplie(WorkflowValidationInstance instance, String conditionRequise) {
-        return conditionRequise == null || conditionRequise.isBlank()
-                || FaitsDuDossier.contient(instance.getFaits(), conditionRequise);
-    }
-
     /**
      * Décisions que l'étape prévoit mais qu'une condition non remplie retient.
      *
-     * <p>Ces décisions figurent désormais aussi dans {@code allowedActions}, marquées
-     * {@code conditionRemplie = false} : une condition ne masque plus le bouton, elle motive son
-     * refus. Cette liste-ci reste néanmoins rendue, et rendue <b>sans filtrage par rôle</b> — là
-     * est sa raison d'être. Ce n'est pas une question d'habilitation : c'est le dossier qui n'est
-     * pas prêt, et la raison de l'attente intéresse celui qui doit agir ailleurs pour la lever
-     * autant que celui qui décidera.</p>
+     * <p>Le moteur les retire des actions offertes, et c'est bien : proposer une clôture que le
+     * dossier n'admet pas ne mènerait qu'à un refus. Mais rien ne les mentionnait ensuite, et le
+     * responsable qualité voyait un dossier arrêté sans que rien ne lui dise qu'il attendait le
+     * solde des actions correctives. Ce n'est pas une question d'habilitation — c'est le dossier
+     * qui n'est pas prêt — d'où l'absence de filtrage par rôle : la raison de l'attente intéresse
+     * tout le monde, y compris celui qui doit agir ailleurs pour la lever.</p>
      */
     private List<WorkflowStateDto.DecisionEnAttenteDto> decisionsEnAttente(
             WorkflowValidationInstance instance, Long etapeCourante) {

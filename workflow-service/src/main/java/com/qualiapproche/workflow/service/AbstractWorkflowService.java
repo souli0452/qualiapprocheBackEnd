@@ -291,18 +291,9 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
     /**
      * Refuse le franchissement tant que le dossier ne remplit pas la condition exigée.
      *
-     * <p><b>C'est ici, et nulle part ailleurs, que la condition se juge.</b> Elle filtrait aussi
-     * les transitions proposées, si bien qu'une action que le dossier n'admettait pas encore
-     * n'apparaissait nulle part : l'écran ne dessinait aucun bouton, et l'utilisateur voyait un
-     * dossier arrêté sans savoir ce qu'il attendait. L'action est désormais offerte et c'est sa
-     * demande qui est refusée — avec la raison.</p>
-     *
-     * <p>Vérifiée <b>avant</b> l'habilitation : à qui porte le rôle attendu sur un dossier qui
-     * n'est pas prêt, il faut répondre ce qui manque au dossier, non qu'il manque de droits.</p>
-     *
-     * <p>Le refus reprend le libellé que l'auteur du circuit a écrit — « toutes les actions
-     * correctives du dossier ont été réalisées… » — et non le nom technique du fait, qui ne dit
-     * rien à qui doit agir. À défaut de libellé, le nom du fait reste préférable au silence.</p>
+     * <p>Vérifiée <b>avant</b> l'habilitation, et non après : les deux refus passent par le même
+     * filtre côté moteur, et l'utilisateur se serait vu répondre qu'il n'a pas les droits alors que
+     * c'est le dossier qui n'est pas prêt. Deux causes distinctes méritent deux messages.</p>
      */
     protected void verifierConditionMetier(D pData, TransitionPersistante pTransition) {
         String exigee = pTransition.getConditionRequise();
@@ -312,22 +303,11 @@ public abstract class AbstractWorkflowService<D extends IWorkflowData> {
         String faits = pData instanceof WorkflowValidationInstance instance
                 ? instance.getFaits() : null;
         if (!FaitsDuDossier.contient(faits, exigee)) {
-            throw new BusinessException(motifDeLaConditionNonRemplie(pTransition, exigee),
+            throw new BusinessException(
+                    "Cette action n'est pas encore possible sur ce dossier : la condition « "
+                            + exigee + " » n'est pas remplie.",
                     HttpStatus.CONFLICT);
         }
-    }
-
-    /** Ce qu'on répond à qui demande une action que le dossier n'admet pas encore. */
-    private String motifDeLaConditionNonRemplie(TransitionPersistante pTransition, String exigee) {
-        String action = pTransition.getLibelle() != null && !pTransition.getLibelle().isBlank()
-                ? "« " + pTransition.getLibelle() + " »" : "Cette action";
-        String enClair = pTransition.getConditionLibelle();
-        if (enClair != null && !enClair.isBlank()) {
-            return action + " n'est pas encore possible sur ce dossier. Il faut d'abord que "
-                    + enClair + ".";
-        }
-        return action + " n'est pas encore possible sur ce dossier : la condition « " + exigee
-                + " » n'est pas remplie.";
     }
 
     protected void verifierEtatOrigine(D pData, TransitionPersistante pTransition) {

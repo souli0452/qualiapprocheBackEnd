@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
  *   <li>{@code etatCode} — état de traitement métier de l'étape ({@code VALIDATION_RS}, {@code CLOTURE}…) ;</li>
  *   <li>{@code comments} — commentaire saisi lors de la décision ;</li>
  *   <li>{@code decision} — code de la transition franchie ;</li>
- *   <li>{@code conditionFranchie} — fait que cette transition exigeait du dossier, ou {@code null} ;</li>
  *   <li>{@code fields} — valeurs saisies lors de la décision, indexées par nom de champ ;</li>
  *   <li>{@code timestamp} — horodatage de la transition.</li>
  * </ul>
@@ -49,14 +48,6 @@ import java.util.stream.Collectors;
  * <p>{@code fields} est ce qui permet à un module métier de recopier une saisie d'étape dans sa
  * propre donnée — un document justificatif de rejet, par exemple. Sans lui, la saisie restait
  * enfermée dans l'historique du moteur et le module devait la redemander à l'utilisateur.</p>
- *
- * <p>{@code conditionFranchie} est ce qui permet à un module d'accrocher un effet métier au
- * <b>point de contrôle</b> plutôt qu'à une étape nommée. Les plans d'action d'une non-conformité
- * étaient confiés à leurs responsables à l'arrivée sur une étape désignée en dur —
- * {@code VALIDATION_RS} : retirer ou renommer cet état dans l'éditeur de circuits suffisait à ce
- * que plus aucun plan ne soit jamais confié, et donc à ce qu'aucun dossier ne puisse plus être
- * clôturé, sans que rien ne le signale. L'effet suit désormais la condition que la transition
- * porte, où que l'administrateur la place.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -135,28 +126,6 @@ public class WorkflowEventListener {
     }
 
     /**
-     * Fait que la transition franchie exigeait du dossier, ou {@code null}.
-     *
-     * <p>C'est le point de contrôle que le franchissement vient de passer. Un module y accroche ce
-     * qu'il doit faire <b>à ce moment-là</b> — confier les plans d'action quand leur affectation
-     * est vérifiée — sans avoir à connaître le nom de l'étape qui le porte.</p>
-     */
-    private String conditionDeLaTransition(String transitionCode) {
-        if (transitionCode == null || transitionCode.isBlank()) {
-            return null;
-        }
-        try {
-            return transitionRepository.findById(Long.valueOf(transitionCode))
-                    .map(t -> t.getConditionRequise())
-                    .filter(c -> !c.isBlank())
-                    .orElse(null);
-        } catch (NumberFormatException e) {
-            log.warn("Code de transition inexploitable : {}", transitionCode);
-            return null;
-        }
-    }
-
-    /**
      * Étape correspondant à l'état atteint. Vide sur un état terminal synthétique
      * ({@code TERMINATED_*}), qui ne correspond à aucune étape configurée.
      */
@@ -219,7 +188,6 @@ public class WorkflowEventListener {
 
         payload.put("comments", event.getCommentaire());
         payload.put("decision", event.getTransitionCode());
-        payload.put("conditionFranchie", conditionDeLaTransition(event.getTransitionCode()));
         payload.put("fields", champsSaisis(instance));
         payload.put("timestamp", LocalDateTime.now().toString());
         return payload;

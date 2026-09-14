@@ -115,7 +115,6 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
                     // d'habilitation ne voit que des transitions.
                     transition.setCosignataires(Cosignataires.lire(dbStep.getCosignataires()));
                     transition.setConditionRequise(dbTrans.getConditionRequise());
-                    transition.setConditionLibelle(dbTrans.getConditionLibelle());
 
                     // Résoudre l'action via le bean factory (DefaultTransitionAction par défaut si non trouvé)
                     try {

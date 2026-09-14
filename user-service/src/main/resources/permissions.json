@@ -568,15 +568,5 @@
     "label": "Voir les documents quel que soit leur classement",
     "value": "document-hors-classement",
     "module": "Documentaire"
-  },
-  {
-    "label": "Consulter l'historique des suggestions de l'assistant IA",
-    "value": "assistant-ia-read",
-    "module": "Assistant IA"
-  },
-  {
-    "label": "Solliciter l'assistant IA et prononcer un verdict sur ses suggestions",
-    "value": "assistant-ia-write",
-    "module": "Assistant IA"
   }
 ]

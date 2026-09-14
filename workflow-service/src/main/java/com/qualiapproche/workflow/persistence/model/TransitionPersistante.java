@@ -22,16 +22,6 @@ public class TransitionPersistante extends Transition<IWorkflowData> {
      * Voir {@code WorkflowTransition#conditionRequise}.
      */
     private String conditionRequise;
-
-    /**
-     * Ce que la condition veut dire, en clair, tel que l'auteur du circuit l'a écrit.
-     *
-     * <p>Recopié depuis {@code WorkflowTransition#conditionLibelle} à la construction du
-     * catalogue : c'est ce texte que le refus rend à l'appelant. Sans lui, on lui opposait le nom
-     * technique du fait — {@code PLANS_ACTION_SOLDES} — qui ne dit rien à qui doit agir.</p>
-     */
-    private String conditionLibelle;
-
     private Integer ordre;
     private String codeImplementation;
 
