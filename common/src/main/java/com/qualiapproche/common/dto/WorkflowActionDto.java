@@ -10,8 +10,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Schema(description = "Une décision que l'appelant peut prendre sur le dossier, telle que le "
         + "circuit la déclare : ce qu'elle fait, comment la présenter, et sous quel code la "
-        + "rejouer. Sa seule présence vaut autorisation — le moteur ne publie que les actions "
-        + "qu'il laisserait passer.")
+        + "rejouer. Sa présence vaut autorisation — le moteur ne publie que les actions dont "
+        + "l'appelant a l'habilitation —, mais pas forcément admission : une action dont la "
+        + "condition n'est pas remplie est publiée avec « conditionRemplie » à faux, et c'est "
+        + "elle qu'il faut montrer en expliquant ce qui manque, jamais masquer.")
 public class WorkflowActionDto {
     /** Identifiant de la transition à jouer — c'est lui que reprend {@code /execute}. */
     @Schema(description = "Ce qu'il faut renvoyer pour jouer l'action. Identifiant technique de la "
@@ -73,4 +75,34 @@ public class WorkflowActionDto {
             example = "APPROUVE",
             allowableValues = {"APPROUVE", "REJETE", "CLOTURE"})
     private String decision;
+
+    /**
+     * Le dossier admet-il cette action en l'état ?
+     *
+     * <p>Vrai pour toute action sans condition. Faux quand la transition exige du dossier un fait
+     * qu'il n'a pas encore : l'action est <b>tout de même publiée</b>. La masquer laissait
+     * l'utilisateur devant un dossier arrêté, sans bouton et sans raison — et la raison est
+     * précisément ce dont il a besoin, puisque la lever lui revient le plus souvent.</p>
+     *
+     * <p>La demander malgré tout ne casse rien : le moteur la refuse en 409, avec
+     * {@link #conditionLibelle} pour motif.</p>
+     */
+    @Schema(description = "Le dossier admet-il cette action en l'état ? Faux, l'action reste "
+            + "publiée mais sera refusée : montrez-la en expliquant ce qui manque, ne la masquez "
+            + "pas.",
+            example = "true")
+    private boolean conditionRemplie = true;
+
+    /** Nom du fait que la transition exige du dossier, ou {@code null}. Repère technique. */
+    @Schema(description = "Nom du fait que la transition exige du dossier, tel que le module "
+            + "métier le déclare. Repère technique, à ne montrer qu'à défaut d'explication.",
+            example = "PLANS_ACTION_SOLDES")
+    private String condition;
+
+    /** Ce que la condition veut dire, en clair, tel que l'auteur du circuit l'a écrit. */
+    @Schema(description = "Ce que la condition veut dire, en clair. C'est le texte à montrer "
+            + "quand l'action n'est pas encore admise, et celui que le refus reprendra.",
+            example = "toutes les actions correctives du dossier ont été réalisées, vérifiées et "
+                    + "reconnues efficaces")
+    private String conditionLibelle;
 }
