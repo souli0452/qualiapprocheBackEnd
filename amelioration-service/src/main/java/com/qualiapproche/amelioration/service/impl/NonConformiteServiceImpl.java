@@ -1461,7 +1461,7 @@ public class NonConformiteServiceImpl
     @Override
     @Transactional
     public void updateWorkflowState(UUID nonConformiteId, String issue, String nomEtape, String etatCode,
-                                    Map<String, String> champs) {
+                                    Map<String, String> champs, String conditionFranchie) {
         log.info("Non-conformité {} : issue={}, étape={}, état={}", nonConformiteId, issue, nomEtape, etatCode);
         NonConformite nc = nonConformiteRepository.findById(nonConformiteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Non conformité introuvable"));
@@ -1479,7 +1479,7 @@ public class NonConformiteServiceImpl
         }
 
         nc.setStatus(statutDepuisLIssue(issue, etat, ancienStatut));
-        confierLesPlansSiLEtapeLeVeut(nc, etat);
+        confierLesPlansSiLaConditionLeVeut(nc, conditionFranchie);
 
         if (nc.getStatus() == Status.PUBLISHED
                 && (ancienStatut == Status.DRAFT || ancienStatut == Status.REJECTED)) {
@@ -1677,15 +1677,32 @@ public class NonConformiteServiceImpl
     }
 
     /**
-     * Confie les plans d'action à leurs responsables quand la validation qualité est atteinte.
+     * Confie les plans d'action à leurs responsables quand le point de contrôle qui vérifie leur
+     * affectation vient d'être franchi.
      *
      * <p>C'est là que le dossier passe de la proposition à l'exécution : les actions proposées par
      * l'agent, validées par le pilote, deviennent des engagements nominatifs suivis par leur propre
      * circuit. Le faire plus tôt les aurait engagés avant validation ; plus tard, la clôture les
      * aurait attendus sans qu'ils aient jamais commencé.</p>
+     *
+     * <p><b>Accroché à la condition, non à une étape nommée.</b> Le déclenchement se lisait sur
+     * l'arrivée à {@code Etat.VALIDATION_RS}, écrit en dur. Or le circuit est paramétrable et rien
+     * ne le rappelait à l'administrateur : supprimer cette étape de l'éditeur, ou seulement changer
+     * son état de traitement, suffisait à ce que plus aucun plan ne soit jamais confié — les
+     * responsables n'étaient pas prévenus, aucun circuit de plan ne s'ouvrait, et la
+     * non-conformité, dont la clôture exige que tous ses plans soient soldés, ne pouvait plus
+     * jamais être close. Une panne sans message, découverte des semaines plus tard, et sans issue
+     * depuis l'interface.</p>
+     *
+     * <p>{@link PlansActionDeLaNonConformiteService#FAIT_PLANS_ACTION_AFFECTES} est précisément le
+     * fait qui garantit que chaque action porte un responsable — c'est-à-dire la seule chose dont
+     * l'affectation a besoin. Le franchissement qui le vérifie est donc le moment juste, où que
+     * l'administrateur place cette condition dans son circuit. Déplacer l'étape, la renommer, la
+     * supprimer au profit d'une autre : l'affectation suit.</p>
      */
-    private void confierLesPlansSiLEtapeLeVeut(NonConformite nc, Etat etat) {
-        if (etat != Etat.VALIDATION_RS) {
+    private void confierLesPlansSiLaConditionLeVeut(NonConformite nc, String conditionFranchie) {
+        if (!PlansActionDeLaNonConformiteService.FAIT_PLANS_ACTION_AFFECTES.equalsIgnoreCase(
+                conditionFranchie != null ? conditionFranchie.trim() : null)) {
             return;
         }
         plansActionService.confierLesPlans(nc.getId());

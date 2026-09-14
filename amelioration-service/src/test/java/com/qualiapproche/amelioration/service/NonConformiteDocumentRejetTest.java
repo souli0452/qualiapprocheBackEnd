@@ -84,7 +84,7 @@ class NonConformiteDocumentRejetTest {
                 .thenReturn(Optional.of(justificatif));
 
         service.updateWorkflowState(ncId, "REJECTED", "Validation", "VALIDATION",
-                Map.of("docRejet", REFERENCE));
+                Map.of("docRejet", REFERENCE), null);
 
         assertThat(nc.getDocRejet()).isSameAs(justificatif);
     }
@@ -99,7 +99,7 @@ class NonConformiteDocumentRejetTest {
         // La décision est déjà prise et enregistrée par le moteur : échouer ici la ferait rejouer
         // indéfiniment par le mécanisme de reprise des notifications.
         service.updateWorkflowState(ncId, "REJECTED", "Validation", "VALIDATION",
-                Map.of("docRejet", REFERENCE));
+                Map.of("docRejet", REFERENCE), null);
 
         assertThat(nc.getDocRejet()).isNull();
         assertThat(nc.getWorkflowStatus()).isEqualTo("Validation");
@@ -112,7 +112,7 @@ class NonConformiteDocumentRejetTest {
         PieceJointe precedent = PieceJointe.builder().url("ancienne-reference").build();
         nc.setDocRejet(precedent);
 
-        service.updateWorkflowState(ncId, "APPROVED", "Validation RS", "VALIDATION_RS", Map.of());
+        service.updateWorkflowState(ncId, "APPROVED", "Validation RS", "VALIDATION_RS", Map.of(), null);
 
         assertThat(nc.getDocRejet()).isSameAs(precedent);
     }
@@ -125,7 +125,7 @@ class NonConformiteDocumentRejetTest {
         nc.setDocRejet(precedent);
 
         service.updateWorkflowState(ncId, "EN_COURS", "Traitement", "TRAITEMENT",
-                Map.of("docRejet", "   "));
+                Map.of("docRejet", "   "), null);
 
         assertThat(nc.getDocRejet()).isSameAs(precedent);
     }

@@ -196,7 +196,7 @@ class ImputationEtTitulaireDAccordTest {
         when(nonConformiteRepository.findById(ncId)).thenReturn(Optional.of(nc));
 
         service.updateWorkflowState(ncId, "EN_COURS", "Traitement", "TRAITEMENT",
-                Map.of("userImputId", NOUVEAU));
+                Map.of("userImputId", NOUVEAU), null);
 
         assertThat(nc.getUserImputId()).isEqualTo(NOUVEAU);
         verify(workflowClient, never()).designerTitulaire(any(), anyString());
