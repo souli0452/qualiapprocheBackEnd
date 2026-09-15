@@ -4,7 +4,7 @@ spring:
   application:
     name: referentiel-service
   datasource:
-    url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5432/qualisira_referentiel}
+    url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5432/bd_quali_sira_referentiel}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   flyway:
@@ -44,7 +44,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET}
+            client-secret: ${KC_CLIENT_SECRET:dNQJQsoKafAvG5XvqPgFKY9DGG3lPhRT7P0XhKzQW0DBWa987FaJWmKW3tjpnrt7MzWZ5sLAC7cuWTMHhuHHfM}
             authorization-grant-type: client_credentials
         provider:
           keycloak:
@@ -111,7 +111,7 @@ qualisira:
     #
     # Vide, le démarrage s'arrête en disant ce qui manque (voir LicenceInstalleeService). Un
     # démarrage qui échoue se remarque dans la minute ; une clé qui ne correspond pas, jamais.
-    cle-publique: ${QUALISIRA_CLE_PUBLIQUE:}
+    cle-publique: ${QUALISIRA_CLE_PUBLIQUE:MCowBQYDK2VwAyEA87qUuQOW5599Dy/lJMsjwHXUIwlLVOpx8jrRhpkD/70=}
     # Durée de l'essai gratuit, accordé une seule fois par installation.
     essai-jours: ${QUALISIRA_ESSAI_JOURS:7}
     # Modules ouverts pendant l'essai : ce qui est effectivement proposé à la vente, et non toute

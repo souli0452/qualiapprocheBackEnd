@@ -9,7 +9,7 @@ spring:
   application:
     name: support-service
   datasource:
-    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5432/qualisira_supportdb}
+    url: ${DB_URL_SUPPORT:jdbc:postgresql://localhost:5432/bd_quali_sira_support}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:root}
   flyway:
@@ -46,7 +46,7 @@ spring:
         registration:
           keycloak:
             client-id: ${KC_CLIENT_ID:quali-sira}
-            client-secret: ${KC_CLIENT_SECRET}
+            client-secret: ${KC_CLIENT_SECRET:dNQJQsoKafAvG5XvqPgFKY9DGG3lPhRT7P0XhKzQW0DBWa987FaJWmKW3tjpnrt7MzWZ5sLAC7cuWTMHhuHHfM}
             authorization-grant-type: client_credentials
         provider:
           keycloak:
