@@ -8,7 +8,6 @@ import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.model.ExecutionContext;
 import com.qualiapproche.workflow.core.port.output.ITransitionCondition;
 import com.qualiapproche.workflow.model.Cosignataires;
-import com.qualiapproche.workflow.model.FaitsDuDossier;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
@@ -63,14 +62,22 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
      */
     private static final String HABILITATION_CREATEUR = RolesPlateforme.HABILITATION_CREATEUR;
 
+    /**
+     * <b>La condition métier ne se juge pas ici.</b>
+     *
+     * <p>Elle y retirait l'action des transitions possibles, et l'écran, qui dessine ses boutons à
+     * partir de cette liste, n'en montrait aucun : le responsable qualité voyait un dossier
+     * immobile, sans bouton ni raison. Une condition non remplie n'est pas une action qui n'existe
+     * pas — c'est une action que le dossier n'admet pas <i>encore</i>, et la différence est tout ce
+     * que l'utilisateur a besoin de savoir.</p>
+     *
+     * <p>L'action reste donc offerte, et c'est {@code verifierConditionMetier} qui la refuse au
+     * moment où elle est demandée, en disant ce qui manque. Ce qui se juge ici ne concerne que
+     * <b>l'appelant</b> : porte-t-il l'habilitation, est-il le titulaire, le créateur, un
+     * signataire que l'étape n'écarte pas.</p>
+     */
     @Override
     public boolean estAutorise(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
-        // La condition métier avant l'habilitation : une action que le dossier n'admet pas encore
-        // ne doit être proposée à personne, fût-il habilité.
-        if (!conditionRemplie(pContexte, pTransition)) {
-            return false;
-        }
-
         // Avant l'habilitation : celui qui est écarté porte précisément le rôle attendu, et le
         // contrôle de rôle l'aurait donc laissé passer.
         if (auteurEcarteDeLEtape(pContexte, pTransition)) {
@@ -270,30 +277,6 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
         return "Vous avez soumis ce dossier : "
                 + (etape != null && !etape.isBlank() ? "l'étape « " + etape + " » revient" : "cette étape revient")
                 + " à un autre signataire que son auteur.";
-    }
-
-    /**
-     * Le dossier remplit-il la condition que cette transition exige ?
-     *
-     * <p>Le moteur ne connaît pas les plans d'action, ni l'efficacité, ni rien de ce que les
-     * modules suivent : il compare le fait exigé par la transition à ceux que le module a inscrits
-     * sur le dossier. La règle métier reste chez qui la détient, et le circuit peut l'exiger sans
-     * la connaître.</p>
-     *
-     * <p>L'administration ne passe pas outre : une condition métier n'est pas une habilitation.
-     * Clore une non-conformité dont les plans d'action ne sont pas soldés reste faux, quel que soit
-     * celui qui le demande — c'est le dossier qui n'est pas prêt, pas l'utilisateur qui manque de
-     * droits.</p>
-     */
-    private boolean conditionRemplie(ExecutionContext<IWorkflowData> pContexte, TransitionPersistante pTransition) {
-        String exigee = pTransition.getConditionRequise();
-        if (exigee == null || exigee.isBlank()) {
-            return true;
-        }
-        if (!(pContexte.getData() instanceof WorkflowValidationInstance instance)) {
-            return false;
-        }
-        return FaitsDuDossier.contient(instance.getFaits(), exigee);
     }
 
     /**

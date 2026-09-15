@@ -118,7 +118,11 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
      * @param champs      valeurs saisies lors de la décision, indexées par nom de champ. Le moteur
      *                    ne transporte que des chaînes : un champ de type fichier y porte la
      *                    référence de l'objet déposé, pas son contenu.
+     * @param conditionFranchie fait que la transition franchie exigeait du dossier, ou {@code null}.
+     *                    C'est le point de contrôle que la décision vient de passer : c'est lui, et
+     *                    non le nom de l'étape atteinte, qui déclenche les effets métier attachés au
+     *                    franchissement — voir {@code PLANS_ACTION_AFFECTES}.
      */
     void updateWorkflowState(UUID nonConformiteId, String issue, String nomEtape, String etatCode,
-                             java.util.Map<String, String> champs);
+                             java.util.Map<String, String> champs, String conditionFranchie);
 }

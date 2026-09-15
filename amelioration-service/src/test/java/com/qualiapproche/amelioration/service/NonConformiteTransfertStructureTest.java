@@ -77,7 +77,7 @@ class NonConformiteTransfertStructureTest {
     }
 
     private void decision(Map<String, String> champs) {
-        service.updateWorkflowState(ncId, "EN_COURS", "Réception", "RECEPTION", champs);
+        service.updateWorkflowState(ncId, "EN_COURS", "Réception", "RECEPTION", champs, null);
     }
 
     private static final UUID STRUCTURE_CIBLE = UUID.randomUUID();

@@ -23,6 +23,15 @@ public interface WorkflowValidationInstanceRepository extends JpaRepository<Work
     boolean existsByEtatCodeInAndStatus(List<String> etatCodes, ValidationStatus status);
 
     /**
+     * Dossiers arrêtés sur l'une des étapes citées.
+     *
+     * <p>Sert le replacement des dossiers dont l'étape vient d'être retirée du circuit : il faut
+     * les lire pour les déplacer, là où {@code existsByEtatCodeInAndStatus} se contentait de
+     * savoir s'il en existait pour refuser la modification.</p>
+     */
+    List<WorkflowValidationInstance> findByEtatCodeInAndStatus(List<String> etatCodes, ValidationStatus status);
+
+    /**
      * Instances de plusieurs ressources, la plus récente de chacune en tête.
      *
      * <p>Sert la consultation par lot : l'appelant retient la première ligne rencontrée pour
