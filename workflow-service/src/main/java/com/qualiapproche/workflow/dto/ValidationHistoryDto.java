@@ -60,6 +60,22 @@ public class ValidationHistoryDto {
             + "antérieures à ce champ.")
     private String validatorFullName;
 
+    /**
+     * Habilitation que l'étape exigeait pour être visée — la fonction au titre de laquelle la
+     * décision a été prise.
+     *
+     * <p>Elle vient de la configuration du circuit et non du compte : un visa se lit « untel, au
+     * titre de responsable qualité », et c'est l'étape qui dit ce titre. Interroger l'annuaire à
+     * la lecture dirait ce que la personne est aujourd'hui, pas ce qu'elle était en signant.</p>
+     *
+     * <p>Nulle si l'étape a depuis été retirée du circuit, ou si elle n'exigeait aucun rôle.</p>
+     */
+    @Schema(description = "Habilitation exigée par l'étape au moment du visa — la fonction au "
+            + "titre de laquelle la décision a été prise. Vient de la configuration du circuit, "
+            + "pas du compte. Nulle si l'étape n'exige aucun rôle ou a été retirée depuis.",
+            example = "RESPONSABLE_QUALITE")
+    private String responsableRole;
+
     @Schema(description = "Date de la décision. C'est elle qui ordonne l'historique.")
     private LocalDateTime decisionDate;
 

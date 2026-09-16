@@ -222,6 +222,16 @@
             white-space: nowrap;
         }
 
+        /* La fonction sous le nom du signataire : un visa atteste d'un titre autant que d'une
+           personne. Plus petite et plus pâle que le nom, pour qu'elle se lise comme une mention
+           et non comme un second intervenant. */
+        span.fonction {
+            display: block;
+            margin-top: 1px;
+            font-size: 7pt;
+            color: #6a7385;
+        }
+
         .mention-cloture {
             margin-top: 14px;
             border: 1px solid #1f7a4d;
@@ -327,6 +337,13 @@
         <td class="etiquette">Participants</td>
         <td colspan="3" th:text="${participants}">—</td>
     </tr>
+    <!-- Ce que l'émetteur a fait de lui-même avant d'enregistrer le dossier : équipement mis à
+         l'arrêt, lot retiré, responsable direct averti. Recueilli à la déclaration, il manquait
+         à la fiche — qui laissait donc croire que rien n'avait précédé la soumission. -->
+    <tr>
+        <td class="etiquette">Action entreprise avant la soumission</td>
+        <td colspan="3" th:text="${actionAvantSoumission}">—</td>
+    </tr>
 </table>
 
 <!-- 2. Constat -->
@@ -341,6 +358,7 @@
         <th style="width: 5%;">N°</th>
         <th th:if="${avecCause}">Cause(s) identifiée(s)</th>
         <th>Solution(s) proposée(s)</th>
+        <th>Critère d'efficacité</th>
         <th style="width: 16%;">Responsable</th>
         <th style="width: 11%; white-space: nowrap;">Échéance</th>
         <th style="width: 11%;">Statut</th>
@@ -351,12 +369,13 @@
         <td th:text="${plan.numero}">1</td>
         <td th:if="${avecCause}" th:text="${plan.cause}">—</td>
         <td th:text="${plan.solution}">—</td>
+        <td th:text="${plan.critere}">—</td>
         <td th:text="${plan.responsable}">—</td>
         <td class="sans-repli" th:text="${plan.echeance}">—</td>
         <td th:text="${plan.statut}">—</td>
     </tr>
     <tr th:if="${#lists.isEmpty(plans)}">
-        <td th:colspan="${avecCause ? 6 : 5}">Aucun plan d'action n'a été ouvert sur ce dossier.</td>
+        <td th:colspan="${avecCause ? 7 : 6}">Aucun plan d'action n'a été ouvert sur ce dossier.</td>
     </tr>
     </tbody>
 </table>
@@ -368,7 +387,7 @@
     <tr>
         <th style="width: 18%;">Niveau / Étape</th>
         <th style="width: 15%;">Décision</th>
-        <th style="width: 18%;">Nom et prénom</th>
+        <th style="width: 20%;">Nom et fonction</th>
         <th style="width: 15%;">Date du visa</th>
         <th>Appréciation</th>
     </tr>
@@ -377,7 +396,10 @@
     <tr th:each="visa : ${visas}">
         <td th:text="${visa.etape}">—</td>
         <td th:text="${visa.decision}">—</td>
-        <td th:text="${visa.auteur}">—</td>
+        <td>
+            <span th:text="${visa.auteur}">—</span>
+            <span class="fonction" th:if="${visa.fonction != ''}" th:text="${visa.fonction}">—</span>
+        </td>
         <td class="sans-repli" th:text="${visa.date}">—</td>
         <td th:text="${visa.appreciation}">—</td>
     </tr>
