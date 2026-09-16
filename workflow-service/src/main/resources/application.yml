@@ -88,6 +88,19 @@ workflow:
     # À n'activer que le temps d'un redémarrage, puis à remettre à false : laissé actif, il efface
     # à CHAQUE démarrage les gabarits retouchés depuis l'écran d'administration.
     rafraichir-au-demarrage: ${WORKFLOW_GABARITS_RAFRAICHIR:false}
+  circuits-livres:
+    # Repose sur les circuits déjà en base les étapes, routes et champs du circuit livré avec la
+    # version. Faux par défaut, et c'est la règle : un circuit qui existe appartient à
+    # l'administrateur qui l'a réglé.
+    #
+    # Actif, il tourne à CHAQUE démarrage et ne sait pas distinguer « cette étape n'est pas encore
+    # arrivée jusqu'ici » de « cette étape a été retirée volontairement » : une étape supprimée
+    # depuis l'éditeur reparaît au redéploiement suivant.
+    #
+    # À n'activer que le temps d'un démarrage, sur une installation qu'une livraison enrichit
+    # d'étapes nouvelles, et après avoir vérifié que rien n'a été retiré à dessein. Puis remettre
+    # à false. Une base vierge n'en a pas besoin : elle reçoit ses circuits complets.
+    rattrapage: ${WORKFLOW_CIRCUITS_RATTRAPAGE:false}
   notifications:
     # Racine du frontal : c'est elle qui rend les liens des courriels cliquables. Vide, les
     # courriels partent sans lien plutôt qu'avec un bouton mort.

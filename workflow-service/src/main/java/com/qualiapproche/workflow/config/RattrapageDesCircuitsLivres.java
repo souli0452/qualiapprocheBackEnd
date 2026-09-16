@@ -8,6 +8,7 @@ import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,24 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * Complète les circuits déjà en base en étapes et en transitions.
+ * Complète les circuits déjà en base en étapes et en transitions — <b>désactivée par défaut</b>.
+ *
+ * <p><b>Ne s'exécute que si {@code workflow.circuits-livres.rattrapage} vaut {@code true}.</b> Le
+ * défaut est l'inverse, et c'est une règle de produit : un circuit qui existe en base appartient à
+ * l'administrateur qui l'a réglé. Tant que cette reprise tournait à chaque démarrage, une étape
+ * retirée depuis l'éditeur reparaissait au redéploiement suivant — elle ne peut pas distinguer
+ * « cette étape n'est pas encore arrivée jusqu'ici » de « cette étape a été retirée
+ * volontairement » : les deux se ressemblent en base, seule l'intention les sépare, et elle n'y
+ * est écrite nulle part.</p>
+ *
+ * <p>Ce qui reste couvert sans elle : une base vierge reçoit ses circuits complets de
+ * {@link WorkflowDataInitializer}, et les réparations qui ne contredisent aucun choix — codes
+ * d'étape manquants, préfixes {@code ROLE_} obsolètes, codes d'action — continuent de
+ * s'appliquer. À n'activer que le temps d'un démarrage, sur une installation qu'une livraison
+ * enrichit d'étapes ou de routes nouvelles, et après avoir vérifié que rien n'a été retiré à
+ * dessein ; puis à remettre à {@code false}.</p>
+ *
+ * <p>Ce qui suit décrit ce qu'elle fait <b>lorsqu'elle est activée</b>.</p>
  *
  * <p>{@link WorkflowDataInitializer} ne crée un circuit que si aucun n'existe pour la famille de
  * ressources : sur une installation en service — c'est-à-dire toutes — un circuit enrichi après
@@ -46,6 +64,7 @@ import java.util.function.Supplier;
  * qui est précisément l'effet recherché.</p>
  */
 @Component
+@ConditionalOnProperty(prefix = "workflow.circuits-livres", name = "rattrapage", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 @Order(120) // après ChampDocumentRejetInitializer, qui complète les champs
