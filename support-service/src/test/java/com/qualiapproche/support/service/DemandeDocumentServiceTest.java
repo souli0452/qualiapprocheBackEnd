@@ -122,6 +122,66 @@ class DemandeDocumentServiceTest {
         return demande;
     }
 
+    // ------------------------------------------------- la pièce jointe au dépôt
+
+    @Test
+    @DisplayName("La pièce jointe se relit, sous son nom et avec son type")
+    void pieceJointe_seRelitSousSonNom() throws Exception {
+        DemandeDocument demande = demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS);
+        demande.setPieceJointeObjectName("demandes/modification/8f2c-preuve.pdf");
+        demande.setPieceJointeNom("constat-du-15-mars.pdf");
+        when(demandeRepository.findById(DEMANDE)).thenReturn(Optional.of(demande));
+        when(storageService.downloadFile("demandes/modification/8f2c-preuve.pdf"))
+                .thenReturn(new java.io.ByteArrayInputStream("%PDF-".getBytes()));
+
+        DemandeDocumentService.PieceJointeDeLaDemande piece = service.pieceJointe(DEMANDE);
+
+        assertThat(piece.nom()).isEqualTo("constat-du-15-mars.pdf");
+        assertThat(piece.type().toString()).isEqualTo("application/pdf");
+        assertThat(piece.contenu()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Une demande sans pièce le dit, plutôt que de rendre un fichier vide")
+    void sansPiece_estRefuseEn404() {
+        when(demandeRepository.findById(DEMANDE))
+                .thenReturn(Optional.of(demande(TypeDemande.SUPPRESSION, EtatDemande.EN_COURS)));
+
+        assertThatThrownBy(() -> service.pieceJointe(DEMANDE))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404")
+                .hasMessageContaining("Aucune pièce");
+    }
+
+    @Test
+    @DisplayName("La pièce d'une demande hors de sa portée ne se relit pas")
+    void pieceJointe_horsPortee_estRefusee() throws Exception {
+        DemandeDocument demande = demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS);
+        demande.setStructureId(AUTRE_STRUCTURE);
+        demande.setDemandeurId(TIERS);
+        demande.setPieceJointeObjectName("demandes/modification/8f2c-preuve.pdf");
+        when(demandeRepository.findById(DEMANDE)).thenReturn(Optional.of(demande));
+
+        assertThatThrownBy(() -> service.pieceJointe(DEMANDE))
+                .isInstanceOf(IllegalArgumentException.class);
+        // Le dépôt n'est jamais sollicité : le refus tombe avant toute lecture du stockage.
+        verify(storageService, never()).downloadFile(anyString());
+    }
+
+    @Test
+    @DisplayName("Un nom sans extension exploitable part en flux binaire, non en texte")
+    void nomSansExtension_partEnFluxBinaire() throws Exception {
+        DemandeDocument demande = demande(TypeDemande.MODIFICATION, EtatDemande.EN_COURS);
+        demande.setPieceJointeObjectName("demandes/modification/8f2c-piece");
+        demande.setPieceJointeNom("piece-sans-extension");
+        when(demandeRepository.findById(DEMANDE)).thenReturn(Optional.of(demande));
+        when(storageService.downloadFile(anyString()))
+                .thenReturn(new java.io.ByteArrayInputStream(new byte[]{1, 2, 3}));
+
+        assertThat(service.pieceJointe(DEMANDE).type().toString())
+                .isEqualTo("application/octet-stream");
+    }
+
     /** Circuit des demandes, tel que le moteur le rend à la création. */
     private static final UUID CIRCUIT_DEMANDES = UUID.fromString("33333333-3333-4333-8333-333333333333");
 
