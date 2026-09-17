@@ -48,6 +48,59 @@ class NiveauxConfidentialiteServiceTest {
         return dto;
     }
 
+    /** Le niveau « M », tel qu'un administrateur le configure : deux rôles admis. */
+    private static final UUID NIVEAU_M = UUID.fromString("33333333-3333-4333-8333-333333333333");
+
+    @Test
+    @DisplayName("Niveau M (AGENT, PILOTE) : les deux rôles admis voient le document")
+    void niveauM_lesDeuxRolesAdmisVoient() {
+        when(client.niveauxConfidentialite())
+                .thenReturn(List.of(niveau(NIVEAU_M, "M", List.of("AGENT", "PILOTE"))));
+
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("PILOTE"))).isTrue();
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("AGENT"))).isTrue();
+        // Un rôle de plus ne retire rien : il suffit d'en détenir un des deux.
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("AGENT", "RESPONSABLE_QUALITE"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("Niveau M : un rôle qui n'y figure pas ne voit rien, même dans la bonne structure")
+    void niveauM_roleAbsentNeVoitRien() {
+        when(client.niveauxConfidentialite())
+                .thenReturn(List.of(niveau(NIVEAU_M, "M", List.of("AGENT", "PILOTE"))));
+
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("RESPONSABLE_QUALITE"))).isFalse();
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of())).isFalse();
+        assertThat(service.niveauxInterdits(Set.of("RESPONSABLE_QUALITE")))
+                .containsExactly(NIVEAU_M.toString());
+    }
+
+    @Test
+    @DisplayName("Le rôle se compare sans égard à la casse ni aux espaces de saisie")
+    void roleCompareSansEgardALaCasse() {
+        // L'écran d'administration laisse saisir « Pilote » ou « pilote  » ; le profil rend
+        // « PILOTE ». Sans normalisation des deux côtés, le porteur du rôle ne verrait rien.
+        when(client.niveauxConfidentialite())
+                .thenReturn(List.of(niveau(NIVEAU_M, "M", List.of(" Agent ", "pilote"))));
+
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("PILOTE"))).isTrue();
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("AGENT"))).isTrue();
+    }
+
+    @Test
+    @DisplayName("Référentiel injoignable : le niveau M se ferme à tous, rôle ou pas")
+    void referentielInjoignable_niveauMSeFermeATous() {
+        // Le symptôme à reconnaître : ce n'est pas le classement qui refuse, c'est l'impossibilité
+        // de l'établir. Aucun rôle n'y change rien, et rien ne le signale à l'écran.
+        when(client.niveauxConfidentialite()).thenThrow(new RuntimeException("referentiel injoignable"));
+
+        assertThat(service.restrictionIndecidable()).isTrue();
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("PILOTE"))).isFalse();
+        assertThat(service.peutVoir(NIVEAU_M.toString(), Set.of("AGENT"))).isFalse();
+        // Seuls les documents sans niveau subsistent.
+        assertThat(service.peutVoir(null, Set.of())).isTrue();
+    }
+
     @Test
     @DisplayName("Un document sans niveau reste visible de tous")
     void sansNiveau_visible() {
