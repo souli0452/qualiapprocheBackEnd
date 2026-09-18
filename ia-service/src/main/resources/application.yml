@@ -55,10 +55,16 @@ spring:
   ai:
     openai:
       # Fournisseur OpenAI-compatible : Mistral cloud (valeur par défaut ci-dessous), OpenAI,
-      # ou un Ollama auto-hébergé (base-url http://localhost:11434 et modèle local). La clé
-      # n'a aucune valeur par défaut : sans IA_API_KEY, le démarrage échoue explicitement.
+      # ou un Ollama auto-hébergé (base-url http://localhost:11434 et modèle local).
+      #
+      # La clé a pour défaut la chaîne vide, et c'est un compromis assumé : le service démarre
+      # sans elle et n'échoue qu'au premier appel, en 503. Le déploiement ne se bloque donc pas
+      # sur une variable oubliée, et les points d'entrée qui n'appellent pas le modèle — le
+      # catalogue des questions — continuent de répondre. En contrepartie, une clé absente ne se
+      # découvre qu'à l'usage : c'est le journal qui la nomme, « Le fournisseur de modèle a refusé
+      # l'appel », et non un refus de démarrer.
       base-url: ${IA_BASE_URL:https://api.mistral.ai}
-      api-key: ${IA_API_KEY}
+      api-key: ${IA_API_KEY:}
       chat:
         options:
           model: ${IA_MODEL:mistral-small-latest}
