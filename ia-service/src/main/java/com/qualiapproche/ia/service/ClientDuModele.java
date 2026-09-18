@@ -8,6 +8,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -111,6 +113,17 @@ public class ClientDuModele {
      * que deux causes plus bas. Le service rendait donc 503 « indisponible » là où le modèle avait
      * simplement été trop lent — deux situations que l'exploitant ne doit pas confondre.</p>
      *
+     * <p>Le statut du fournisseur se cherche de la même façon, et pour la même raison. Spring AI
+     * n'émet pas les exceptions du client HTTP : il les enveloppe dans {@link TransientAiException}
+     * (429 et 5xx, après réessai) et {@link NonTransientAiException} (les 4xx). Éprouvés sur le
+     * seul type de tête, les deux tests ci-dessous ne reconnaissaient donc <b>aucune</b> erreur du
+     * fournisseur : un 401 comme un 429 tombaient dans la branche « inattendue », qui déverse une
+     * pile de cent lignes là où une seule était prévue — et l'exploitant cherchait une panne du
+     * service quand le fournisseur, lui, disait clairement pourquoi il refusait.</p>
+     *
+     * <p>Ces deux enveloppes ne portent pas toujours de cause : le statut et le corps de la
+     * réponse ne vivent alors que dans leur message, d'où la branche qui le journalise tel quel.</p>
+     *
      * <p>Le détail exact est journalisé, jamais rendu : il peut contenir des fragments de la
      * requête envoyée au fournisseur.</p>
      */
@@ -120,13 +133,19 @@ public class ClientDuModele {
             return new BusinessException(
                     "Réponse du modèle trop lente, réessayez.", HttpStatus.GATEWAY_TIMEOUT);
         }
-        if (e instanceof ResourceAccessException) {
-            log.warn("Fournisseur de modèle injoignable : {}", e.getMessage());
+        ResourceAccessException injoignable = dansLesCauses(e, ResourceAccessException.class);
+        if (injoignable != null) {
+            log.warn("Fournisseur de modèle injoignable : {}", injoignable.getMessage());
             return new BusinessException(MESSAGE_INDISPONIBLE, HttpStatus.SERVICE_UNAVAILABLE);
         }
-        if (e instanceof RestClientResponseException reponse) {
+        RestClientResponseException reponse = dansLesCauses(e, RestClientResponseException.class);
+        if (reponse != null) {
             log.warn("Le fournisseur de modèle a répondu {} : {}",
                     reponse.getStatusCode(), reponse.getMessage());
+            return new BusinessException(MESSAGE_INDISPONIBLE, HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (e instanceof NonTransientAiException || e instanceof TransientAiException) {
+            log.warn("Le fournisseur de modèle a refusé l'appel : {}", e.getMessage());
             return new BusinessException(MESSAGE_INDISPONIBLE, HttpStatus.SERVICE_UNAVAILABLE);
         }
         log.error("Erreur inattendue lors de l'appel au modèle.", e);
@@ -134,17 +153,26 @@ public class ClientDuModele {
     }
 
     /**
-     * Un dépassement de délai figure-t-il dans la chaîne des causes ? Le parcours est borné : une
-     * chaîne circulaire — deux exceptions se désignant l'une l'autre — y tournerait sans fin.
+     * Un dépassement de délai figure-t-il dans la chaîne des causes ?
      */
     private boolean estUnDepassementDeDelai(Throwable erreur) {
+        return dansLesCauses(erreur, SocketTimeoutException.class) != null;
+    }
+
+    /**
+     * La première exception du type demandé dans la chaîne des causes, tête comprise.
+     *
+     * <p>Le parcours est borné : une chaîne circulaire — deux exceptions se désignant l'une
+     * l'autre — y tournerait sans fin.</p>
+     */
+    private <T extends Throwable> T dansLesCauses(Throwable erreur, Class<T> type) {
         Throwable cause = erreur;
         for (int profondeur = 0; cause != null && profondeur < PROFONDEUR_MAX_DES_CAUSES; profondeur++) {
-            if (cause instanceof SocketTimeoutException) {
-                return true;
+            if (type.isInstance(cause)) {
+                return type.cast(cause);
             }
             cause = cause.getCause() == cause ? null : cause.getCause();
         }
-        return false;
+        return null;
     }
 }
