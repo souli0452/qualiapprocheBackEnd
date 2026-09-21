@@ -144,6 +144,7 @@ public class RoleInitializer implements CommandLineRunner {
                 PermissionsPortee.TOUTES_STRUCTURES
         ));
 
+        ouvrirLaFaqAuSuperAdmin();
         ouvrirLesTableauxDeBordAuxRolesExistants();
         donnerLaPorteeAuxRolesExistants();
         ouvrirLAssistantIaAuSuperAdmin();
@@ -245,6 +246,19 @@ public class RoleInitializer implements CommandLineRunner {
         completer("SUPER_ADMIN",
                 "sans elles, l'assistant IA restait fermé même au super administrateur de cette instance",
                 "assistant-ia-read", "assistant-ia-write");
+    }
+
+    /**
+     * Ouvre la foire aux questions au super administrateur des installations déjà en service.
+     *
+     * <p>Trois permissions entrent au dictionnaire d'un coup : lire les brouillons, écrire, et
+     * décider de ce qui paraît. Un rôle SUPER_ADMIN créé désormais les reçoit ; celui déjà en
+     * base ne les aurait jamais eues, le démarrage ne réappliquant pas les dotations.</p>
+     */
+    private void ouvrirLaFaqAuSuperAdmin() {
+        completer("SUPER_ADMIN",
+                "sans elles, la foire aux questions restait fermée au super administrateur",
+                "faq-read", "faq-write", "faq-publish");
     }
 
     /**

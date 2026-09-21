@@ -585,8 +585,13 @@
     "module": "Configuration"
   },
   {
-    "label": "Écrire et publier les réponses de la FAQ",
+    "label": "Écrire et corriger les réponses de la FAQ",
     "value": "faq-write",
+    "module": "Configuration"
+  },
+  {
+    "label": "Publier une réponse de la FAQ, et la retirer de la publication",
+    "value": "faq-publish",
     "module": "Configuration"
   }
 ]
