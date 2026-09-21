@@ -55,4 +55,29 @@ public class IaAssistantProperties {
      * de la base.</p>
      */
     private int fenetreConversation = 12;
+
+    /**
+     * Plafond, en caractères, de ce que la fenêtre glissante renvoie au modèle.
+     *
+     * <p>La borne en nombre de messages ne dit rien de leur poids : douze messages de quatre
+     * mille caractères, plus la consigne, dépassent la fenêtre de contexte d'un modèle de sept
+     * milliards de paramètres. Le fournisseur tronque alors par le début — c'est-à-dire par la
+     * consigne système, que l'assistant cesse donc de suivre précisément dans les conversations
+     * les plus longues. Les deux bornes s'appliquent ensemble : la plus stricte l'emporte.</p>
+     *
+     * <p>Douze mille caractères valent environ trois mille jetons, ce qui laisse de la place à
+     * la consigne et à la réponse dans une fenêtre de huit mille.</p>
+     */
+    private int fenetreCaracteres = 12_000;
+
+    /**
+     * Nombre moyen de caractères par jeton, pour estimer un usage que le fournisseur ne rapporte
+     * pas.
+     *
+     * <p>Ollama ne renseigne pas toujours les jetons consommés. Sans estimation, ces appels
+     * comptaient zéro et le budget quotidien ne s'appliquait jamais — le garde-fou ne gardait
+     * rien là où il était le plus utile. Quatre est l'ordre de grandeur usuel en français ;
+     * l'estimation vise à protéger, non à facturer.</p>
+     */
+    private int caracteresParJeton = 4;
 }

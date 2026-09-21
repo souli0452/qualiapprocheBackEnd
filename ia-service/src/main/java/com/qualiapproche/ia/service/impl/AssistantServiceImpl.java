@@ -52,9 +52,10 @@ public class AssistantServiceImpl implements AssistantService {
         budget.exigerDuReste();
 
         PromptRegistry.PromptVersionne prompt = promptRegistry.promptPour(demande.getTypeAssistance());
+        String envoye = construireMessageUtilisateur(demande);
 
         long debut = System.currentTimeMillis();
-        ChatResponse reponse = client.repondre(prompt.contenu(), construireMessageUtilisateur(demande));
+        ChatResponse reponse = client.repondre(prompt.contenu(), envoye);
         long dureeMs = System.currentTimeMillis() - debut;
 
         String texte = client.texteDe(reponse);
@@ -76,7 +77,7 @@ public class AssistantServiceImpl implements AssistantService {
                 .ressourceType(demande.getRessourceType())
                 .ressourceId(demande.getRessourceId())
                 .dureeMs(dureeMs)
-                .jetonsUtilises(client.jetonsDe(reponse))
+                .jetonsUtilises(client.jetonsOuEstimation(reponse, prompt.contenu() + envoye, texte))
                 .build();
 
         SuggestionIa enregistree = repository.save(trace);

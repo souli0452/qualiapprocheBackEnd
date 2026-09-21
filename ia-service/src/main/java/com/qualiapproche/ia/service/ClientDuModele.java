@@ -62,19 +62,77 @@ public class ClientDuModele {
     }
 
     /**
-     * Le texte produit, ou {@code null} si le modèle n'a rien rendu : une réponse sans génération
-     * reste possible (filtrage du fournisseur, arrêt immédiat) et ne doit pas lever ici.
+     * Le texte produit, débarrassé du balisage Markdown, ou {@code null} si le modèle n'a rien
+     * rendu : une réponse sans génération reste possible (filtrage du fournisseur, arrêt immédiat)
+     * et ne doit pas lever ici.
      */
     public String texteDe(ChatResponse reponse) {
         if (reponse == null || reponse.getResult() == null || reponse.getResult().getOutput() == null) {
             return null;
         }
-        return reponse.getResult().getOutput().getText();
+        return sansBalisage(reponse.getResult().getOutput().getText());
+    }
+
+    /**
+     * Retire le balisage Markdown que le modèle produit par habitude.
+     *
+     * <p>Rien ne le met en forme : le fil l'affiche en texte brut, et une suggestion part dans un
+     * champ de formulaire. Les dièses et les astérisques s'y montrent tels quels — une réponse de
+     * quatre lignes en portait davantage que de mots utiles. La consigne le proscrit déjà, mais un
+     * modèle de sept milliards de paramètres retombe dans ses plis : la garantie est ici.</p>
+     *
+     * <p>Le texte est conservé, seules les marques tombent : un titre devient sa propre ligne, un
+     * terme en gras redevient le terme. Les puces sont normalisées en tirets plutôt que
+     * supprimées — une énumération reste une énumération, et le tiret se lit partout.</p>
+     */
+    private String sansBalisage(String texte) {
+        if (texte == null || texte.isBlank()) {
+            return texte;
+        }
+        return texte
+                // Titres : « ### Constat » devient « Constat », la ligne subsiste.
+                .replaceAll("(?m)^\\s{0,3}#{1,6}\\s+", "")
+                // Puces d'astérisque ou de plus, ramenées au tiret : « * point » devient « - point ».
+                .replaceAll("(?m)^(\\s*)[*+]\\s+", "$1- ")
+                // Gras et italique, doubles marques d'abord : sans quoi « **mot** » laisse « *mot* ».
+                .replaceAll("\\*\\*(.+?)\\*\\*", "$1")
+                .replaceAll("__(.+?)__", "$1")
+                .replaceAll("(?<![\\p{L}\\d*])\\*(?!\\s)(.+?)(?<!\\s)\\*(?![\\p{L}\\d*])", "$1")
+                // Traits de séparation seuls sur leur ligne : « --- », « *** », « ___ ».
+                .replaceAll("(?m)^\\s*([-*_])\\1{2,}\\s*$", "")
+                // Accents graves, ceux des blocs comme ceux des termes.
+                .replaceAll("(?m)^\\s*```.*$", "")
+                .replace("`", "")
+                // Les lignes vidées par ce qui précède ne doivent pas laisser de trous.
+                .replaceAll("\\n{3,}", "\\n\\n")
+                .strip();
     }
 
     /** Le modèle ayant répondu, tel qu'il se nomme lui-même. */
     public String modeleDe(ChatResponse reponse) {
         return reponse != null && reponse.getMetadata() != null ? reponse.getMetadata().getModel() : null;
+    }
+
+    /**
+     * Les jetons de l'appel, rapportés par le fournisseur ou estimés à défaut.
+     *
+     * <p>Ollama ne renseigne pas toujours l'usage. Rendus nuls, ces appels comptaient zéro dans
+     * le budget quotidien, qui ne s'appliquait donc jamais sur une installation auto-hébergée —
+     * le garde-fou manquait là où il protège le mieux, puisqu'un modèle local ne se facture pas
+     * mais se paie en CPU. L'estimation, grossière, vaut mieux que l'aveuglement : elle borne
+     * une boucle, ce qu'un zéro ne fait pas.</p>
+     *
+     * @param envoye ce qui est parti au modèle, consigne comprise
+     * @param rendu  ce qu'il a produit
+     */
+    public long jetonsOuEstimation(ChatResponse reponse, String envoye, String rendu) {
+        Long rapportes = jetonsDe(reponse);
+        if (rapportes != null && rapportes > 0) {
+            return rapportes;
+        }
+        long caracteres = (envoye == null ? 0 : envoye.length()) + (rendu == null ? 0 : rendu.length());
+        int parJeton = Math.max(1, proprietes.getCaracteresParJeton());
+        return Math.max(1, caracteres / parJeton);
     }
 
     /** Les jetons consommés par l'appel, si le fournisseur les rapporte. */

@@ -28,6 +28,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -56,9 +57,9 @@ public class ConversationServiceImpl implements ConversationService {
     private final ClientDuModele client;
     private final BudgetDeJetons budget;
     private final IaAssistantProperties proprietes;
+    private final TransactionTemplate transactions;
 
     @Override
-    @Transactional
     public ReponseConversationDto repondre(MessageDemandeDto demande) {
         String question = demande.getMessage().trim();
         return tenirUnTour(demande.getConversationId(), question, question,
@@ -66,7 +67,6 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     @Override
-    @Transactional
     public ReponseConversationDto repondreSurMatiere(UUID conversationId, String questionAffichee,
                                                      String matiere) {
         // Ce que le fil garde, ce que le modèle reçoit : la question d'un côté, la question et ses
@@ -88,18 +88,19 @@ public class ConversationServiceImpl implements ConversationService {
     private ReponseConversationDto tenirUnTour(UUID conversationId, String questionAffichee,
                                                String questionTransmise,
                                                PromptRegistry.PromptVersionne consigne) {
-        budget.exigerDuReste();
-
         String question = questionAffichee.trim();
-        ConversationIa fil = conversationId != null
-                ? sienneOuRien(conversationId)
-                : ouvrirUnFil(question);
-        exigerDeLaPlace(fil);
 
-        // Le fil connu du modèle : la fenêtre glissante, puis la question du tour.
-        List<Message> echange = fenetreDuFil(fil.getId());
+        // 1. Ce qu'il faut savoir avant d'appeler : des lectures brèves, refermées aussitôt.
+        budget.exigerDuReste();
+        List<Message> echange = new ArrayList<>();
+        if (conversationId != null) {
+            exigerDeLaPlace(sienneOuRien(conversationId));
+            echange.addAll(fenetreDuFil(conversationId));
+        }
         echange.add(new UserMessage(questionTransmise));
 
+        // 2. Le temps long, hors de toute transaction : aucune connexion n'est retenue pendant
+        //    que le modèle écrit.
         long debut = System.currentTimeMillis();
         ChatResponse reponse = client.repondre(consigne.contenu(), echange);
         long dureeMs = System.currentTimeMillis() - debut;
@@ -110,8 +111,30 @@ public class ConversationServiceImpl implements ConversationService {
                     "L'assistant n'a produit aucune réponse.", HttpStatus.BAD_GATEWAY);
         }
 
-        // Les deux tours ne sont inscrits qu'une fois la réponse obtenue : un appel en échec ne
-        // laisse ni question orpheline, ni fil ouvert sur rien — la transaction défait tout.
+        // 3. L'inscription des deux tours, atomique et brève.
+        long jetons = client.jetonsOuEstimation(reponse, consigne.contenu() + questionTransmise, texte);
+        return transactions.execute(statut ->
+                inscrire(conversationId, question, texte, reponse, consigne, dureeMs, jetons));
+    }
+
+    /**
+     * Inscrit la question et la réponse, et rend ce que l'écran affiche.
+     *
+     * <p>Le fil n'est ouvert qu'ici, jamais avant l'appel : une génération qui échoue ne laisse
+     * donc ni question orpheline, ni fil ouvert sur rien. C'est la garantie que donnait la
+     * transaction unique, conservée sans son coût.</p>
+     *
+     * <p>Il est relu plutôt que repris de la phase de lecture : entre-temps, un autre message a
+     * pu s'y inscrire, et son compte d'alors servirait de rang à deux messages.</p>
+     */
+    private ReponseConversationDto inscrire(UUID conversationId, String question, String texte,
+                                            ChatResponse reponse,
+                                            PromptRegistry.PromptVersionne consigne,
+                                            long dureeMs, long jetons) {
+        ConversationIa fil = conversationId != null
+                ? sienneOuRien(conversationId)
+                : ouvrirUnFil(question);
+
         int rang = fil.getNombreMessages();
         messages.save(MessageIa.builder()
                 .conversationId(fil.getId())
@@ -127,7 +150,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .modele(client.modeleDe(reponse))
                 .promptVersion(consigne.version())
                 .dureeMs(dureeMs)
-                .jetonsUtilises(client.jetonsDe(reponse))
+                .jetonsUtilises(jetons)
                 .build());
 
         fil.setNombreMessages(rang);
@@ -214,10 +237,28 @@ public class ConversationServiceImpl implements ConversationService {
     private List<Message> fenetreDuFil(UUID conversationId) {
         List<MessageIa> derniers = messages.findByConversationIdOrderByRangDesc(
                 conversationId, PageRequest.of(0, Math.max(1, proprietes.getFenetreConversation())));
-        Collections.reverse(derniers);
 
-        List<Message> echange = new ArrayList<>(derniers.size() + 1);
+        // Deux bornes, et la plus stricte l'emporte. Le compte de messages ne dit rien de leur
+        // poids : douze messages longs, plus la consigne, dépassent la fenêtre de contexte d'un
+        // petit modèle, qui tronque alors par le début — c'est-à-dire par la consigne système,
+        // qu'il cesse donc de suivre précisément dans les conversations les plus longues. On
+        // remonte du plus récent au plus ancien et on s'arrête au plafond de caractères : ce qui
+        // est écarté est toujours le plus vieux.
+        int plafond = Math.max(1, proprietes.getFenetreCaracteres());
+        List<MessageIa> retenus = new ArrayList<>(derniers.size());
+        int poids = 0;
         for (MessageIa message : derniers) {
+            int taille = message.getContenu() == null ? 0 : message.getContenu().length();
+            if (!retenus.isEmpty() && poids + taille > plafond) {
+                break;
+            }
+            poids += taille;
+            retenus.add(message);
+        }
+        Collections.reverse(retenus);
+
+        List<Message> echange = new ArrayList<>(retenus.size() + 1);
+        for (MessageIa message : retenus) {
             echange.add(message.getRole() == RoleMessage.ASSISTANT
                     ? new AssistantMessage(message.getContenu())
                     : new UserMessage(message.getContenu()));
