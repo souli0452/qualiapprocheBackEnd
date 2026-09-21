@@ -2,6 +2,7 @@ package com.qualiapproche.referentiel.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.FaqDto;
+import com.qualiapproche.common.dto.PublicationFaqDto;
 import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.common.dto.FichierFaqDto;
 import com.qualiapproche.referentiel.service.FaqService;
@@ -34,6 +35,7 @@ import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.FAQ_FICHIER;
 import static com.qualiapproche.common.utils.ApiUrls.FAQ_FICHIERS;
+import static com.qualiapproche.common.utils.ApiUrls.FAQ_PUBLICATION;
 import static com.qualiapproche.common.utils.ApiUrls.FAQ_PUBLIEES;
 import static com.qualiapproche.common.utils.ApiUrls.FAQ_ROOT_URL;
 
@@ -178,6 +180,20 @@ public class FaqController {
     public ResponseEntity<Void> retirerLaPiece(@PathVariable("fichierId") UUID fichierId) {
         fichiers.supprimer(fichierId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Publie ou dépublie un lot de réponses.
+     *
+     * <p>Sa propre permission, distincte de l'écriture : on peut vouloir qu'une réponse soit
+     * rédigée par les uns et ouverte par les autres, après relecture. Ce qui paraît ici devient
+     * la parole de l'organisation, affichée dans l'aide et récitée par l'assistant.</p>
+     */
+    @PreAuthorize("@perm.detient('faq-publish', 'CONFIG_GLOBAL_MANAGE')")
+    @PutMapping(FAQ_PUBLICATION)
+    public ResponseEntity<ApiResponse<Integer>> publier(@Valid @RequestBody PublicationFaqDto demande) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.publier(demande.getIds(), demande.isPubliee())));
     }
 
     @PreAuthorize("@perm.canDelete(this)")

@@ -27,6 +27,16 @@ public interface FaqService {
     long compter(boolean publiee);
 
     /**
+     * Publie ou dépublie plusieurs entrées d'un coup.
+     *
+     * <p>En lot parce qu'on relit une série de brouillons puis on les ouvre ensemble : les
+     * publier un par un aurait demandé autant d'allers-retours que de réponses.</p>
+     *
+     * @return le nombre d'entrées effectivement changées
+     */
+    int publier(List<UUID> ids, boolean publiee);
+
+    /**
      * Pour l'administration : tout, publié ou non, en entier.
      *
      * <p>C'est ce que l'écran demande par {@code /all}, comme les autres référentiels : le

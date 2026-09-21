@@ -82,6 +82,7 @@ public class ApiUrls {
      */
     public static final String FAQ_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/faq";
     public static final String FAQ_PUBLIEES = "/publiees";
+    public static final String FAQ_PUBLICATION = "/publication";
     public static final String FAQ_FICHIERS = "/{id}/fichiers";
     public static final String FAQ_FICHIER = "/fichiers/{fichierId}";
     public static final String NIVEAU_CONFIDENTIALITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-confidentialite";

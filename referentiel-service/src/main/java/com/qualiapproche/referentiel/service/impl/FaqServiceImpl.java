@@ -8,6 +8,7 @@ import com.qualiapproche.referentiel.entities.Faq;
 import com.qualiapproche.referentiel.repository.FaqRepository;
 import com.qualiapproche.referentiel.service.FaqService;
 import com.qualiapproche.referentiel.service.FichierFaqService;
+import com.qualiapproche.common.config.PermissionChecker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -38,6 +39,7 @@ public class FaqServiceImpl implements FaqService {
 
     private final FaqRepository repository;
     private final FichierFaqService fichiers;
+    private final PermissionChecker permissions;
 
     @Override
     @Transactional
@@ -46,7 +48,7 @@ public class FaqServiceImpl implements FaqService {
         return versDto(repository.save(Faq.builder()
                 .question(dto.getQuestion().strip())
                 .reponse(dto.getReponse().strip())
-                .publiee(dto.isPubliee())
+                .publiee(dto.isPubliee() && peutPublier())
                 .build()));
     }
 
@@ -56,7 +58,12 @@ public class FaqServiceImpl implements FaqService {
         Faq entree = sienneOuRien(dto.getId());
         entree.setQuestion(dto.getQuestion().strip());
         entree.setReponse(dto.getReponse().strip());
-        entree.setPubliee(dto.isPubliee());
+        // Sans le droit de publier, l'état de publication ne bouge pas : ni pour l'ouvrir, ni
+        // pour la fermer. L'écran masque déjà l'interrupteur ; un appel direct ne doit pas
+        // davantage y parvenir.
+        if (peutPublier()) {
+            entree.setPubliee(dto.isPubliee());
+        }
         return versDto(repository.save(entree));
     }
 
@@ -120,6 +127,33 @@ public class FaqServiceImpl implements FaqService {
     @Transactional
     public void delete(UUID id) {
         repository.delete(sienneOuRien(id));
+    }
+
+    @Override
+    @Transactional
+    public int publier(List<UUID> ids, boolean publiee) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        // Chaque entrée est vérifiée une à une : un lot mêlant les organisations ne doit pas
+        // passer parce qu'il est un lot.
+        List<Faq> entrees = ids.stream().map(this::sienneOuRien)
+                .filter(entree -> entree.isPubliee() != publiee)
+                .toList();
+        entrees.forEach(entree -> entree.setPubliee(publiee));
+        repository.saveAll(entrees);
+        return entrees.size();
+    }
+
+    /**
+     * L'appelant peut-il décider de ce qui paraît ?
+     *
+     * <p>Écrire et publier sont deux droits distincts : on peut rédiger une réponse et attendre
+     * qu'un autre la relise avant qu'elle engage l'organisation. La permission dédiée rend cette
+     * relecture possible sans fermer l'écriture.</p>
+     */
+    private boolean peutPublier() {
+        return permissions.detient("faq-publish", "CONFIG_GLOBAL_MANAGE");
     }
 
     /**

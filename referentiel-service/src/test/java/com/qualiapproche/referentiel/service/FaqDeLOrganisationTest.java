@@ -5,6 +5,7 @@ import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.referentiel.entities.Faq;
 import com.qualiapproche.referentiel.repository.FaqRepository;
+import com.qualiapproche.common.config.PermissionChecker;
 import com.qualiapproche.referentiel.service.impl.FaqServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,7 @@ class FaqDeLOrganisationTest {
     private static final UUID ENTREE = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
     private FaqRepository repository;
+    private PermissionChecker permissions;
     private FaqServiceImpl service;
     private MockedStatic<SecurityUtils> securite;
 
@@ -54,7 +56,10 @@ class FaqDeLOrganisationTest {
         // Les pièces jointes ont leurs propres cas : ici on éprouve le cloisonnement de la FAQ.
         FichierFaqService fichiers = mock(FichierFaqService.class);
         when(fichiers.desEntrees(any())).thenReturn(List.of());
-        service = new FaqServiceImpl(repository, fichiers);
+        permissions = mock(PermissionChecker.class);
+        // Par défaut, l'appelant peut publier : les cas qui éprouvent le contraire le disent.
+        when(permissions.detient(any(String[].class))).thenReturn(true);
+        service = new FaqServiceImpl(repository, fichiers, permissions);
         securite = mockStatic(SecurityUtils.class);
         securite.when(SecurityUtils::getCurrentDirectionId).thenReturn(MA_DIRECTION);
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -89,6 +94,55 @@ class FaqDeLOrganisationTest {
         assertThat(rendue.getReponse()).isEqualTo("Le pilote, puis la qualité.");
     }
 
+
+    @Test
+    @DisplayName("sans le droit de publier, une réponse créée reste un brouillon")
+    void sansLeDroitDePublier_laReponseResteUnBrouillon() {
+        when(permissions.detient(any(String[].class))).thenReturn(false);
+        FaqDto demande = demande();
+        demande.setPubliee(true);
+
+        // L'écran masque déjà l'interrupteur ; un appel direct ne doit pas davantage y parvenir.
+        assertThat(service.create(demande).isPubliee()).isFalse();
+    }
+
+    @Test
+    @DisplayName("sans le droit de publier, on ne retire pas non plus une réponse en service")
+    void sansLeDroitDePublier_onNeDepubliePas() {
+        when(permissions.detient(any(String[].class))).thenReturn(false);
+        Faq existante = entreeDe(MA_DIRECTION);
+        existante.setPubliee(true);
+        when(repository.findById(ENTREE)).thenReturn(Optional.of(existante));
+
+        FaqDto demande = demande();
+        demande.setPubliee(false);
+
+        assertThat(service.update(demande).isPubliee()).isTrue();
+    }
+
+    @Test
+    @DisplayName("publier un lot ne change que ce qui doit l'être")
+    void publierUnLot_neChangeQueLeNecessaire() {
+        Faq brouillon = entreeDe(MA_DIRECTION);
+        when(repository.findById(ENTREE)).thenReturn(Optional.of(brouillon));
+
+        assertThat(service.publier(List.of(ENTREE), true)).isEqualTo(0);
+
+        brouillon.setPubliee(false);
+        assertThat(service.publier(List.of(ENTREE), true)).isEqualTo(1);
+        assertThat(brouillon.isPubliee()).isTrue();
+    }
+
+    @Test
+    @DisplayName("un lot mêlant une autre organisation est refusé en entier")
+    void lotMelant_estRefuseEnEntier() {
+        when(repository.findById(ENTREE)).thenReturn(Optional.of(entreeDe(AUTRE_DIRECTION)));
+
+        // Chaque entrée est vérifiée une à une : un lot ne passe pas parce qu'il est un lot.
+        catchThrowableOfType(() -> service.publier(List.of(ENTREE), true), BusinessException.class);
+
+        verify(repository, never()).saveAll(any());
+    }
 
     @Test
     @DisplayName("l'entrée d'une autre organisation est introuvable, et non refusée")
