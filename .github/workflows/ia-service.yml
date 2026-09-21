@@ -36,26 +36,12 @@ jobs:
         run: mvn clean install -pl ia-service -am -DskipTests -Dcheckstyle.skip=true
 
       - name: Trigger Coolify Deployment
-        env:
-          WEBHOOK: ${{ secrets.IA_WEBHOOK }}
         run: |
-          # Le secret n'existe pas encore : l'assistant est en ligne, mais son application
-          # Coolify n'a pas de webhook déclaré ici. Sans cette garde, l'appel partait vers une
-          # URL vide et faisait échouer l'action — donc un rouge permanent sur une compilation
-          # et trente-huit tests qui, eux, passent. On le dit et on s'arrête là : le jour où le
-          # secret est posé, le déploiement repart sans rien changer d'autre.
-          if [ -z "$WEBHOOK" ]; then
-            echo "IA_WEBHOOK absent : rien n'a été déployé."
-            echo "Pour automatiser : Coolify > application ia-service > Webhooks, puis poser"
-            echo "l'URL en secret GitHub nommé IA_WEBHOOK."
-            exit 0
-          fi
-
           echo "Calling Coolify webhook..."
 
           # Ajout du header Authorization avec le token
           response=$(curl -s -o response.txt -w "%{http_code}" \
-          -X GET "$WEBHOOK" \
+          -X GET "${{ secrets.IA_WEBHOOK }}" \
           -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")
           echo "HTTP Status: $response"
           echo "Response:"
