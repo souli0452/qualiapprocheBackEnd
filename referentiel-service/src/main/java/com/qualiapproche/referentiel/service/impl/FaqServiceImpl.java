@@ -70,15 +70,24 @@ public class FaqServiceImpl implements FaqService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<FaqDto> getAll(String recherche, Pageable pageable) {
+    public Page<FaqDto> getAll(boolean publiee, String recherche, Pageable pageable) {
         UUID directionId = SecurityUtils.getCurrentDirectionId();
         if (directionId == null) {
             return Page.empty(pageable);
         }
         Pageable range = pageable.getSort().isSorted() ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), ORDRE);
-        String terme = recherche == null || recherche.isBlank() ? null : recherche.strip();
-        return repository.rechercher(directionId, terme, range).map(this::versDto);
+        // Jamais nul : un paramètre nul non typé finit en bytea côté PostgreSQL, et le LIKE
+        // échoue. La chaîne vide retient tout, ce qui est exactement l'absence de filtre.
+        String terme = recherche == null ? "" : recherche.strip();
+        return repository.rechercher(directionId, publiee, terme, range).map(this::versDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long compter(boolean publiee) {
+        UUID directionId = SecurityUtils.getCurrentDirectionId();
+        return directionId == null ? 0 : repository.countByDirectionIdAndPubliee(directionId, publiee);
     }
 
     @Override
@@ -88,8 +97,10 @@ public class FaqServiceImpl implements FaqService {
         if (directionId == null) {
             return List.of();
         }
-        return avecLeursPieces(repository.rechercher(directionId, null, Pageable.unpaged())
-                .map(this::versDto).getContent().stream().toList());
+        // Sans filtre : la requête de recherche n'a rien à faire ici, et l'y employer obligeait
+        // à lui passer un terme qui n'existe pas.
+        return avecLeursPieces(repository.findAllByDirectionIdOrderByCreatedAtAsc(directionId)
+                .stream().map(this::versDto).toList());
     }
 
     @Override

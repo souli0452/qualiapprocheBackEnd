@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -146,12 +147,37 @@ class FaqDeLOrganisationTest {
     }
 
     @Test
-    @DisplayName("une recherche vide ne filtre rien, plutôt que de ne rien rendre")
-    void rechercheVide_neFiltreRien() {
-        when(repository.rechercher(any(), any(), any())).thenReturn(Page.empty());
+    @DisplayName("une recherche absente devient une chaîne vide, jamais un nul")
+    void rechercheAbsente_nEstJamaisNulle() {
+        when(repository.rechercher(any(), anyBoolean(), any(), any())).thenReturn(Page.empty());
 
-        service.getAll("   ", PageRequest.of(0, 20));
+        service.getAll(true, null, PageRequest.of(0, 20));
 
-        verify(repository).rechercher(eq(MA_DIRECTION), eq(null), any());
+        // Un nul non typé finit en bytea côté PostgreSQL, et le LIKE échoue sur un
+        // « lower(bytea) does not exist » : la liste entière rendait 500 avant même qu'une
+        // question soit écrite. La chaîne vide donne LIKE '%%', qui retient tout.
+        verify(repository).rechercher(eq(MA_DIRECTION), eq(true), eq(""), any());
+    }
+
+    @Test
+    @DisplayName("une recherche de blancs ne filtre rien non plus")
+    void rechercheDeBlancs_neFiltreRien() {
+        when(repository.rechercher(any(), anyBoolean(), any(), any())).thenReturn(Page.empty());
+
+        service.getAll(true, "   ", PageRequest.of(0, 20));
+
+        verify(repository).rechercher(eq(MA_DIRECTION), eq(true), eq(""), any());
+    }
+
+    @Test
+    @DisplayName("la liste entière n'emprunte pas la requête de recherche")
+    void listeEntiere_nEmprunteRienALaRecherche() {
+        when(repository.findAllByDirectionIdOrderByCreatedAtAsc(MA_DIRECTION))
+                .thenReturn(List.of(entreeDe(MA_DIRECTION)));
+
+        assertThat(service.getAll()).hasSize(1);
+
+        // L'y employer obligeait à lui passer un terme qui n'existe pas.
+        verify(repository, never()).rechercher(any(), anyBoolean(), any(), any());
     }
 }

@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.qualiapproche.common.utils.ApiUrls.FAQ_FICHIER;
@@ -88,12 +89,30 @@ public class FaqController {
         return ResponseEntity.ok(ApiResponse.success(service.getAll()));
     }
 
+    /**
+     * Une page du référentiel, d'un côté ou de l'autre de la publication.
+     *
+     * <p>L'écran présente deux onglets et demande toujours l'un des deux : publiée par défaut,
+     * parce que c'est ce qu'on vient voir. Le filtre est servi ici et non dans le navigateur —
+     * une page de dix lignes filtrée après coup en laisserait trois, et la pagination
+     * mentirait.</p>
+     */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping
     public ResponseEntity<Page<FaqDto>> page(
+            @RequestParam(value = "publiee", defaultValue = "true") boolean publiee,
             @RequestParam(value = "search", required = false) String search,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(service.getAll(search, pageable));
+        return ResponseEntity.ok(service.getAll(publiee, search, pageable));
+    }
+
+    /** Les comptes de part et d'autre, que les onglets affichent. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/comptes")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> comptes() {
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "publiees", service.compter(true),
+                "nonPubliees", service.compter(false))));
     }
 
     /**

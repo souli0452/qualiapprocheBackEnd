@@ -16,8 +16,15 @@ public interface FaqService {
 
     FaqDto getById(UUID id);
 
-    /** Pour l'administration : tout, publié ou non, paginé et filtré. */
-    Page<FaqDto> getAll(String recherche, Pageable pageable);
+    /**
+     * Pour l'administration : d'un côté ou de l'autre de la publication, paginé et filtré.
+     *
+     * <p>L'écran présente deux onglets et demande donc toujours l'un des deux états.</p>
+     */
+    Page<FaqDto> getAll(boolean publiee, String recherche, Pageable pageable);
+
+    /** Combien d'entrées de chaque côté, pour les onglets. */
+    long compter(boolean publiee);
 
     /**
      * Pour l'administration : tout, publié ou non, en entier.

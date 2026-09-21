@@ -63,7 +63,7 @@ class CheminsDeLaFaqTest {
     @Test
     @DisplayName("la convention du dépôt est suivie : /all, /get/{id}, et la page à la racine")
     void laConventionEstSuivie() {
-        assertThat(cheminsDeLecture()).contains("/all", "/get/{id}", "/publiees", "");
+        assertThat(cheminsDeLecture()).contains("/all", "/get/{id}", "/publiees", "/comptes", "");
     }
 
     @Test
