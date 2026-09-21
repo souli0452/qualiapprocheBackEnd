@@ -38,9 +38,6 @@ public class Faq extends AuditEntity {
     @Column(name = "reponse", columnDefinition = "TEXT", nullable = false)
     private String reponse;
 
-    /** Regroupement dans l'aide. Libre : les rubriques d'une organisation ne se devinent pas. */
-    @Column(name = "categorie", length = 120)
-    private String categorie;
 
     /**
      * Visible dans l'aide, et récitée par l'assistant.
@@ -51,13 +48,4 @@ public class Faq extends AuditEntity {
     @Column(name = "publiee", nullable = false)
     private boolean publiee;
 
-    /**
-     * Ordre d'affichage.
-     *
-     * <p>Il compte au-delà de l'esthétique : la consigne de l'assistant porte un plafond de
-     * caractères, et ce qui le dépasse ne lui est pas envoyé. Ce qui importe le plus se place
-     * donc en tête.</p>
-     */
-    @Column(name = "rang", nullable = false)
-    private int rang;
 }

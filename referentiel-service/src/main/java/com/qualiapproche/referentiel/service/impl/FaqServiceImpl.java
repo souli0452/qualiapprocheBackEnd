@@ -34,7 +34,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FaqServiceImpl implements FaqService {
 
-    private static final Sort ORDRE = Sort.by(Sort.Order.asc("rang"), Sort.Order.asc("createdAt"));
+    private static final Sort ORDRE = Sort.by(Sort.Order.asc("createdAt"));
 
     private final FaqRepository repository;
     private final FichierFaqService fichiers;
@@ -46,9 +46,7 @@ public class FaqServiceImpl implements FaqService {
         return versDto(repository.save(Faq.builder()
                 .question(dto.getQuestion().strip())
                 .reponse(dto.getReponse().strip())
-                .categorie(nettoyer(dto.getCategorie()))
                 .publiee(dto.isPubliee())
-                .rang(dto.getRang())
                 .build()));
     }
 
@@ -58,9 +56,7 @@ public class FaqServiceImpl implements FaqService {
         Faq entree = sienneOuRien(dto.getId());
         entree.setQuestion(dto.getQuestion().strip());
         entree.setReponse(dto.getReponse().strip());
-        entree.setCategorie(nettoyer(dto.getCategorie()));
         entree.setPubliee(dto.isPubliee());
-        entree.setRang(dto.getRang());
         return versDto(repository.save(entree));
     }
 
@@ -93,7 +89,7 @@ public class FaqServiceImpl implements FaqService {
             return List.of();
         }
         List<FaqDto> publiees =
-                repository.findAllByDirectionIdAndPublieeTrueOrderByRangAscCreatedAtAsc(directionId)
+                repository.findAllByDirectionIdAndPublieeTrueOrderByCreatedAtAsc(directionId)
                         .stream().map(this::versDto).toList();
         return avecLeursPieces(publiees);
     }
@@ -145,18 +141,13 @@ public class FaqServiceImpl implements FaqService {
         return entrees;
     }
 
-    private String nettoyer(String valeur) {
-        return valeur == null || valeur.isBlank() ? null : valeur.strip();
-    }
 
     private FaqDto versDto(Faq entree) {
         return FaqDto.builder()
                 .id(entree.getId())
                 .question(entree.getQuestion())
                 .reponse(entree.getReponse())
-                .categorie(entree.getCategorie())
                 .publiee(entree.isPubliee())
-                .rang(entree.getRang())
                 .updateAt(entree.getUpdateAt())
                 .build();
     }

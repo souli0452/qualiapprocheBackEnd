@@ -69,12 +69,11 @@ class FaqDeLOrganisationTest {
                 .id(ENTREE)
                 .question("  Qui vise une procédure ?  ")
                 .reponse("  Le pilote, puis la qualité.  ")
-                .categorie("  Documents  ")
-                .publiee(true).rang(2).build();
+                .publiee(true).build();
     }
 
     private Faq entreeDe(UUID directionId) {
-        Faq entree = Faq.builder().question("q").reponse("r").publiee(true).rang(0).build();
+        Faq entree = Faq.builder().question("q").reponse("r").publiee(true).build();
         entree.setId(ENTREE);
         entree.setDirectionId(directionId);
         return entree;
@@ -87,17 +86,8 @@ class FaqDeLOrganisationTest {
 
         assertThat(rendue.getQuestion()).isEqualTo("Qui vise une procédure ?");
         assertThat(rendue.getReponse()).isEqualTo("Le pilote, puis la qualité.");
-        assertThat(rendue.getCategorie()).isEqualTo("Documents");
     }
 
-    @Test
-    @DisplayName("une catégorie vide devient absente, et non une chaîne de blancs")
-    void categorieVide_devientAbsente() {
-        FaqDto demande = demande();
-        demande.setCategorie("   ");
-
-        assertThat(service.create(demande).getCategorie()).isNull();
-    }
 
     @Test
     @DisplayName("l'entrée d'une autre organisation est introuvable, et non refusée")
@@ -126,11 +116,11 @@ class FaqDeLOrganisationTest {
     @Test
     @DisplayName("les entrées publiées ne sont demandées que pour sa propre organisation")
     void entreesPubliees_borneesALOrganisation() {
-        when(repository.findAllByDirectionIdAndPublieeTrueOrderByRangAscCreatedAtAsc(MA_DIRECTION))
+        when(repository.findAllByDirectionIdAndPublieeTrueOrderByCreatedAtAsc(MA_DIRECTION))
                 .thenReturn(List.of(entreeDe(MA_DIRECTION)));
 
         assertThat(service.getPubliees()).hasSize(1);
-        verify(repository).findAllByDirectionIdAndPublieeTrueOrderByRangAscCreatedAtAsc(MA_DIRECTION);
+        verify(repository).findAllByDirectionIdAndPublieeTrueOrderByCreatedAtAsc(MA_DIRECTION);
     }
 
     @Test
@@ -140,7 +130,7 @@ class FaqDeLOrganisationTest {
 
         assertThat(service.getPubliees()).isEmpty();
         verify(repository, never())
-                .findAllByDirectionIdAndPublieeTrueOrderByRangAscCreatedAtAsc(any());
+                .findAllByDirectionIdAndPublieeTrueOrderByCreatedAtAsc(any());
     }
 
     @Test

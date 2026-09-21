@@ -14,14 +14,13 @@ import java.util.UUID;
 @Repository
 public interface FaqRepository extends JpaRepository<Faq, UUID> {
 
-    /** Ce que l'aide affiche et ce que l'assistant récite : les entrées publiées, dans l'ordre. */
-    List<Faq> findAllByDirectionIdAndPublieeTrueOrderByRangAscCreatedAtAsc(UUID directionId);
+    /** Ce que l'aide affiche et ce que l'assistant récite : les publiées, dans l'ordre d'écriture. */
+    List<Faq> findAllByDirectionIdAndPublieeTrueOrderByCreatedAtAsc(UUID directionId);
 
     /** Ce que l'écran d'administration montre : tout, publié ou non, filtré par la recherche. */
     @Query("SELECT f FROM Faq f WHERE f.directionId = :directionId AND (:recherche IS NULL "
             + "OR LOWER(f.question) LIKE LOWER(CONCAT('%', :recherche, '%')) "
-            + "OR LOWER(f.reponse) LIKE LOWER(CONCAT('%', :recherche, '%')) "
-            + "OR LOWER(f.categorie) LIKE LOWER(CONCAT('%', :recherche, '%')))")
+            + "OR LOWER(f.reponse) LIKE LOWER(CONCAT('%', :recherche, '%')))")
     Page<Faq> rechercher(@Param("directionId") UUID directionId,
                          @Param("recherche") String recherche, Pageable pageable);
 }

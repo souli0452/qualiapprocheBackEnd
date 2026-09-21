@@ -81,7 +81,7 @@ class CatalogueDeFaqTest {
     }
 
     @Test
-    @DisplayName("le plafond tranche par la fin : l'ordre d'affichage décide de ce qui survit")
+    @DisplayName("le plafond tranche par la fin : les plus anciennes réponses survivent")
     void lePlafond_trancheParLaFin() {
         proprietes.setFaqCaracteres(500);
         poser(entree("première", "p".repeat(300)),

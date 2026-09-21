@@ -78,8 +78,9 @@ public class CatalogueDeFaq {
             String bloc = "\nQ : " + entree.getQuestion().strip()
                     + "\nR : " + entree.getReponse().strip() + pieces + "\n";
             if (recitees > 0 && poids + bloc.length() > plafond) {
-                // Écarté par la fin, jamais par le milieu : l'ordre d'affichage décide de ce qui
-                // survit, et l'administrateur le maîtrise depuis l'écran de la FAQ.
+                // Écarté par la fin : ce sont les réponses les plus anciennes qui survivent à la
+                // troncature. Une FAQ qui dépasse ce plafond appelle un index, pas un arbitrage
+                // entre ses entrées.
                 log.warn("FAQ tronquée : {} entrées sur {} tiennent dans le plafond de {}"
                         + " caractères.", recitees, publiees.size(), plafond);
                 break;

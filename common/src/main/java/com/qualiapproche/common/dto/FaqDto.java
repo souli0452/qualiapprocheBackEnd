@@ -43,15 +43,10 @@ public class FaqDto {
     @Size(max = 1500, message = "La réponse ne peut pas dépasser 1500 caractères.")
     private String reponse;
 
-    /** Regroupement dans l'aide : « Documents », « Non-conformités », « Compte »... */
-    @Size(max = 120, message = "La catégorie ne peut pas dépasser 120 caractères.")
-    private String categorie;
 
     /** Visible dans l'aide et récitée par l'assistant. */
     private boolean publiee;
 
-    /** Ordre d'affichage ; l'assistant récite dans le même ordre. */
-    private int rang;
 
     private LocalDateTime updateAt;
 
