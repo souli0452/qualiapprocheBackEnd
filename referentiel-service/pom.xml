@@ -12,6 +12,17 @@
     <description>Referential and Configuration Service</description>
 
     <dependencies>
+        <!--
+          Pieces jointes facultatives de la FAQ. L'auto-configuration du stockage est conditionnee
+          a la propriete minio.url : tant qu'elle n'est pas posee, aucun bean n'est cree et le
+          service demarre exactement comme avant. Rien n'est donc rendu obligatoire ici.
+        -->
+        <dependency>
+            <groupId>com.qualiapproche</groupId>
+            <artifactId>lib-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.qualiapproche</groupId>
             <artifactId>common</artifactId>

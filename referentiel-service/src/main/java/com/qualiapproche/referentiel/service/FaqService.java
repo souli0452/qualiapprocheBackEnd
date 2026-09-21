@@ -1,0 +1,32 @@
+package com.qualiapproche.referentiel.service;
+
+import com.qualiapproche.common.dto.FaqDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+import java.util.UUID;
+
+/** La foire aux questions : ce que l'organisation écrit, ce que ses utilisateurs consultent. */
+public interface FaqService {
+
+    FaqDto create(FaqDto dto);
+
+    FaqDto update(FaqDto dto);
+
+    FaqDto getById(UUID id);
+
+    /** Pour l'administration : tout, publié ou non. */
+    Page<FaqDto> getAll(String recherche, Pageable pageable);
+
+    /**
+     * Pour l'aide et pour l'assistant IA : les entrées publiées, dans l'ordre d'affichage.
+     *
+     * <p>Sans pagination, à dessein — les deux lecteurs en ont besoin en entier : l'aide pour
+     * l'afficher, l'assistant pour la joindre à sa consigne. C'est aussi pourquoi la réponse est
+     * bornée à mille cinq cents caractères à la saisie.</p>
+     */
+    List<FaqDto> getPubliees();
+
+    void delete(UUID id);
+}

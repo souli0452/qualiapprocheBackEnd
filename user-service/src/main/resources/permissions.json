@@ -578,5 +578,15 @@
     "label": "Solliciter l'assistant IA et prononcer un verdict sur ses suggestions",
     "value": "assistant-ia-write",
     "module": "Assistant IA"
+  },
+  {
+    "label": "Consulter la FAQ dans l'écran d'administration, brouillons compris",
+    "value": "faq-read",
+    "module": "Configuration"
+  },
+  {
+    "label": "Écrire et publier les réponses de la FAQ",
+    "value": "faq-write",
+    "module": "Configuration"
   }
 ]

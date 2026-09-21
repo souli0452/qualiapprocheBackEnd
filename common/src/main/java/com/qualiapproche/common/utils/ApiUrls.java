@@ -75,6 +75,15 @@ public class ApiUrls {
     // résolve et que l'écran de configuration les administre.
     public static final String DOMAINE_APPLICATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/domaines-application";
     public static final String PRIORITE_DOCUMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/priorites-document";
+
+    /**
+     * Foire aux questions. Deux lectures s'y font : l'écran d'aide, ouvert à tous, et l'assistant
+     * IA qui appelle {@code /publiees} pour joindre les réponses à sa consigne.
+     */
+    public static final String FAQ_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/faq";
+    public static final String FAQ_PUBLIEES = "/publiees";
+    public static final String FAQ_FICHIERS = "/{id}/fichiers";
+    public static final String FAQ_FICHIER = "/fichiers/{fichierId}";
     public static final String NIVEAU_CONFIDENTIALITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-confidentialite";
 
     /** Réglages de l'organisation — contact, téléphone, logo — désignés par une clé immuable. */
@@ -245,5 +254,4 @@ public class ApiUrls {
 
     public static final String IA_QUESTIONS = "/questions";
     public static final String IA_QUESTION_PAR_CODE = "/questions/{code}";
-
 }
