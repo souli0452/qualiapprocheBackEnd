@@ -1,0 +1,53 @@
+# Carte des menus de QualiSira, telle que le front la déclare.
+#
+# À QUOI ELLE SERT
+# Sans elle, l'assistant ne connaît rien de l'application : interrogé sur « où se trouve… »,
+# il produisait des chemins plausibles et faux — un menu « Paramètres », un onglet
+# « Administration », un écran « Documentation à réviser », dont aucun n'existe. Il n'y a
+# pas de mauvaise volonté là-dedans : un modèle de langue comble ce qu'il ignore. La carte
+# lui donne la réponse, et lui retire la raison d'inventer.
+#
+# CE QU'ELLE N'EST PAS
+# Une liste d'habilitations. Chaque entrée du menu réel est soumise à un module souscrit et
+# à une permission ; l'assistant ne les voit pas et ne doit rien en conclure. Il nomme un
+# emplacement, il ne promet pas un accès.
+#
+# SOURCE ET MISE À JOUR
+# Relevée dans FrontQualiApproche, src/app/core/layout/component/app.menu.ts.
+# Un menu ajouté là-bas et oublié ici fait mentir l'assistant. Le test
+# CarteDesMenusTest en vérifie la forme ; la correspondance avec le front, elle, se
+# revérifie à la main quand le menu bouge — voir outils/verifier-carte-des-menus.sh.
+#
+# FORMAT : une entrée par ligne, « Rubrique > Sous-groupe > Entrée = /route ».
+# Les lignes vides et celles commençant par # sont ignorées.
+
+Accueil > Tableau de bord = /
+
+Gestion documentaire > Gestion documentaire = /gestion-documentaire
+
+Qualité & Conformité > Audite = /audite
+Qualité & Conformité > Non-Conformités = /non-conformite
+Qualité & Conformité > Réglementation = /reglementation
+Qualité & Conformité > Critères d'évaluation = /critere-evaluation
+
+Gestion des Ressources > Formation = /formation
+Gestion des Ressources > Fournisseur = /fournisseur
+Gestion des Ressources > Prestataire = /prestataire
+Gestion des Ressources > Produit = /produit
+
+Gestion des Actions > Action corrective et préventive = /action-corrective-preventive
+Gestion des Actions > Réclamation = /reclamation
+Gestion des Actions > Risque = /risque
+
+Comptes utilisateurs > Gestion des utilisateurs = /utilisateurs
+Comptes utilisateurs > Gestion des rôles = /roles
+
+Configurations > Configurations globales = /configurations
+Configurations > Non-Conformités > Niveau de Non-Conformité = /niveau-non-conformite
+Configurations > Non-Conformités > Origine de Non-Conformité = /origine-non-conformite
+Configurations > Organigramme > Catégorie de processus = /parametrage-organigramme/categorie-processus
+Configurations > Organigramme > Processus = /parametrage-organigramme/processus
+Configurations > Documentation > Type de document = /parametrage-document/types
+Configurations > Documentation > Priorités = /parametrage-document/priorites
+Configurations > Documentation > Domaines d'application = /parametrage-document/domaines
+Configurations > Documentation > Niveaux de confidentialité = /parametrage-document/confidentialite
