@@ -16,8 +16,17 @@ public interface FaqService {
 
     FaqDto getById(UUID id);
 
-    /** Pour l'administration : tout, publié ou non. */
+    /** Pour l'administration : tout, publié ou non, paginé et filtré. */
     Page<FaqDto> getAll(String recherche, Pageable pageable);
+
+    /**
+     * Pour l'administration : tout, publié ou non, en entier.
+     *
+     * <p>C'est ce que l'écran demande par {@code /all}, comme les autres référentiels : le
+     * service de pagination du front y passe page et taille, que ce point d'entrée ignore —
+     * une liste tronquée à dix valeurs tairait les suivantes sans que rien ne l'indique.</p>
+     */
+    List<FaqDto> getAll();
 
     /**
      * Pour l'aide et pour l'assistant IA : les entrées publiées, dans l'ordre d'affichage.

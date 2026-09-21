@@ -83,6 +83,17 @@ public class FaqServiceImpl implements FaqService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<FaqDto> getAll() {
+        UUID directionId = SecurityUtils.getCurrentDirectionId();
+        if (directionId == null) {
+            return List.of();
+        }
+        return avecLeursPieces(repository.rechercher(directionId, null, Pageable.unpaged())
+                .map(this::versDto).getContent().stream().toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<FaqDto> getPubliees() {
         UUID directionId = SecurityUtils.getCurrentDirectionId();
         if (directionId == null) {

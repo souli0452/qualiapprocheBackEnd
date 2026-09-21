@@ -2,6 +2,7 @@ package com.qualiapproche.referentiel.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.FaqDto;
+import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.common.dto.FichierFaqDto;
 import com.qualiapproche.referentiel.service.FaqService;
 import com.qualiapproche.referentiel.service.FichierFaqService;
@@ -69,20 +70,41 @@ public class FaqController {
      * jamais les brouillons.</p>
      */
     @GetMapping(FAQ_PUBLIEES)
-    public ResponseEntity<List<FaqDto>> publiees() {
-        return ResponseEntity.ok(service.getPubliees());
+    public ResponseEntity<ApiResponse<List<FaqDto>>> publiees() {
+        return ResponseEntity.ok(ApiResponse.success(service.getPubliees()));
+    }
+
+    /**
+     * Le référentiel en entier, pour l'écran d'administration.
+     *
+     * <p>Enveloppé à la main : GlobalResponseHandler pagine d'office toute réponse de type
+     * {@code List}, à dix éléments faute de page et de taille — l'écran aurait affiché dix
+     * questions sur trente sans que rien ne l'indique. Un {@code ApiResponse} explicite est la
+     * seule forme que l'intercepteur laisse passer intacte.</p>
+     */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<List<FaqDto>>> all() {
+        return ResponseEntity.ok(ApiResponse.success(service.getAll()));
     }
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping
-    public ResponseEntity<Page<FaqDto>> getAll(
-            @RequestParam(value = "recherche", required = false) String recherche,
+    public ResponseEntity<Page<FaqDto>> page(
+            @RequestParam(value = "search", required = false) String search,
             @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(service.getAll(recherche, pageable));
+        return ResponseEntity.ok(service.getAll(search, pageable));
     }
 
+    /**
+     * Une entrée par son identifiant.
+     *
+     * <p>Sous {@code /get/} et non à la racine : un {@code /{id}} nu happait {@code /all} et
+     * {@code /publiees}, que Spring lui présentait comme des identifiants — « Invalid UUID
+     * string: all », en 500, sur la simple consultation de la liste.</p>
+     */
     @PreAuthorize("@perm.canRead(this)")
-    @GetMapping("/{id}")
+    @GetMapping("/get/{id}")
     public ResponseEntity<FaqDto> getById(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(service.getById(id));
     }
