@@ -211,16 +211,25 @@ public class QmsDocumentService {
         // 7. Register Audit log
         auditLogService.logAction("CREATION", documentNumber, "Dépôt initial du document dans Minio");
 
-        // 8. Associate workflow immediately
-        WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
+        // 8. Le circuit s'ouvre avec le document — mais celui-ci reste un brouillon.
+        //
+        // L'instance naît avec le dossier, comme pour une non-conformité : sans elle, le rédacteur
+        // n'aurait aucune décision à prendre le jour où il veut soumettre. Ce qui distingue le
+        // brouillon du document remis au circuit est `currentEtape`, et il reste nul tant
+        // qu'aucune décision n'a été prise — c'est déjà la définition qu'emploient le statut
+        // affiché, le filtre « brouillon » des listes et le retour en brouillon après un rejet.
+        //
+        // L'étape était inscrite dès le dépôt, si bien qu'aucun document ne pouvait être un
+        // brouillon : l'écran de création offrait « Enregistrer » et « Soumettre », les deux
+        // produisaient un document déjà remis au circuit, et le rédacteur n'avait aucun moyen de
+        // déposer un texte pour y revenir. Le franchissement de la première action inscrira
+        // l'étape atteinte, par le point de rappel habituel.
+        workflowClient.initiateWorkflow(
                 document.getId(), "DOCUMENT", finalWorkflowId, document.getDocumentNumber());
         document.setWorkflowId(finalWorkflowId);
         // Le classement se confronte au circuit une fois celui-ci rattaché : c'est lui qui
         // désigne les rôles décideurs.
         avertissementDuDepot.set(avertissementSurLeClassement(document));
-        if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
-            document.setCurrentEtape(workflowInstance.getCurrentStateName());
-        }
         document = documentRepository.save(document);
 
         return document;

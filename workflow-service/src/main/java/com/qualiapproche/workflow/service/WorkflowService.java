@@ -1770,12 +1770,55 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
         if (instance == null) {
             return List.of();
         }
-        return historyRepository.findByValidationInstance_IdOrderByDecisionDateAsc(instance.getId()).stream()
-                .map(this::toHistoryDto)
+        List<ValidationHistory> decisions =
+                historyRepository.findByValidationInstance_IdOrderByDecisionDateAsc(instance.getId());
+        Map<String, String> fonctions = fonctionsDesEtapes(decisions);
+        return decisions.stream()
+                .map(decision -> toHistoryDto(decision, fonctions))
                 .toList();
     }
 
-    private ValidationHistoryDto toHistoryDto(ValidationHistory history) {
+    /**
+     * Habilitation exigée par chaque étape traversée, indexée par le code que l'historique a gardé.
+     *
+     * <p>C'est ce qui permet à un visa de se lire « untel, au titre de responsable qualité ». Le
+     * titre est celui que l'étape exige, non celui que la personne détient aujourd'hui : demander
+     * à l'annuaire ferait dire à la trace ce qui est vrai maintenant, alors qu'un visa énonce ce
+     * qui l'était à sa date.</p>
+     *
+     * <p>Les étapes sont relues en une fois plutôt qu'une par ligne : l'historique d'un dossier
+     * repasse plusieurs fois par les mêmes. Un code qui n'est pas un identifiant d'étape — ou une
+     * étape retirée du circuit depuis — n'a simplement pas d'entrée, et le visa s'imprime sans
+     * fonction plutôt que de faire échouer la lecture.</p>
+     */
+    private Map<String, String> fonctionsDesEtapes(List<ValidationHistory> decisions) {
+        java.util.Set<Long> identifiants = decisions.stream()
+                .map(ValidationHistory::getStepCode)
+                .filter(Objects::nonNull)
+                .map(code -> {
+                    try {
+                        return Long.valueOf(code.trim());
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (identifiants.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, String> fonctions = new java.util.HashMap<>();
+        for (WorkflowStep etape : stepRepository.findAllById(identifiants)) {
+            if (etape.getId() != null && etape.getResponsableRole() != null
+                    && !etape.getResponsableRole().isBlank()) {
+                fonctions.put(etape.getId().toString(), etape.getResponsableRole().trim());
+            }
+        }
+        return fonctions;
+    }
+
+    private ValidationHistoryDto toHistoryDto(ValidationHistory history, Map<String, String> fonctions) {
         List<ValidationHistoryDto.FieldValueDto> valeurs =
                 history.getFieldValues() == null ? List.of()
                         : history.getFieldValues().stream()
@@ -1796,6 +1839,8 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 .comments(history.getComments())
                 .validatorUserId(history.getValidatorUserId())
                 .validatorFullName(history.getValidatorFullName())
+                .responsableRole(history.getStepCode() != null
+                        ? fonctions.get(history.getStepCode().trim()) : null)
                 .decisionDate(history.getDecisionDate())
                 .fieldValues(valeurs)
                 .build();

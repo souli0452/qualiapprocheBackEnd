@@ -76,6 +76,13 @@ spring:
           filters:
             - RewritePath=/workflow-service/(?<segment>.*), /${segment}
 
+        - id: ia-service
+          uri: lb://IA-SERVICE
+          predicates:
+            - Path=/ia-service/**
+          filters:
+            - RewritePath=/ia-service/(?<segment>.*), /${segment}
+
 springdoc:
   swagger-ui:
     urls:
@@ -97,6 +104,8 @@ springdoc:
         url: /contexte-service/v3/api-docs
       - name: workflow-service
         url: /workflow-service/v3/api-docs
+      - name: ia-service
+        url: /ia-service/v3/api-docs
 
 qualisira:
   cors:
@@ -179,3 +188,4 @@ gateway:
       /evaluation-service: EVALUATION
       /planification-service: AUDIT
       /contexte-service: CONTEXTE
+      /ia-service: ASSISTANT_IA

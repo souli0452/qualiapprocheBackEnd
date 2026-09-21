@@ -64,6 +64,19 @@ public class ValidationHistoryDto {
             example = "Awa Traoré")
     private String validatorFullName;
 
+    /**
+     * Habilitation que l'étape exigeait — la fonction au titre de laquelle le visa a été donné.
+     *
+     * <p>Lue sur le circuit, non sur le compte : elle dit sous quel titre la décision a été prise,
+     * là où l'annuaire dirait ce que la personne est devenue depuis.</p>
+     */
+    @Schema(description = "Fonction au titre de laquelle la décision a été prise : l'habilitation "
+            + "exigée par l'étape. Elle vient du circuit et non du compte, de sorte qu'un "
+            + "changement d'affectation ne réécrit pas les visas déjà donnés. Vide si l'étape "
+            + "n'exige aucun rôle ou a depuis quitté le circuit.",
+            example = "RESPONSABLE_QUALITE")
+    private String responsableRole;
+
     @Schema(description = "Quand la décision a été prise. C'est elle qui ordonne le parcours du "
             + "dossier, rendu du plus ancien au plus récent.",
             example = "2026-03-14T09:25:00")

@@ -5,6 +5,9 @@ import com.qualiapproche.support.dto.DemandeDocumentDto;
 import com.qualiapproche.support.model.DemandeDocument;
 import com.qualiapproche.support.service.DemandeDocumentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -106,6 +109,27 @@ public class DemandeDocumentController {
     @PreAuthorize("@perm.canRead(this)")
     public ResponseEntity<DemandeDocumentDto> getById(@PathVariable("id") UUID id) {
         return ResponseEntity.ok(demandeService.getById(id));
+    }
+
+    /**
+     * Télécharge la pièce jointe déposée avec la demande.
+     *
+     * <p>Son nom figurait sur la fiche sans que rien ne permette de l'ouvrir : la preuve jointe par
+     * le demandeur était invisible pour qui devait instruire. La pièce est désignée par la demande
+     * et non par sa référence de stockage — une référence venue du client ouvrirait le dépôt
+     * entier.</p>
+     */
+    @GetMapping("/{id}/piece-jointe")
+    @PreAuthorize("@perm.canRead(this)")
+    public ResponseEntity<Resource> telechargerPieceJointe(@PathVariable("id") UUID id) {
+        DemandeDocumentService.PieceJointeDeLaDemande piece = demandeService.pieceJointe(id);
+        return ResponseEntity.ok()
+                // Le nom du dépôt : sans lui, le navigateur enregistre un identifiant technique
+                // sans extension exploitable.
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + piece.nom() + "\"")
+                .contentType(piece.type())
+                .body(new InputStreamResource(piece.contenu()));
     }
 
     /**

@@ -215,6 +215,11 @@ public class FicheClotureNonConformiteService {
                 : "—");
 
         contexte.setVariable("description", valeurOuTiret(nc.getJustification()));
+        // Les mesures prises d'emblée par l'émetteur — équipement arrêté, lot retiré, responsable
+        // averti — sont recueillies à la déclaration (« Correction(s) entreprise(s) ») et ne
+        // figuraient nulle part sur la fiche : le dossier imprimé laissait croire que rien n'avait
+        // été fait avant l'enregistrement.
+        contexte.setVariable("actionAvantSoumission", valeurOuTiret(nc.getActionDsc()));
 
         // Un circuit « Correction » remet en conformité sans rechercher la cause : la colonne
         // n'existe pas sur ses plans, la fiche ne l'imprime donc pas non plus.
@@ -245,6 +250,7 @@ public class FicheClotureNonConformiteService {
                 valeurOuVide(plan.getNumeroOdre()),
                 valeurOuTiret(plan.getCauseIdentifiees()),
                 valeurOuTiret(plan.getSolutionRetenues()),
+                valeurOuTiret(plan.getCritereEfficacite()),
                 valeurOuTiret(premierRenseigne(
                         nomDe(plan.getResponsableId() == null ? null : plan.getResponsableId().toString(),
                                 plan.getResponsableNomComplet()),
@@ -258,17 +264,48 @@ public class FicheClotureNonConformiteService {
                 valeurOuTiret(decision.getStepName() != null ? decision.getStepName() : decision.getStepCode()),
                 valeurOuTiret(decision.getDecision()),
                 valeurOuTiret(decision.getValidatorFullName()),
+                fonctionLisible(decision.getResponsableRole()),
                 decision.getDecisionDate() != null ? decision.getDecisionDate().format(DATE_HEURE) : "—",
                 valeurOuTiret(decision.getComments()));
     }
 
+    /**
+     * La fonction au titre de laquelle un visa a été donné, telle qu'elle s'imprime.
+     *
+     * <p>Un nom sans fonction ne dit pas à quel titre la personne a signé, et c'est précisément ce
+     * qu'un visa atteste. Le titre est celui que l'étape exige — il vient du circuit, pas du
+     * compte, de sorte qu'une mutation ne réécrit pas les visas déjà donnés.</p>
+     *
+     * <p>Le nom du rôle est celui que l'installation a choisi et n'est pas traduit : le code ne
+     * connaît pas les rôles, qui se créent depuis l'écran d'administration. Seuls les soulignés
+     * s'effacent, pour qu'un code de rôle se lise comme une fonction. Les deux désignations
+     * personnelles du moteur, elles, ne sont pas des rôles et se nomment en clair.</p>
+     *
+     * <p>Vide plutôt qu'un tiret : la fonction s'imprime sous le nom, et un tiret y ferait une
+     * ligne de plus sans rien dire.</p>
+     */
+    private static String fonctionLisible(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        String titre = role.trim();
+        if ("@CREATEUR".equalsIgnoreCase(titre)) {
+            return "Émetteur du dossier";
+        }
+        if ("@TITULAIRE".equalsIgnoreCase(titre)) {
+            return "Agent chargé du traitement";
+        }
+        return titre.replace('_', ' ');
+    }
+
     /** Ligne du tableau des causes et solutions, prête à imprimer. */
-    public record LignePlan(String numero, String cause, String solution,
+    public record LignePlan(String numero, String cause, String solution, String critere,
                             String responsable, String echeance, String statut) {
     }
 
     /** Ligne du tableau des visas : une décision d'un niveau du circuit, avec son appréciation. */
-    public record LigneVisa(String etape, String decision, String auteur, String date, String appreciation) {
+    public record LigneVisa(String etape, String decision, String auteur, String fonction,
+                            String date, String appreciation) {
     }
 
     private static String libelleStatut(StatutEnum statut) {

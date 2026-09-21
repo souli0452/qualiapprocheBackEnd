@@ -15,12 +15,15 @@ import com.qualiapproche.support.repository.DocumentQmsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -208,6 +211,54 @@ public class DemandeDocumentService {
         }
 
         demandeRepository.save(demande);
+    }
+
+    /**
+     * La pièce jointe au dépôt, telle qu'on la relit.
+     *
+     * <p>Le type n'est pas conservé à l'enregistrement — la demande n'en garde que le nom — il se
+     * déduit donc de l'extension. Introuvable, c'est un flux binaire : le navigateur propose alors
+     * l'enregistrement, ce qui vaut mieux que d'afficher un fichier pour du texte.</p>
+     */
+    public record PieceJointeDeLaDemande(InputStream contenu, String nom, MediaType type) {
+    }
+
+    /**
+     * Relit la pièce déposée avec la demande.
+     *
+     * <p>Elle était enregistrée au dépôt et son nom figurait sur la fiche, mais rien ne permettait
+     * de l'ouvrir : le demandeur joignait une preuve que l'instructeur ne pouvait pas consulter.</p>
+     *
+     * <p>C'est l'identifiant de la demande qui désigne la pièce, jamais sa référence de stockage :
+     * une référence venue du client laisserait demander n'importe quel objet du dépôt. Le droit se
+     * juge comme celui de lire la demande — même portée de structure.</p>
+     */
+    @Transactional(readOnly = true)
+    public PieceJointeDeLaDemande pieceJointe(UUID demandeId) {
+        DemandeDocument demande = demandeRepository.findById(demandeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Demande introuvable : " + demandeId));
+        exigerAccesDemande(demande);
+
+        String reference = demande.getPieceJointeObjectName();
+        if (reference == null || reference.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Aucune pièce n'a été jointe à cette demande.");
+        }
+
+        String nom = demande.getPieceJointeNom() != null && !demande.getPieceJointeNom().isBlank()
+                ? demande.getPieceJointeNom()
+                : reference.substring(reference.lastIndexOf('/') + 1);
+
+        try {
+            return new PieceJointeDeLaDemande(
+                    storageService.downloadFile(reference),
+                    nom,
+                    MediaTypeFactory.getMediaType(nom).orElse(MediaType.APPLICATION_OCTET_STREAM));
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "La pièce jointe est introuvable ou illisible : " + e.getMessage());
+        }
     }
 
     /** Retire le document et clôt la demande, qui reste consultable. */

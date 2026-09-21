@@ -228,4 +228,22 @@ public class ApiUrls {
     /* reporting */
     public static final String CREATE_REPORTING_ROOT_URL = "api/v1/reports/reporting";
 
+    /* Assistant IA urls */
+
+    public static final String IA_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/ia";
+    public static final String IA_ASSISTANCE = "/assistance";
+    public static final String IA_SUGGESTIONS = "/suggestions";
+    public static final String IA_SUGGESTION_VERDICT = "/suggestions/{id}/verdict";
+
+    /* Assistant IA — fil de discussion */
+
+    public static final String IA_CONVERSATION = "/conversation";
+    public static final String IA_CONVERSATIONS = "/conversations";
+    public static final String IA_CONVERSATION_PAR_ID = "/conversations/{id}";
+
+    /* Assistant IA — questions prédéfinies, adossées à l'API métier */
+
+    public static final String IA_QUESTIONS = "/questions";
+    public static final String IA_QUESTION_PAR_CODE = "/questions/{code}";
+
 }

@@ -9,6 +9,7 @@ import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +36,14 @@ import java.util.Set;
  *
  * <p>Une étape qui porte déjà un champ est laissée telle quelle : un administrateur a pu en changer
  * le libellé ou le rendre obligatoire, et ce rattrapage n'a pas à défaire son choix.</p>
+ *
+ * <p><b>Désactivé par défaut</b>, comme {@link RattrapageDesCircuitsLivres} et pour la même raison :
+ * reposer un champ sur un circuit existant défait sa suppression au redéploiement suivant. Même
+ * clé, {@code workflow.circuits-livres.rattrapage}. Une base vierge reçoit ces champs de
+ * {@link WorkflowDataInitializer}, qui les déclare sur le circuit livré.</p>
  */
 @Component
+@ConditionalOnProperty(prefix = "workflow.circuits-livres", name = "rattrapage", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 @Order(110) // après WorkflowStepCodeInitializer
