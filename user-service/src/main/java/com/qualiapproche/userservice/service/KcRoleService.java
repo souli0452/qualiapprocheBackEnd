@@ -5,6 +5,7 @@ import com.qualiapproche.common.dto.auth.KcRoleDto;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.entities.mappers.KcRoleMapper;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
+import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RoleScopeResource;
@@ -12,6 +13,8 @@ import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.springframework.beans.factory.annotation.Value;
+import com.qualiapproche.common.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,6 +33,7 @@ public class KcRoleService {
     private final KcAuthProperties kcAuthProperties;
     private final KcRoleMapper kcRoleMapper;
     private final AppRoleRepository appRoleRepository;
+    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 
     @Value("${keycloak.realm}")
     private String realm;
@@ -69,9 +73,32 @@ public class KcRoleService {
         keycloak.realm(realm).roles().deleteRole(roleName);
     }
 
+    /**
+     * Supprime un rôle applicatif, et refuse de le faire quand il est encore porté.
+     *
+     * <p>Le contrôle des porteurs vient avant la suppression, et il vaut mieux que la contrainte
+     * de la base. Sans lui, PostgreSQL refusait le retrait d'un rôle encore attribué et la
+     * violation remontait en exception brute, que l'appelant traduisait en « introuvable » — un
+     * rôle parfaitement existant se disait absent, sans que rien n'indique qu'il suffisait de le
+     * retirer à ses porteurs.</p>
+     *
+     * <p>Les permissions du rôle, elles, ne retiennent rien : {@code @ElementCollection} les fait
+     * disparaître avec lui.</p>
+     */
     public void deleteRoleById(UUID id) {
         AppRole role = appRoleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Role not found with id: " + id));
+                .orElseThrow(() -> new BusinessException(
+                        "Aucun rôle ne porte cet identifiant : " + id, HttpStatus.NOT_FOUND));
+
+        long porteurs = userRoleAssignmentRepository.countByRole_Id(id);
+        if (porteurs > 0) {
+            throw new BusinessException(
+                    "Le rôle « " + role.getName() + " » est encore attribué à " + porteurs
+                            + " utilisateur" + (porteurs > 1 ? "s" : "")
+                            + ". Retirez-le-leur avant de le supprimer.",
+                    HttpStatus.CONFLICT);
+        }
+
         appRoleRepository.delete(role);
     }
 

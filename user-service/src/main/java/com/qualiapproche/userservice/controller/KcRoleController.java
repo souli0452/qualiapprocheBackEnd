@@ -60,14 +60,21 @@ public class KcRoleController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Supprime un rôle applicatif.
+     *
+     * <p>Sans filet : une exception traduisait ici <b>toute</b> cause en « introuvable » — rôle
+     * encore porté, contrainte violée, base injoignable, tout rendait le même 404 muet. Le
+     * gestionnaire général sait déjà rendre chaque {@code BusinessException} avec son statut et
+     * son message ; le service dit donc 404 quand le rôle n'existe pas, et 409 en nommant le
+     * nombre de porteurs quand il est encore attribué.</p>
+     */
+    @Operation(summary = "Supprimer un rôle applicatif",
+            description = "Refuse en 409 tant que des utilisateurs le portent.")
     @DeleteMapping("/role/{id}")
     public ResponseEntity<Void> deleteRoleById(@PathVariable UUID id) {
-        try {
-            kcRoleService.deleteRoleById(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        kcRoleService.deleteRoleById(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/assign-roles")
