@@ -80,4 +80,19 @@ public class IaAssistantProperties {
      * l'estimation vise à protéger, non à facturer.</p>
      */
     private int caracteresParJeton = 4;
+
+    /**
+     * Plafond, en caractères, de la FAQ recopiée dans la consigne de l'assistant.
+     *
+     * <p>Les entrées actives sont jointes à la consigne système, donc envoyées au fournisseur
+     * <b>à chaque tour</b> : leur volume se paie sur tous les appels, pas une fois. Sans plafond,
+     * une FAQ qui grossit au fil des mois finirait par occuper la fenêtre de contexte entière et
+     * par évincer la conversation elle-même — l'assistant réciterait sans plus entendre.</p>
+     *
+     * <p>Huit mille caractères valent environ deux mille jetons : de quoi porter une trentaine de
+     * questions-réponses. Au-delà, ce n'est plus une FAQ qu'il faut mais un index, et les entrées
+     * excédentaires sont écartées par la fin — d'où l'ordre de récitation, qui n'est pas
+     * cosmétique.</p>
+     */
+    private int faqCaracteres = 8_000;
 }
