@@ -217,6 +217,11 @@ public class NonConformiteServiceImpl
      */
     @Override
     public NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException {
+        return createNonConformite(dto, null);
+    }
+
+    @Override
+    public NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException {
         NonConformite nonConformite = nonConformiteMapper.toEntity(dto);
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
@@ -253,13 +258,12 @@ public class NonConformiteServiceImpl
             UUID workflowId = activeWorkflow.getId();
             savedNonConformite.setWorkflowId(workflowId);
 
-            WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
-                    savedNonConformite.getId(),
-                    "NON_CONFORMITE",
-                    workflowId,
-                    // La référence lisible : c'est elle que citeront les courriels d'étape.
-                    savedNonConformite.getNumeroReference()
-            );
+            // La référence lisible : c'est elle que citeront les courriels d'étape.
+            WorkflowInstanceDto workflowInstance = structureDuDossier == null
+                    ? workflowClient.initiateWorkflow(savedNonConformite.getId(), "NON_CONFORMITE", workflowId,
+                            savedNonConformite.getNumeroReference())
+                    : workflowClient.initiateWorkflowDansLaStructure(savedNonConformite.getId(), "NON_CONFORMITE",
+                            workflowId, savedNonConformite.getNumeroReference(), structureDuDossier);
 
             if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
                 savedNonConformite.setWorkflowStatus(workflowInstance.getCurrentStateName());

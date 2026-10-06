@@ -20,6 +20,12 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
 
     /**
+     * Crée une non-conformité dont le circuit s'ouvre dans {@code structureDuDossier} plutôt que
+     * dans la structure du déclarant. Nulle, c'est la création ordinaire.
+     */
+    NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException;
+
+    /**
      * Soumet au pilote du processus une non-conformité enregistrée, sans attendre une seconde visite
      * de son auteur.
      *

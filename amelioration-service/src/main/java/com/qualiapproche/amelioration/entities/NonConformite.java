@@ -115,6 +115,12 @@ public class NonConformite extends AuditEntity {
   private String userImputFullName;
   private String originNonConformiteId;
   private String originNonConformiteLibelle;
+  /**
+   * L'écart d'origine quand la non-conformité vient d'un autre module : « AUDIT-CONSTAT:&lt;uuid&gt; ».
+   * Unique — une transmission rejouée retrouve le dossier au lieu d'en ouvrir un second.
+   */
+  @Column(name = "cle_origine", length = 120, unique = true)
+  private String cleOrigine;
   private String numeroFdac;
   private String pertinanceRsSuivi;
   @Lob

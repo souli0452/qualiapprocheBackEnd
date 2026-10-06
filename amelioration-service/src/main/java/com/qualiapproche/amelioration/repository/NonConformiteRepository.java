@@ -48,6 +48,9 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
         Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
 
+        /** Le dossier déjà ouvert pour cet écart d'origine, s'il l'a été : voir NonConformite.cleOrigine. */
+        java.util.Optional<NonConformite> findByCleOrigine(String cleOrigine);
+
         @Query(value = "SELECT a.origine_service_libelle_court, COUNT(*) as count " +
                         "FROM quali_nc a " +
                         "WHERE a.created_at BETWEEN :debut AND :fin " +
