@@ -351,10 +351,13 @@ public class WorkflowController {
             @RequestParam("workflowId") UUID workflowId,
             @RequestParam(value = "titulaireId", required = false) String titulaireId,
             // Référence lisible du dossier (« NC-2026-014 ») : citée par les courriels d'étape.
-            @RequestParam(value = "reference", required = false) String reference) {
+            @RequestParam(value = "reference", required = false) String reference,
+            // La structure que le dossier concerne, quand ce n'est pas celle du déclarant : une NC
+            // relevée par un audit vise le processus audité. Absente, celle du déclarant.
+            @RequestParam(value = "structureId", required = false) String structureId) {
 
-        return ResponseEntity.ok(
-                workflowService.initiateWorkflow(resourceId, resourceType, workflowId, titulaireId, reference));
+        return ResponseEntity.ok(workflowService.initiateWorkflow(
+                resourceId, resourceType, workflowId, titulaireId, reference, structureId));
     }
 
     /**
