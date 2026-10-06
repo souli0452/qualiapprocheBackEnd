@@ -39,6 +39,42 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!-- Transmission des écarts d'audit au module Non-conformités (amelioration-service). -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <!-- Plan et rapport d'audit exportés : PDF depuis le gabarit HTML, comme la fiche de clôture
+             des non-conformités ; Word construit directement, depuis le même modèle de document. -->
+        <dependency>
+            <groupId>com.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.0.10</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.5.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Rapport et plan d'audit chargés sur le serveur de fichiers : facultatif, comme pour la
+             FAQ — sans serveur configuré, le service démarre et seul le dépôt est refusé. -->
+        <dependency>
+            <groupId>com.qualiapproche</groupId>
+            <artifactId>lib-storage</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

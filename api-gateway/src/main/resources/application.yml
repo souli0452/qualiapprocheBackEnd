@@ -185,7 +185,11 @@ gateway:
       /referentiel-service/api/v1/formation: FORMATION
       /referentiel-service/api/v1/fournisseur: FORMATION
       /referentiel-service/api/v1/exigence: REGLEMENTATION
-      /evaluation-service: EVALUATION
-      /planification-service: AUDIT
+      # Le module d'audit vit dans evaluation-service depuis qu'il a quitté planification-service :
+      # c'est AUDIT qu'il exige, et non EVALUATION — qui, côté front, ne désigne que les critères
+      # d'évaluation. Sans cela, une direction abonnée à l'audit se voyait refuser ses audits, et
+      # une direction abonnée aux seuls critères les obtenait.
+      /evaluation-service/api/v1/critere-evaluation: EVALUATION
+      /evaluation-service: AUDIT
       /contexte-service: CONTEXTE
       /ia-service: ASSISTANT_IA
