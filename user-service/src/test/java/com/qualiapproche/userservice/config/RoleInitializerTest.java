@@ -50,6 +50,9 @@ class RoleInitializerTest {
     /** L'assistant IA, dernier module entré au dictionnaire et rattrapé au démarrage. */
     private static final String[] ASSISTANT_IA = {"assistant-ia-read", "assistant-ia-write"};
 
+    /** La foire aux questions, entrée au dictionnaire avec son droit de publication. */
+    private static final String[] FAQ = {"faq-read", "faq-write", "faq-publish"};
+
     /**
      * Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire.
      *
@@ -61,6 +64,7 @@ class RoleInitializerTest {
         List<String> tout = new ArrayList<>(List.of(TABLEAUX_DE_BORD));
         tout.addAll(List.of(PORTEE));
         tout.addAll(List.of(ASSISTANT_IA));
+        tout.addAll(List.of(FAQ));
         return tout;
     }
 

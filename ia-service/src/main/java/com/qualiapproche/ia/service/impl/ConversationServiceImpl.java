@@ -13,6 +13,7 @@ import com.qualiapproche.ia.enumeration.RoleMessage;
 import com.qualiapproche.ia.repository.ConversationIaRepository;
 import com.qualiapproche.ia.repository.MessageIaRepository;
 import com.qualiapproche.ia.service.BudgetDeJetons;
+import com.qualiapproche.ia.service.CatalogueDeFaq;
 import com.qualiapproche.ia.service.ClientDuModele;
 import com.qualiapproche.ia.service.ConversationService;
 import com.qualiapproche.ia.service.PromptRegistry;
@@ -57,13 +58,36 @@ public class ConversationServiceImpl implements ConversationService {
     private final ClientDuModele client;
     private final BudgetDeJetons budget;
     private final IaAssistantProperties proprietes;
+    private final CatalogueDeFaq faq;
     private final TransactionTemplate transactions;
 
     @Override
     public ReponseConversationDto repondre(MessageDemandeDto demande) {
         String question = demande.getMessage().trim();
         return tenirUnTour(demande.getConversationId(), question, question,
-                promptRegistry.promptDeConversation());
+                consigneAvecLaFaq());
+    }
+
+    /**
+     * La consigne de conversation, augmentée de la FAQ de l'organisation.
+     *
+     * <p>Relue à chaque tour plutôt que mise en cache : une réponse corrigée par un administrateur
+     * doit valoir dès la question suivante, et non au prochain redémarrage du service. La lecture
+     * est un index sur trois colonnes, et elle se fait dans la phase brève qui précède l'appel au
+     * modèle.</p>
+     *
+     * <p>La version du prompt suit le contenu : deux organisations n'ont pas la même FAQ, et une
+     * trace qui les confondrait rendrait l'historique des suggestions incomparable. Le suffixe
+     * dit donc si la consigne portait une FAQ, et de quelle taille.</p>
+     */
+    private PromptRegistry.PromptVersionne consigneAvecLaFaq() {
+        PromptRegistry.PromptVersionne base = promptRegistry.promptDeConversation();
+        String catalogue = faq.pourLaConsigne();
+        if (catalogue.isEmpty()) {
+            return base;
+        }
+        return new PromptRegistry.PromptVersionne(
+                base.version() + "+faq" + catalogue.length(), base.contenu() + catalogue);
     }
 
     @Override

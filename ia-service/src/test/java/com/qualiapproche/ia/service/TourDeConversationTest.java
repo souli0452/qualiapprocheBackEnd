@@ -101,8 +101,12 @@ class TourDeConversationTest {
             return fil;
         });
 
+        // Le catalogue rend une FAQ vide : ces cas éprouvent le déroulé d'un tour, pas la FAQ.
+        CatalogueDeFaq faq = mock(CatalogueDeFaq.class);
+        when(faq.pourLaConsigne()).thenReturn("");
+
         service = new ConversationServiceImpl(conversations, messages, new PromptRegistry(),
-                client, budget, proprietes, transactions);
+                client, budget, proprietes, faq, transactions);
 
         securite = mockStatic(SecurityUtils.class);
         securite.when(SecurityUtils::getCurrentUserId).thenReturn("agent-1");

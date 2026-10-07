@@ -16,6 +16,9 @@ public interface UserRoleAssignmentRepository extends JpaRepository<UserRoleAssi
      */
     List<UserRoleAssignment> findByRole_Id(UUID roleId);
 
+    /** Combien d'utilisateurs portent ce rôle. Interrogé avant toute suppression. */
+    long countByRole_Id(UUID roleId);
+
     /** Même résolution, pour les appelants qui ne connaissent le rôle que par son nom. */
     List<UserRoleAssignment> findByRole_NameIgnoreCase(String roleName);
 }

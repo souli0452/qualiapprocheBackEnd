@@ -51,3 +51,4 @@ Configurations > Documentation > Type de document = /parametrage-document/types
 Configurations > Documentation > Priorités = /parametrage-document/priorites
 Configurations > Documentation > Domaines d'application = /parametrage-document/domaines
 Configurations > Documentation > Niveaux de confidentialité = /parametrage-document/confidentialite
+Configurations > Foire aux questions = /faq
