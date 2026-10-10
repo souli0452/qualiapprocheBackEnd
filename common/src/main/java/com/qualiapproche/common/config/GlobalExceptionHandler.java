@@ -95,6 +95,22 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ApiResponse.error(message, status.value()), status);
     }
 
+    /** Un paramètre d'adresse du mauvais type (un identifiant qui n'est pas un UUID) est une erreur de l'appelant. */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return new ResponseEntity<>(ApiResponse.error("Valeur invalide pour « " + ex.getName() + " ».",
+                HttpStatus.BAD_REQUEST.value()), HttpStatus.BAD_REQUEST);
+    }
+
+    /** Une adresse qui ne mène à rien est un 404 : elle remontait jusqu'au gestionnaire général, en 500. */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return new ResponseEntity<>(ApiResponse.error("Ressource introuvable : " + ex.getResourcePath(),
+                HttpStatus.NOT_FOUND.value()), HttpStatus.NOT_FOUND);
+    }
+
     /**
      * Dernier recours : ce qu'aucun autre gestionnaire n'a reconnu.
      *
@@ -103,14 +119,19 @@ public class GlobalExceptionHandler {
      * aucune trace — un 500 en production ne laissait donc rien à examiner, ni ligne fautive, ni
      * cause. C'est la seule information qui compte ici, et la seule qui manquait.</p>
      *
-     * <p>Le message reste rendu à l'appelant tel quel : il aide au diagnostic en développement, et
-     * les exceptions porteuses d'un message destiné à l'utilisateur ont leur propre gestionnaire
-     * plus haut.</p>
+     * <p>L'appelant ne reçoit plus le message de l'exception : il livrait des requêtes SQL, des
+     * adresses internes de services, des noms de classes. Il reçoit une <b>référence</b>, que le
+     * journal porte avec la pile — c'est elle qui relie une plainte d'utilisateur à sa cause. Les
+     * exceptions porteuses d'un message destiné à l'utilisateur ont leur propre gestionnaire plus
+     * haut.</p>
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-        LOG.error("Erreur non gérée remontée jusqu'au gestionnaire général.", ex);
-        ApiResponse<Void> response = ApiResponse.error("Une erreur interne est survenue: " + ex.getMessage(),
+        String reference = java.util.UUID.randomUUID().toString().substring(0, 8);
+        LOG.error("Erreur non gérée remontée jusqu'au gestionnaire général [référence {}].", reference, ex);
+        ApiResponse<Void> response = ApiResponse.error(
+                "Une erreur interne est survenue (référence " + reference + "). "
+                        + "Communiquez cette référence au support si le problème persiste.",
                 HttpStatus.INTERNAL_SERVER_ERROR.value());
         return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }

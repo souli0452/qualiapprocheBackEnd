@@ -11,6 +11,13 @@ spring:
     url: ${DB_URL_IA:jdbc:postgresql://localhost:5432/qualisira_ia}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
+    # Sous spring.datasource, où Hikari la lit : écrite sous spring.jpa, elle était ignorée, et chaque
+    # service ouvrait 10 connexions — 70 pour la pile, contre max_connections = 100 sur PostgreSQL.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: 2
+      connection-timeout: 10000
+      max-lifetime: 1800000
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -96,3 +103,17 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
+
+---
+# Appels entre services (Feign) : des délais bornés. Il n'y en avait aucun — un service lent ou
+# figé retenait sans fin les fils de tous ceux qui l'appelaient, jusqu'à les bloquer à leur tour.
+# 2 s pour joindre, 10 s pour répondre : assez pour un rendu PDF ou une page de référentiel, pas
+# pour immobiliser un écran.
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT:10000}

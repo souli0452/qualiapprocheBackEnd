@@ -28,6 +28,11 @@ public class GlobalResponseHandler implements ResponseBodyAdvice<Object> {
         if (className.contains("springdoc") || className.contains("swagger")) {
             return false;
         }
+        // Ni les points d'entrée d'actuator : une sonde de santé attend {"status":"UP"} à la racine
+        // du corps, pas dans l'enveloppe ApiResponse.
+        if (className.startsWith("org.springframework.boot.actuate")) {
+            return false;
+        }
 
         Class<?> paramType = returnType.getParameterType();
         if (paramType.equals(ApiResponse.class) ||
