@@ -1,6 +1,7 @@
 package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.evaluation.client.Annuaire;
 import com.qualiapproche.evaluation.client.Parametrage;
 import com.qualiapproche.evaluation.dto.ActionMaitriseRisqueDto;
 import com.qualiapproche.evaluation.dto.AuditDto;
@@ -84,6 +85,7 @@ class ProgrammeEtClotureDAuditTest {
     @Mock private AuditeurService auditeurs;
     @Mock private CodificationDocumentService codification;
     @Mock private FichiersAudit fichiers;
+    @Mock private Annuaire annuaire;
 
     @InjectMocks private AuditService service;
 
@@ -242,6 +244,45 @@ class ProgrammeEtClotureDAuditTest {
         assertThatThrownBy(() -> service.valider(planifie.getId()))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("déjà engagé");
         assertThat(planifie.getStatut()).isEqualTo(StatutAudit.PLANIFIE);
+    }
+
+    @Test
+    @DisplayName("La fiche dit à l'utilisateur connecté s'il est de l'équipe, responsable ou associé")
+    void la_fiche_dit_si_je_suis_de_l_equipe() {
+        Auditeur responsable = Auditeur.builder().utilisateurId("responsable-programme").build();
+        Auditeur associee = Auditeur.builder().utilisateurId("awa").build();
+        audit.setResponsableEquipe(responsable);
+        assertThat(service.lire(audit.getId()).isJeSuisDeLEquipe()).isTrue();
+
+        audit.setResponsableEquipe(null);
+        assertThat(service.lire(audit.getId()).isJeSuisDeLEquipe()).isFalse();
+
+        audit.getMembresEquipe().add(associee);
+        Jwt awa = Jwt.withTokenValue("jeton").header("alg", "none")
+                .subject("awa").claim("direction_id", DIRECTION.toString()).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(awa));
+        assertThat(service.lire(audit.getId()).isJeSuisDeLEquipe()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Le refus nomme l'auditeur, et ne montre jamais son identifiant technique")
+    void le_refus_nomme_l_auditeur() {
+        Auditeur responsable = Auditeur.builder().utilisateurId("7f3c-uuid-keycloak").statut(StatutAuditeur.ACTIF).build();
+        responsable.setId(UUID.randomUUID());
+        Audit planifie = audit(StatutAudit.PLANIFIE);
+        planifie.setResponsableEquipe(responsable);
+        when(auditeurs.estDisponible(any(Auditeur.class), any(), any(), any())).thenReturn(false);
+
+        when(annuaire.personne("7f3c-uuid-keycloak")).thenReturn("Awa Traoré");
+        assertThatThrownBy(() -> service.valider(planifie.getId()))
+                .hasMessageStartingWith("L'auditeur Awa Traoré est inactif")
+                .hasMessageNotContaining("7f3c-uuid-keycloak");
+
+        // Annuaire injoignable : il rend l'identifiant, que le message ne doit pas reprendre.
+        when(annuaire.personne("7f3c-uuid-keycloak")).thenReturn("7f3c-uuid-keycloak");
+        assertThatThrownBy(() -> service.valider(planifie.getId()))
+                .hasMessageStartingWith("Un auditeur de l'équipe est inactif")
+                .hasMessageNotContaining("7f3c-uuid-keycloak");
     }
 
     @Test

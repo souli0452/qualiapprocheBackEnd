@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.evaluation.dto.AuditeurDto;
 import com.qualiapproche.evaluation.dto.ChecklistAuditDto;
+import com.qualiapproche.evaluation.dto.FiltreVivier;
 import com.qualiapproche.evaluation.entities.Auditeur;
 import com.qualiapproche.evaluation.entities.ChecklistAudit;
 import com.qualiapproche.evaluation.enumeration.StatutChecklist;
@@ -46,8 +47,9 @@ class ListesPagineesTest {
 
     private final ChecklistAuditRepository checklists = mock(ChecklistAuditRepository.class);
     private final AuditeurRepository auditeurs = mock(AuditeurRepository.class);
-    private final AuditeurService serviceAuditeurs =
-            new AuditeurService(auditeurs, mock(AuditRepository.class), mock(EvaluationAuditeurRepository.class));
+    private final AuditRepository audits = mock(AuditRepository.class);
+    private final EvaluationAuditeurRepository evaluations = mock(EvaluationAuditeurRepository.class);
+    private final AuditeurService serviceAuditeurs = new AuditeurService(auditeurs, audits, evaluations);
     private final ChecklistAuditService serviceChecklists = new ChecklistAuditService(checklists, serviceAuditeurs);
 
     @BeforeEach
@@ -103,8 +105,34 @@ class ListesPagineesTest {
         when(auditeurs.findAll(any(Specification.class), any(Pageable.class))).thenReturn(Page.empty());
         Pageable parStatut = PageRequest.of(0, 25, Sort.by("statut"));
 
-        serviceAuditeurs.page(List.of("u-1", "u-2"), parStatut);
+        serviceAuditeurs.page(FiltreVivier.builder().utilisateurIds(List.of("u-1", "u-2")).build(), parStatut);
 
         verify(auditeurs).findAll(any(Specification.class), org.mockito.ArgumentMatchers.eq(parStatut));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @DisplayName("La page du vivier porte la moyenne et les audits de l'année de chacun, en requêtes groupées")
+    void la_page_du_vivier_porte_les_chiffres_de_chacun() {
+        Auditeur awa = Auditeur.builder().utilisateurId("awa").build();
+        awa.setId(UUID.randomUUID());
+        Auditeur ali = Auditeur.builder().utilisateurId("ali").build();
+        ali.setId(UUID.randomUUID());
+        when(auditeurs.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(awa, ali)));
+        when(evaluations.moyennes(any())).thenReturn(List.<Object[]>of(new Object[]{awa.getId(), 3.5}));
+        // Awa a mené deux audits comme responsable et un comme auditrice associée ; Ali, un seul.
+        when(audits.realisesCommeResponsablesDepuis(any(), any()))
+                .thenReturn(List.<Object[]>of(new Object[]{awa.getId(), 2L}));
+        when(audits.realisesCommeMembresDepuis(any(), any()))
+                .thenReturn(List.<Object[]>of(new Object[]{awa.getId(), 1L}, new Object[]{ali.getId(), 1L}));
+
+        List<AuditeurDto> page = serviceAuditeurs.page(new FiltreVivier(), PageRequest.of(0, 10)).getContent();
+
+        assertThat(page).extracting(AuditeurDto::getScoreEvaluationMoyen).containsExactly(3.5, null);
+        assertThat(page).extracting(AuditeurDto::getAuditsRealises12Mois).containsExactly(3L, 1L);
+        // Trois requêtes pour toute la page, et non deux par auditeur.
+        verify(evaluations, never()).moyenne(any());
+        verify(audits, never()).realisesDepuis(any(), any());
     }
 }

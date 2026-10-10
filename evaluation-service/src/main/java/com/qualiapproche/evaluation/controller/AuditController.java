@@ -186,9 +186,10 @@ public class AuditController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/{id}/rapport/fichier")
     public ResponseEntity<InputStreamResource> telechargerRapport(@PathVariable("id") UUID id) {
+        String nom = service.nomDuRapport(id);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("rapport-audit"))
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
+                .contentType(EnTeteFichier.typeDe(nom))
                 .body(new InputStreamResource(service.contenuDuRapport(id)));
     }
 

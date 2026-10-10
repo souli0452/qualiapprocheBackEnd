@@ -17,7 +17,8 @@ import static com.qualiapproche.evaluation.controller.AuditUrls.TYPES_CONSTAT;
 @RequirePermissions(
         create = {"audit-config", "CONFIG_GLOBAL_MANAGE"},
         update = {"audit-config", "CONFIG_GLOBAL_MANAGE"},
-        read = {"audit-read", "audit-write", "audit-conduct", "audit-config", "CONFIG_READ"},
+        // audit-validate : le valideur lit la compilation des constats, qu'il faut regrouper par nature.
+        read = {"audit-read", "audit-write", "audit-conduct", "audit-validate", "audit-config", "CONFIG_READ"},
         delete = {"audit-config", "CONFIG_GLOBAL_MANAGE"}
 )
 public class TypeConstatController extends ParametrageSimpleController<TypeConstat> {

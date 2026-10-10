@@ -38,4 +38,27 @@ public interface AuditRepository extends JpaRepository<Audit, UUID>, JpaSpecific
             + "AND a.statut = com.qualiapproche.evaluation.enumeration.StatutAudit.CLOTURE "
             + "AND a.dateFinPrevue >= :depuis")
     long realisesDepuis(@Param("auditeurId") UUID auditeurId, @Param("depuis") LocalDate depuis);
+
+    /**
+     * {@link #realisesDepuis} pour toute une page d'auditeurs : les audits qu'ils ont menés comme
+     * responsables d'équipe. Chaque ligne porte l'identifiant de l'auditeur puis son compte.
+     */
+    @Query("SELECT a.responsableEquipe.id, COUNT(a) FROM Audit a "
+            + "WHERE a.responsableEquipe.id IN :auditeurIds "
+            + "AND a.statut = com.qualiapproche.evaluation.enumeration.StatutAudit.CLOTURE "
+            + "AND a.dateFinPrevue >= :depuis GROUP BY a.responsableEquipe.id")
+    List<Object[]> realisesCommeResponsablesDepuis(@Param("auditeurIds") Collection<UUID> auditeurIds,
+                                                   @Param("depuis") LocalDate depuis);
+
+    /**
+     * Le complément : les audits où ils figuraient parmi les auditeurs associés. Un audit dont
+     * l'auditeur était aussi le responsable est écarté, pour ne pas le compter deux fois.
+     */
+    @Query("SELECT m.id, COUNT(DISTINCT a) FROM Audit a JOIN a.membresEquipe m "
+            + "WHERE m.id IN :auditeurIds "
+            + "AND (a.responsableEquipe IS NULL OR a.responsableEquipe.id <> m.id) "
+            + "AND a.statut = com.qualiapproche.evaluation.enumeration.StatutAudit.CLOTURE "
+            + "AND a.dateFinPrevue >= :depuis GROUP BY m.id")
+    List<Object[]> realisesCommeMembresDepuis(@Param("auditeurIds") Collection<UUID> auditeurIds,
+                                              @Param("depuis") LocalDate depuis);
 }

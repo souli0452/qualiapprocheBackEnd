@@ -33,6 +33,10 @@ public class NiveauEvaluationAuditeur extends AuditEntity implements Retirable {
     @Column(name = "ordre", nullable = false)
     private int ordre;
 
+    /** Teinte du niveau, en {@code #RRGGBB}, reprise partout où il s'affiche. */
+    @Column(name = "couleur", length = 7)
+    private String couleur;
+
     @Builder.Default
     @Column(name = "actif", nullable = false)
     private boolean actif = true;

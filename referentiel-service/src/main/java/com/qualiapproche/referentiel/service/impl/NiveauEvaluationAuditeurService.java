@@ -1,10 +1,12 @@
 package com.qualiapproche.referentiel.service.impl;
 
 import com.qualiapproche.common.dto.NiveauEvaluationAuditeurDto;
+import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.referentiel.entities.NiveauEvaluationAuditeur;
 import com.qualiapproche.referentiel.entities.mappers.NiveauEvaluationAuditeurMapper;
 import com.qualiapproche.referentiel.repository.NiveauEvaluationAuditeurRepository;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -35,10 +37,26 @@ public class NiveauEvaluationAuditeurService
         return Sort.by("ordre");
     }
 
+    /**
+     * Une couleur {@code #RRGGBB}, ou rien. Elle part telle quelle dans le style des écrans :
+     * toute autre forme est refusée plutôt que recopiée.
+     */
+    private static String couleurOuRien(String couleur) {
+        if (couleur == null || couleur.isBlank()) {
+            return null;
+        }
+        String propre = couleur.strip().toLowerCase();
+        if (!propre.matches("#[0-9a-f]{6}")) {
+            throw new BusinessException("La couleur doit s'écrire #RRGGBB (ex : #16a34a).", HttpStatus.BAD_REQUEST);
+        }
+        return propre;
+    }
+
     @Override
     protected void recopier(NiveauEvaluationAuditeurDto saisie, NiveauEvaluationAuditeur cible) {
         cible.setLibelle(exigerTexte(saisie.getLibelle(), "libellé"));
         cible.setOrdre(saisie.getOrdre());
+        cible.setCouleur(couleurOuRien(saisie.getCouleur()));
         if (cible.getId() != null) {
             cible.setActif(saisie.isActif());
         }

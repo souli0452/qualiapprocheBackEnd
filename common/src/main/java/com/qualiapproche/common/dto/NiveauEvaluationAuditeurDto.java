@@ -26,6 +26,9 @@ public class NiveauEvaluationAuditeurDto extends AuditEntityDto {
     @Schema(description = "Rang et valeur du niveau ; le plus haut est le meilleur.", example = "3")
     private int ordre;
 
+    @Schema(description = "Teinte du niveau, en #RRGGBB ; absente, l'écran la déduit du rang.", example = "#16a34a")
+    private String couleur;
+
     @Schema(description = "Faux une fois le niveau retiré : il ne se propose plus dans les choix.")
     private boolean actif;
 }

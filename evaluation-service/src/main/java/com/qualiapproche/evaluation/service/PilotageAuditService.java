@@ -207,6 +207,8 @@ public class PilotageAuditService {
                         .noeudLibelle(n.getNoeud().getLibelle())
                         .niveau(n.getNiveau())
                         .score(n.getScore())
+                        .preuve(n.getPreuve())
+                        .commentaire(n.getCommentaire())
                         .constatRetenu(n.constatRetenu())
                         .statut(n.getStatut())
                         .nonConformiteId(n.getNonConformiteId())

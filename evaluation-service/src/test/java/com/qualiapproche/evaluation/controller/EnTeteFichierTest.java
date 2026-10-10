@@ -40,4 +40,13 @@ class EnTeteFichierTest {
         assertThat(EnTeteFichier.attachement("rapport-audit")).isEqualTo("attachment; filename=\"rapport-audit\"");
         assertThat(EnTeteFichier.attachement(null)).isEqualTo("attachment; filename=\"fichier\"");
     }
+
+    @Test
+    @DisplayName("Le type d'un fichier se déduit de son extension, octet-stream à défaut")
+    void typeDeduitDeLExtension() {
+        assertThat(EnTeteFichier.typeDe("Plan AFNOR 2026.pdf")).hasToString("application/pdf");
+        assertThat(EnTeteFichier.typeDe("rapport.DOCX").toString()).contains("wordprocessingml");
+        assertThat(EnTeteFichier.typeDe("rapport-audit")).hasToString("application/octet-stream");
+        assertThat(EnTeteFichier.typeDe(null)).hasToString("application/octet-stream");
+    }
 }

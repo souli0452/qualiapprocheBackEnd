@@ -48,6 +48,22 @@ public class FichiersAudit {
         }
     }
 
+    /**
+     * Le nom sous lequel garder un fichier déposé : celui du poste de l'utilisateur, sans le
+     * chemin que certains navigateurs y joignent, et borné à la taille de la colonne.
+     */
+    public static String nomDOrigine(MultipartFile fichier) {
+        String nom = fichier.getOriginalFilename();
+        if (nom == null) {
+            return null;
+        }
+        nom = nom.substring(Math.max(nom.lastIndexOf('/'), nom.lastIndexOf('\\')) + 1).strip();
+        if (nom.isEmpty()) {
+            return null;
+        }
+        return nom.length() <= 255 ? nom : nom.substring(nom.length() - 255);
+    }
+
     public InputStream contenu(String reference) {
         if (reference == null) {
             throw new BusinessException("Aucun fichier n'a été chargé.", HttpStatus.NOT_FOUND);

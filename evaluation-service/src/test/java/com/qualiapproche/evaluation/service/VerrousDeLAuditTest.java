@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.config.PermissionChecker;
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.evaluation.client.Annuaire;
 import com.qualiapproche.evaluation.client.Parametrage;
 import com.qualiapproche.evaluation.dto.AuditDto;
 import com.qualiapproche.evaluation.entities.Audit;
@@ -91,6 +92,7 @@ class VerrousDeLAuditTest {
         @Mock private AuditeurService auditeurs;
         @Mock private SignatureRepository signatures;
         @Mock private Parametrage parametrage;
+        @Mock private Annuaire annuaire;
 
         @InjectMocks private AuditService service;
 

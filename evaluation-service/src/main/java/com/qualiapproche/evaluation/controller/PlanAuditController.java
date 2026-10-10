@@ -73,9 +73,10 @@ public class PlanAuditController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/fichier")
     public ResponseEntity<InputStreamResource> telecharger(@PathVariable("auditId") UUID auditId) {
+        String nom = service.nomDuFichier(auditId);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("plan-audit"))
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
+                .contentType(EnTeteFichier.typeDe(nom))
                 .body(new InputStreamResource(service.contenuDuFichier(auditId)));
     }
 }

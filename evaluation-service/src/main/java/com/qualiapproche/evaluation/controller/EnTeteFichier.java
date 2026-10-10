@@ -1,6 +1,8 @@
 package com.qualiapproche.evaluation.controller;
 
 import org.springframework.http.ContentDisposition;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 
 import java.nio.charset.StandardCharsets;
 
@@ -18,6 +20,15 @@ import java.nio.charset.StandardCharsets;
 final class EnTeteFichier {
 
     private EnTeteFichier() {
+    }
+
+    /**
+     * Le type du fichier d'après son extension, pour que le poste l'ouvre avec la bonne
+     * application ; {@code application/octet-stream} quand l'extension ne dit rien. Les
+     * extensions admises au dépôt sont en liste blanche (ReglesDePieceJointe).
+     */
+    static MediaType typeDe(String nom) {
+        return MediaTypeFactory.getMediaType(nom == null ? "" : nom).orElse(MediaType.APPLICATION_OCTET_STREAM);
     }
 
     /**

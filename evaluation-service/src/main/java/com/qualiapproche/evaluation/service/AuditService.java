@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.evaluation.client.Annuaire;
 import com.qualiapproche.evaluation.client.Parametrage;
 import com.qualiapproche.evaluation.dto.ActionMaitriseRisqueDto;
 import com.qualiapproche.evaluation.dto.AuditDto;
@@ -75,6 +76,7 @@ public class AuditService {
     private final AuditeurService auditeurs;
     private final CodificationDocumentService codification;
     private final FichiersAudit fichiers;
+    private final Annuaire annuaire;
 
     @Transactional(readOnly = true)
     public Page<AuditDto> rechercher(FiltreProgramme filtre, Pageable pageable) {
@@ -273,6 +275,7 @@ public class AuditService {
                     + " : son rapport ne se remplace plus.", HttpStatus.CONFLICT);
         }
         audit.setFichierRapport(fichiers.deposer(fichier, audit.getId().toString(), "rapport"));
+        audit.setNomFichierRapport(FichiersAudit.nomDOrigine(fichier));
         if (audit.getReferenceRapport() == null) {
             audit.setReferenceRapport(codification.genererReference(CodificationDocumentService.RAPPORT_AUDIT));
         }
@@ -283,6 +286,13 @@ public class AuditService {
     @Transactional(readOnly = true)
     public InputStream contenuDuRapport(UUID id) {
         return fichiers.contenu(sienOuRien(id).getFichierRapport());
+    }
+
+    /** Le nom sous lequel rendre le rapport chargé, extension comprise. */
+    @Transactional(readOnly = true)
+    public String nomDuRapport(UUID id) {
+        Audit audit = sienOuRien(id);
+        return audit.getNomFichierRapport() != null ? audit.getNomFichierRapport() : "rapport-audit";
     }
 
     @Transactional
@@ -329,15 +339,41 @@ public class AuditService {
         }
         for (Auditeur auditeur : equipe) {
             if (auditeur.aConflitInteret(audit)) {
-                throw new BusinessException("L'auditeur " + auditeur.getUtilisateurId() + " appartient au"
+                throw new BusinessException(nomPourUnMessage(auditeur) + " appartient au"
                         + " processus audité ou le pilote : il ne peut pas l'auditer.", HttpStatus.CONFLICT);
             }
             if (!auditeurs.estDisponible(auditeur, audit.getDateDebutPrevue(), audit.getDateFinPrevue(),
                     audit.getId())) {
-                throw new BusinessException("L'auditeur " + auditeur.getUtilisateurId() + " est inactif ou"
+                throw new BusinessException(nomPourUnMessage(auditeur) + " est inactif ou"
                         + " déjà engagé sur un autre audit pendant cette période.", HttpStatus.CONFLICT);
             }
         }
+    }
+
+    private static boolean estDeLEquipe(Audit audit, String utilisateurId) {
+        if (utilisateurId == null) {
+            return false;
+        }
+        if (audit.getResponsableEquipe() != null
+                && utilisateurId.equals(audit.getResponsableEquipe().getUtilisateurId())) {
+            return true;
+        }
+        return audit.getMembresEquipe().stream().anyMatch(m -> utilisateurId.equals(m.getUtilisateurId()));
+    }
+
+    /**
+     * « L'auditeur Awa Traoré », pour un message lu à l'écran.
+     *
+     * <p>Le message citait l'identifiant Keycloak de l'auditeur, une suite de chiffres que personne
+     * ne sait relier à un collègue. Si l'annuaire ne répond pas, le message reste juste sans le nom
+     * plutôt que d'exposer l'identifiant.</p>
+     */
+    private String nomPourUnMessage(Auditeur auditeur) {
+        String nom = annuaire.personne(auditeur.getUtilisateurId());
+        if (nom == null || nom.isBlank() || nom.equals(auditeur.getUtilisateurId())) {
+            return "Un auditeur de l'équipe";
+        }
+        return "L'auditeur " + nom;
     }
 
     private void recopier(AuditDto saisie, Audit cible) {
@@ -439,6 +475,7 @@ public class AuditService {
                 .joursDeRetard(audit.joursDeRetard(LocalDate.now()))
                 .origineRapport(audit.getOrigineRapport())
                 .rapportCharge(audit.getFichierRapport() != null)
+                .nomFichierRapport(audit.getNomFichierRapport())
                 .referenceRapport(audit.getReferenceRapport())
                 .conclusionsRapport(audit.getConclusionsRapport())
                 .recommandationsRapport(audit.getRecommandationsRapport())
@@ -452,6 +489,7 @@ public class AuditService {
                 .siteIds(List.copyOf(audit.getSiteIds()))
                 .responsableEquipeId(audit.getResponsableEquipe() == null ? null : audit.getResponsableEquipe().getId())
                 .membreEquipeIds(audit.getMembresEquipe().stream().map(Auditeur::getId).toList())
+                .jeSuisDeLEquipe(estDeLEquipe(audit, SecurityUtils.getCurrentUserId()))
                 .checklistIds(audit.getChecklists().stream().map(ChecklistAudit::getId).toList())
                 .actionsMaitriseRisques(audit.getActionsMaitriseRisques().stream()
                         .map(a -> ActionMaitriseRisqueDto.builder()

@@ -93,20 +93,54 @@ public class PlanAuditService {
         return versDto(depot.save(plan));
     }
 
-    /** Charge un plan reçu tout fait ; le plan est créé s'il n'existait pas encore. */
+    /**
+     * Charge le plan qu'un organisme auditeur a transmis ; le plan est créé s'il n'existait pas.
+     *
+     * <p>Réservé aux audits externes et vivants, comme l'élaboration est réservée aux audits
+     * internes : seul l'écran l'empêchait, et un appel direct chargeait un plan sur un audit
+     * interne ou clôturé. Un plan reçu ne prend pas de numéro dans la série des plans : il porte
+     * celui de l'organisme, et le consommer laissait un trou dans la série.</p>
+     */
     @Transactional
     public PlanAuditDto charger(UUID auditId, MultipartFile fichier) {
         Audit audit = audits.sienOuRien(auditId);
-        PlanAudit plan = depot.findByAuditId(audit.getId()).orElseGet(() -> amorcer(audit));
+        if (audit.getStatut().estTermine()) {
+            throw new BusinessException("L'audit " + audit.getReference() + " est " + audit.getStatut()
+                    + " : son plan ne se remplace plus.", HttpStatus.CONFLICT);
+        }
+        if (audit.getType() == null || !audit.getType().isCircuitExterne()) {
+            throw new BusinessException("Le plan d'un audit interne s'élabore dans le système :"
+                    + " seul le plan d'un audit externe se charge.", HttpStatus.CONFLICT);
+        }
+        PlanAudit plan = depot.findByAuditId(audit.getId()).orElseGet(() -> amorcerRecu(audit));
         plan.exigerModifiable();
         plan.setFichierRecu(fichiers.deposer(fichier, audit.getId().toString(), "plan"));
+        plan.setNomFichierRecu(FichiersAudit.nomDOrigine(fichier));
         plan.setOrigine(OrigineDocument.CHARGE);
         return versDto(depot.save(plan));
+    }
+
+    /** Le nom sous lequel rendre le plan chargé, extension comprise. */
+    @Transactional(readOnly = true)
+    public String nomDuFichier(UUID auditId) {
+        PlanAudit plan = sienOuRien(auditId);
+        return plan.getNomFichierRecu() != null ? plan.getNomFichierRecu() : "plan-audit";
     }
 
     @Transactional(readOnly = true)
     public InputStream contenuDuFichier(UUID auditId) {
         return fichiers.contenu(sienOuRien(auditId).getFichierRecu());
+    }
+
+    private PlanAudit amorcerRecu(Audit audit) {
+        return PlanAudit.builder()
+                .audit(audit)
+                .objectifs(audit.getObjectifsAudit())
+                .portee(audit.getPorteeAudit())
+                .criteres(audit.getCriteresAudit())
+                .origine(OrigineDocument.CHARGE)
+                .statut(StatutPlanAudit.BROUILLON)
+                .build();
     }
 
     private PlanAudit amorcer(Audit audit) {
@@ -142,6 +176,7 @@ public class PlanAuditService {
                 .moyensNecessaires(plan.getMoyensNecessaires())
                 .origine(plan.getOrigine())
                 .fichierCharge(plan.getFichierRecu() != null)
+                .nomFichierCharge(plan.getNomFichierRecu())
                 .statut(plan.getStatut())
                 .datePartage(plan.getDatePartage())
                 .activites(plan.getActivites().stream().map(a -> ActivitePlanDto.builder()

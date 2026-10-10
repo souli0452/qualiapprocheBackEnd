@@ -84,6 +84,10 @@ public class PlanAudit extends AuditEntity {
     @Column(name = "fichier_recu", columnDefinition = "TEXT")
     private String fichierRecu;
 
+    /** Nom du fichier tel que l'utilisateur l'a chargé, extension comprise. */
+    @Column(name = "nom_fichier_recu", length = 255)
+    private String nomFichierRecu;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "statut", nullable = false, length = 20)
     private StatutPlanAudit statut;

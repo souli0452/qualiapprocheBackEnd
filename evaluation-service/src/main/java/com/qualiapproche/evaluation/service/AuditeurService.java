@@ -4,24 +4,32 @@ import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.common.spec.Filtres;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.evaluation.dto.AuditeurDto;
+import com.qualiapproche.evaluation.dto.FiltreVivier;
 import com.qualiapproche.evaluation.entities.Audit;
 import com.qualiapproche.evaluation.entities.Auditeur;
+import com.qualiapproche.evaluation.entities.EvaluationAuditeur;
 import com.qualiapproche.evaluation.enumeration.StatutAuditeur;
 import com.qualiapproche.evaluation.repository.AuditRepository;
 import com.qualiapproche.evaluation.repository.AuditeurRepository;
 import com.qualiapproche.evaluation.repository.EvaluationAuditeurRepository;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,21 +51,103 @@ public class AuditeurService {
 
     @Transactional(readOnly = true)
     public List<AuditeurDto> lister() {
-        return depot.findAllByDirectionIdOrderByCreatedAtAsc(Perimetre.exigerUneDirection())
-                .stream().map(this::versDto).toList();
+        return avecSesChiffres(depot.findAllByDirectionIdOrderByCreatedAtAsc(Perimetre.exigerUneDirection())
+                .stream().map(this::versDto).toList());
     }
 
     /**
-     * Le vivier page par page, pour l'écran. Le nom d'un auditeur vit dans l'annuaire et non ici :
-     * la recherche par nom se résout en amont en identifiants d'utilisateurs ({@code utilisateurIds}).
+     * Le vivier page par page, filtré comme l'écran le demande (A4). Le nom d'un auditeur vit dans
+     * l'annuaire et non ici : la recherche par nom se résout en amont en identifiants
+     * d'utilisateurs ({@code utilisateurIds}).
      */
     @Transactional(readOnly = true)
-    public Page<AuditeurDto> page(Collection<String> utilisateurIds, Pageable pageable) {
-        return depot.findAll(Filtres.tous(
+    public Page<AuditeurDto> page(FiltreVivier filtre, Pageable pageable) {
+        FiltreVivier f = filtre == null ? new FiltreVivier() : filtre;
+        Page<AuditeurDto> page = depot.findAll(Filtres.tous(
                         Filtres.<Auditeur>deLaDirection(Perimetre.exigerUneDirection()),
-                        Filtres.parmi("utilisateurId", utilisateurIds)),
+                        Filtres.parmi("utilisateurId", f.getUtilisateurIds()),
+                        Filtres.egal("statut", f.getStatut()),
+                        Filtres.egal("structureAppartenance", f.getStructureId()),
+                        detenantLaCertification(f.getCertification()),
+                        selonSonEvaluation(f)),
                 Filtres.ordonnee(pageable, Sort.by("createdAt")))
                 .map(this::versDto);
+        avecSesChiffres(page.getContent());
+        return page;
+    }
+
+    /** Les auditeurs qui détiennent cette certification, sans tenir compte de la casse. */
+    private static Specification<Auditeur> detenantLaCertification(String certification) {
+        if (certification == null || certification.isBlank()) {
+            return null;
+        }
+        String cherchee = certification.strip().toLowerCase();
+        return (racine, requete, cb) -> {
+            Subquery<Integer> detient = requete.subquery(Integer.class);
+            Root<Auditeur> lui = detient.from(Auditeur.class);
+            Join<Auditeur, String> certifications = lui.join("certifications");
+            detient.select(cb.literal(1)).where(cb.equal(lui, racine), cb.equal(cb.lower(certifications), cherchee));
+            return cb.exists(detient);
+        };
+    }
+
+    /**
+     * Le filtre par évaluation : les seuls non évalués, ou ceux dont la moyenne tombe dans la
+     * tranche d'un niveau. La moyenne est celle que la liste affiche, sur la valeur recopiée de
+     * chaque note.
+     */
+    private static Specification<Auditeur> selonSonEvaluation(FiltreVivier f) {
+        if (f.isNonEvalues()) {
+            return (racine, requete, cb) -> {
+                Subquery<Integer> note = requete.subquery(Integer.class);
+                Root<EvaluationAuditeur> e = note.from(EvaluationAuditeur.class);
+                note.select(cb.literal(1)).where(cb.equal(e.get("auditeur"), racine));
+                return cb.not(cb.exists(note));
+            };
+        }
+        if (f.getMoyenneMin() == null && f.getMoyenneMax() == null) {
+            return null;
+        }
+        return (racine, requete, cb) -> {
+            Subquery<Double> moyenne = requete.subquery(Double.class);
+            Root<EvaluationAuditeur> e = moyenne.from(EvaluationAuditeur.class);
+            moyenne.select(cb.avg(e.get("valeurNiveau"))).where(cb.equal(e.get("auditeur"), racine));
+            List<Predicate> bornes = new ArrayList<>();
+            if (f.getMoyenneMin() != null) {
+                bornes.add(cb.greaterThan(moyenne, f.getMoyenneMin()));
+            }
+            if (f.getMoyenneMax() != null) {
+                bornes.add(cb.lessThanOrEqualTo(moyenne, f.getMoyenneMax()));
+            }
+            return cb.and(bornes.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * Pose sur chaque auditeur sa moyenne d'évaluation et ses audits des douze derniers mois.
+     *
+     * <p>Seule la fiche d'un auditeur les calculait : le portefeuille affichait « Non évalué » et
+     * zéro audit pour tout le monde. Trois requêtes groupées pour toute la liste, plutôt que deux
+     * par auditeur.</p>
+     */
+    private List<AuditeurDto> avecSesChiffres(List<AuditeurDto> auditeurs) {
+        if (auditeurs.isEmpty()) {
+            return auditeurs;
+        }
+        List<UUID> ids = auditeurs.stream().map(AuditeurDto::getId).toList();
+        LocalDate depuis = LocalDate.now().minusMonths(12);
+        Map<UUID, Double> moyennes = new HashMap<>();
+        evaluations.moyennes(ids).forEach(l -> moyennes.put((UUID) l[0], ((Number) l[1]).doubleValue()));
+        Map<UUID, Long> realises = new HashMap<>();
+        audits.realisesCommeResponsablesDepuis(ids, depuis)
+                .forEach(l -> realises.merge((UUID) l[0], ((Number) l[1]).longValue(), Long::sum));
+        audits.realisesCommeMembresDepuis(ids, depuis)
+                .forEach(l -> realises.merge((UUID) l[0], ((Number) l[1]).longValue(), Long::sum));
+        auditeurs.forEach(a -> {
+            a.setScoreEvaluationMoyen(moyennes.get(a.getId()));
+            a.setAuditsRealises12Mois(realises.getOrDefault(a.getId(), 0L));
+        });
+        return auditeurs;
     }
 
     @Transactional(readOnly = true)

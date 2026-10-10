@@ -3,6 +3,7 @@ package com.qualiapproche.evaluation.controller;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.evaluation.dto.AuditeurDto;
+import com.qualiapproche.evaluation.dto.FiltreVivier;
 import com.qualiapproche.evaluation.service.AuditeurService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +43,15 @@ public class AuditeurController {
 
     private final AuditeurService service;
 
-    /** L'écran du vivier, page par page ; {@code utilisateurIds} borne aux personnes cherchées. */
+    /**
+     * L'écran du vivier, page par page, avec ses filtres : {@code utilisateurIds} borne aux
+     * personnes cherchées ; statut, structure, certification et tranche de moyenne d'évaluation.
+     */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping
-    public ResponseEntity<Page<AuditeurDto>> page(
-            @RequestParam(value = "utilisateurIds", required = false) List<String> utilisateurIds,
-            @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(service.page(utilisateurIds, pageable));
+    public ResponseEntity<Page<AuditeurDto>> page(@ParameterObject FiltreVivier filtre,
+                                                  @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(service.page(filtre, pageable));
     }
 
     /** Le vivier entier, pour les listes de choix. */

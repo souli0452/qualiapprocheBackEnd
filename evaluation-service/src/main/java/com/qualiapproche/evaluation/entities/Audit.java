@@ -133,6 +133,10 @@ public class Audit extends AuditEntity {
     @Column(name = "fichier_rapport", columnDefinition = "TEXT")
     private String fichierRapport;
 
+    /** Nom du rapport tel que l'utilisateur l'a chargé, extension comprise. */
+    @Column(name = "nom_fichier_rapport", length = 255)
+    private String nomFichierRapport;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "type_audit_id")
     private TypeAudit type;

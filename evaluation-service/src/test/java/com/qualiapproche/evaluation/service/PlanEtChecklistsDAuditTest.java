@@ -162,6 +162,7 @@ class PlanEtChecklistsDAuditTest {
         @Test
         @DisplayName("Un plan chargé se valide, puis se partage avec l'audité à une date consignée")
         void un_plan_charge_se_valide_puis_se_partage() {
+            audit.setType(TypeAudit.builder().libelle("Certification").circuitExterne(true).build());
             planExistant(StatutPlanAudit.BROUILLON);
             when(fichiers.deposer(any(), any(String[].class))).thenReturn("audits/plan.pdf");
 
@@ -173,6 +174,44 @@ class PlanEtChecklistsDAuditTest {
             assertThat(partage.getStatut()).isEqualTo(StatutPlanAudit.PARTAGE);
             assertThat(partage.getDatePartage()).isNotNull();
             assertThat(partage.isFichierCharge()).isTrue();
+        }
+
+        @Test
+        @DisplayName("Le plan reçu d'un organisme garde son nom de fichier et ne prend pas de numéro PLA")
+        void le_plan_recu_garde_son_nom_sans_numero() {
+            audit.setType(TypeAudit.builder().libelle("Certification").circuitExterne(true).build());
+            when(fichiers.deposer(any(), any(String[].class))).thenReturn("audits/plan.pdf");
+            MultipartFile fichier = mock(MultipartFile.class);
+            when(fichier.getOriginalFilename()).thenReturn("C:\\Users\\awa\\Plan AFNOR 2026.pdf");
+
+            PlanAuditDto plan = service.charger(audit.getId(), fichier);
+
+            assertThat(plan.getNomFichierCharge()).isEqualTo("Plan AFNOR 2026.pdf");
+            assertThat(plan.getReference()).isNull();
+            verify(codification, never()).genererReference(any());
+        }
+
+        @Test
+        @DisplayName("Le plan chargé se rend sous son nom d'origine ; un ancien chargement, sous un nom générique")
+        void le_plan_charge_se_rend_sous_son_nom() {
+            PlanAudit plan = planExistant(StatutPlanAudit.BROUILLON);
+            assertThat(service.nomDuFichier(audit.getId())).isEqualTo("plan-audit");
+
+            plan.setNomFichierRecu("Plan AFNOR 2026.pdf");
+            assertThat(service.nomDuFichier(audit.getId())).isEqualTo("Plan AFNOR 2026.pdf");
+        }
+
+        @Test
+        @DisplayName("Un plan ne se charge ni sur un audit interne, ni sur un audit clôturé")
+        void pas_de_plan_charge_hors_audit_externe_vivant() {
+            assertThatThrownBy(() -> service.charger(audit.getId(), mock(MultipartFile.class)))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("audit interne");
+
+            audit.setType(TypeAudit.builder().libelle("Certification").circuitExterne(true).build());
+            audit.setStatut(StatutAudit.CLOTURE);
+            assertThatThrownBy(() -> service.charger(audit.getId(), mock(MultipartFile.class)))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("ne se remplace plus");
+            verify(fichiers, never()).deposer(any(), any(String[].class));
         }
 
         @Test

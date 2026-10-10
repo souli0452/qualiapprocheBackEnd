@@ -41,6 +41,7 @@ public class AuditDto {
     private Double scoreMaturite;
     private OrigineDocument origineRapport;
     private boolean rapportCharge;
+    private String nomFichierRapport;
     private String referenceRapport;
     private String conclusionsRapport;
     private String recommandationsRapport;
@@ -58,6 +59,12 @@ public class AuditDto {
     private List<UUID> siteIds;
     private UUID responsableEquipeId;
     private List<UUID> membreEquipeIds;
+    /**
+     * L'utilisateur connecté fait-il partie de l'équipe (responsable ou auditeur associé) ?
+     * Calculé pour lui à chaque lecture, jamais saisi : l'écran s'en sert pour n'offrir les gestes
+     * d'équipe qu'à ceux que le serveur laissera faire.
+     */
+    private boolean jeSuisDeLEquipe;
     private List<UUID> checklistIds;
     @Valid
     private List<ActionMaitriseRisqueDto> actionsMaitriseRisques;

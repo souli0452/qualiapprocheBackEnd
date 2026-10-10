@@ -32,6 +32,7 @@ public class PlanAuditDto {
     private String moyensNecessaires;
     private OrigineDocument origine;
     private boolean fichierCharge;
+    private String nomFichierCharge;
     private StatutPlanAudit statut;
     private LocalDateTime datePartage;
     @Valid
