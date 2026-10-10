@@ -1,7 +1,6 @@
 package com.qualiapproche.amelioration.service.impl;
 
 import com.qualiapproche.amelioration.client.ReferentielClient;
-import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.mappers.NonConformiteMapper;
 import com.qualiapproche.amelioration.repository.NiveauNonConformiteRepository;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
@@ -87,13 +86,10 @@ public class NonConformitesDAuditService {
         }
 
         try {
-            NonConformiteDto creee = service.createNonConformite(dto, structureId.toString());
-            NonConformite nc = nonConformites.findById(creee.getId()).orElseThrow();
-            nc.setCleOrigine(ecart.getCleOrigine());
-            nonConformites.save(nc);
+            NonConformiteDto creee = service.createNonConformite(dto, structureId.toString(), ecart.getCleOrigine());
             log.info("Non-conformité {} ouverte depuis l'écart d'audit {}.", creee.getNumeroReference(),
                     ecart.getCleOrigine());
-            return mapper.toDto(nc);
+            return creee;
         } catch (IOException e) {
             throw new BusinessException("La non-conformité issue de l'audit n'a pas pu être enregistrée.",
                     HttpStatus.INTERNAL_SERVER_ERROR);

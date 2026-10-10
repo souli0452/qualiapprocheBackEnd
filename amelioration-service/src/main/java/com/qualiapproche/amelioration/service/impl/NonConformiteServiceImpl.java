@@ -224,7 +224,25 @@ public class NonConformiteServiceImpl
 
     @Override
     public NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException {
+        return createNonConformite(dto, structureDuDossier, null);
+    }
+
+    /**
+     * Crée le dossier ; {@code cleOrigine} désigne l'écart d'audit qui l'ouvre, s'il y en a un.
+     *
+     * <p>L'ordre des gestes est délibéré. La ligne est écrite tout de suite ({@code flush}) : une
+     * contrainte violée — écart d'audit déjà transmis, numéro déjà pris — se révèle alors avant
+     * tout appel au dehors. Les pièces viennent ensuite, et l'ouverture du circuit en dernier :
+     * elle était faite avant les pièces, si bien qu'un échec de celles-ci annulait le dossier mais
+     * laissait chez le moteur un circuit « en cours » sur un dossier qui n'existait pas.</p>
+     */
+    @Transactional
+    public NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier, String cleOrigine)
+            throws IOException {
         NonConformite nonConformite = nonConformiteMapper.toEntity(dto);
+        // Écrite avec le dossier, et non par une seconde transaction : deux transmissions du même
+        // écart laissaient sinon un second dossier, sans clé, que l'idempotence ne voyait plus.
+        nonConformite.setCleOrigine(cleOrigine);
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
         nonConformite.setOriginNonConformiteLibelle(dto.getOriginNonConformiteLibelle());
@@ -249,7 +267,9 @@ public class NonConformiteServiceImpl
 
 
         // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
-        NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
+        NonConformite savedNonConformite = nonConformiteRepository.saveAndFlush(nonConformite);
+
+        ncFichierService.synchroniser(dto.getFichiers(), savedNonConformite.getId());
 
         // Initialiser le workflow : une indisponibilité de workflow-service ne doit pas bloquer
         // la création de la non-conformité (aligné sur la politique déjà utilisée pour PlanAction).
@@ -275,8 +295,6 @@ public class NonConformiteServiceImpl
             log.error("Erreur lors de l'initialisation du workflow NON_CONFORMITE pour {} : {}",
                     savedNonConformite.getId(), e.getMessage());
         }
-
-        ncFichierService.synchroniser(dto.getFichiers(), savedNonConformite.getId());
 
         return populateAttachments(nonConformiteMapper.toDto(savedNonConformite));
     }
@@ -632,11 +650,62 @@ public class NonConformiteServiceImpl
 
     @Transactional
     public void delete(UUID id) {
-        if (nonConformiteRepository.existsById(id)) {
-            nonConformiteRepository.deleteById(id);
+        supprimerLeDossier(nonConformiteRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.")));
+    }
+
+    /**
+     * Supprime un dossier et tout ce qui n'existe que par lui.
+     *
+     * <p>La suppression n'emportait que la ligne du dossier : ses plans d'action restaient en base
+     * — liés par {@code plan_action.non_conforme_id}, que la collection {@code planActions} ne lit
+     * pas —, leurs circuits restaient « en cours » chez le moteur, et les pièces restaient sur le
+     * serveur de fichiers. Tout part désormais : les plans dans la transaction, le moteur et les
+     * fichiers <b>après</b> son commit — une suppression qui échoue ne doit rien avoir détruit
+     * ailleurs.</p>
+     *
+     * <p>Un dossier ouvert par un audit ne se supprime pas : le constat y renvoie, et ne le
+     * retransmettrait jamais — la trace de l'écart serait perdue des deux côtés.</p>
+     */
+    private void supprimerLeDossier(NonConformite nc) {
+        if (nc.getCleOrigine() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La non-conformité " + nc.getNumeroReference()
+                    + " a été ouverte par un audit, qui y renvoie : elle ne peut pas être supprimée.");
+        }
+        UUID id = nc.getId();
+        List<UUID> plans = planActionRepository.findPlanActionsByNonConformeId(id).stream()
+                .map(PlanAction::getId).toList();
+        planActionRepository.deleteAllById(plans);
+        nonConformiteRepository.delete(nc);
+        nonConformiteRepository.flush();
+        apresLeCommit(() -> {
             oublierChezLeMoteur(id);
+            plans.forEach(this::oublierChezLeMoteur);
+            purgerLesPieces(id);
+            plans.forEach(this::purgerLesPieces);
+        });
+    }
+
+    private static void apresLeCommit(Runnable geste) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            geste.run();
+                        }
+                    });
         } else {
-            throw new ResponseStatusException(HttpStatus.OK, "Cette NonConformité n'existe pas.");
+            geste.run();
+        }
+    }
+
+    /** Les pièces du dossier (ou d'un de ses plans), contenu compris ; un échec se journalise. */
+    private void purgerLesPieces(UUID dossierId) {
+        try {
+            fichierService.supprimerTout(dossierId);
+        } catch (Exception e) {
+            log.warn("Pièces du dossier {} non purgées du serveur de fichiers : {}", dossierId, e.getMessage());
         }
     }
 
@@ -655,10 +724,7 @@ public class NonConformiteServiceImpl
                         "Actualité invalide, impossible de supprimer.");
             }
         });
-        nonConformiteDtos.forEach(dto -> {
-            nonConformiteRepository.deleteById(dto.getId());
-            oublierChezLeMoteur(dto.getId());
-        });
+        nonConformiteDtos.forEach(dto -> supprimerLeDossier(nonConformiteRepository.findById(dto.getId()).orElseThrow()));
     }
 
     /**

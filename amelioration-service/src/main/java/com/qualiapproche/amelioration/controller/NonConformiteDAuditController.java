@@ -46,7 +46,15 @@ public class NonConformiteDAuditController {
         return service.dejaOuverte(ecart.getCleOrigine())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> {
-                    NonConformiteDto creee = service.ouvrir(ecart);
+                    NonConformiteDto creee;
+                    try {
+                        creee = service.ouvrir(ecart);
+                    } catch (org.springframework.dao.DataIntegrityViolationException course) {
+                        // Une transmission concurrente du même écart vient d'ouvrir le dossier : on
+                        // rend le sien, comme si elle était arrivée la première — ce qu'elle a fait.
+                        return service.dejaOuverte(ecart.getCleOrigine()).map(ResponseEntity::ok)
+                                .orElseThrow(() -> course);
+                    }
                     return ResponseEntity.ok(ecart.isSoumettre() ? service.soumettre(creee.getId()) : creee);
                 });
     }

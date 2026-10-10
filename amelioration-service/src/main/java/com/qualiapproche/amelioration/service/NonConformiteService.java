@@ -25,6 +25,9 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
      */
     NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException;
 
+    /** Comme {@link #createNonConformite(NonConformiteDto, String)}, pour un dossier ouvert par un écart d'audit. */
+    NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier, String cleOrigine) throws IOException;
+
     /**
      * Soumet au pilote du processus une non-conformité enregistrée, sans attendre une seconde visite
      * de son auteur.
