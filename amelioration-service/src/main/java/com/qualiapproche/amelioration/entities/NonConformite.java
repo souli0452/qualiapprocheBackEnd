@@ -43,6 +43,15 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 @Table(name = "quali_nc")
 public class NonConformite extends AuditEntity {
+  /**
+   * Verrou optimiste : deux écritures concurrentes sur le même dossier — un webhook du circuit et la
+   * saisie d'un utilisateur, deux décideurs — ne s'écrasent plus en silence ; la seconde reçoit un
+   * conflit (409) et relit le dossier. Distinct de {@code version}, qui est une donnée métier.
+   */
+  @jakarta.persistence.Version
+  @jakarta.persistence.Column(name = "verrou_version", nullable = false)
+  private long verrouVersion;
+
   private String numeroReference;
   private String version;
   private String origineId;

@@ -39,6 +39,15 @@ import java.util.UUID;
 @NoArgsConstructor
 @Table(name = "constat")
 public class Constat extends AuditEntity {
+    /**
+     * Verrou optimiste : deux écritures concurrentes sur le même dossier — un webhook du circuit et la
+     * saisie d'un utilisateur, deux décideurs — ne s'écrasent plus en silence ; la seconde reçoit un
+     * conflit (409) et relit le dossier.
+     */
+    @jakarta.persistence.Version
+    @jakarta.persistence.Column(name = "verrou_version", nullable = false)
+    private long verrouVersion;
+
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "audit_id", nullable = false)

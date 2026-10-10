@@ -50,6 +50,15 @@ import java.util.UUID;
 @NoArgsConstructor
 @Table(name = "audit")
 public class Audit extends AuditEntity {
+    /**
+     * Verrou optimiste : deux écritures concurrentes sur le même dossier — un webhook du circuit et la
+     * saisie d'un utilisateur, deux décideurs — ne s'écrasent plus en silence ; la seconde reçoit un
+     * conflit (409) et relit le dossier.
+     */
+    @jakarta.persistence.Version
+    @jakarta.persistence.Column(name = "verrou_version", nullable = false)
+    private long verrouVersion;
+
 
     @Column(name = "reference", nullable = false, length = 60)
     private String reference;
