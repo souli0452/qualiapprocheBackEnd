@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.service.impl;
 
 import java.io.IOException;
+import com.qualiapproche.amelioration.numerotation.NumerotationDesNonConformites;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -133,6 +134,7 @@ public class NonConformiteServiceImpl
     private final WorkflowClient workflowClient;
     private final PlansActionDeLaNonConformiteService plansActionService;
     private final PermissionChecker permissionChecker;
+    private final NumerotationDesNonConformites numerotation;
 
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -672,13 +674,11 @@ public class NonConformiteServiceImpl
         return nonConformites.map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
+    /**
+     * Le numéro de la non-conformité, tiré de la série de sa structure pour l'année (voir
+     * {@code NumerotationDesNonConformites}). Le sigle vient du référentiel ; à défaut, du libellé reçu.
+     */
     public String genererNumeroReference(String structureSoumissionId, String structureSoumissionLibelle) {
-        final String prefix = "NFQT";
-        final int annee = LocalDate.now().getYear();
-
-        Integer dernierNumero = nonConformiteRepository.findDernierNumero(structureSoumissionId, annee);
-        int nouveauNumero = (dernierNumero != null) ? dernierNumero + 1 : 1;
-
         String sigle = structureSoumissionLibelle;
         if (structureSoumissionId != null) {
             try {
@@ -690,9 +690,7 @@ public class NonConformiteServiceImpl
                 log.error("Error fetching structure sigle for reference generation: {}", e.getMessage());
             }
         }
-
-        String numeroFormate = String.format("%05d", nouveauNumero);
-        return String.format("%s-%s-%d-%s", prefix, sigle.toUpperCase().replaceAll("\\s+", "_"), annee, numeroFormate);
+        return numerotation.attribuer(structureSoumissionId, sigle, LocalDate.now().getYear());
     }
 
     @Override

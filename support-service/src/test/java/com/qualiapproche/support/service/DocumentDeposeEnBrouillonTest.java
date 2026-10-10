@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -56,6 +57,9 @@ class DocumentDeposeEnBrouillonTest {
         workflowClient = mock(WorkflowClient.class);
         typeService = mock(QmsDocumentTypeService.class);
 
+        com.qualiapproche.support.numerotation.NumerotationDesDocuments numerotation =
+                mock(com.qualiapproche.support.numerotation.NumerotationDesDocuments.class);
+        when(numerotation.attribuer(anyString(), anyString(), anyInt())).thenReturn("PRO-DQA-2026-001");
         service = new QmsDocumentService(
                 documentRepository,
                 mock(QmsDocumentVersionRepository.class),
@@ -68,7 +72,8 @@ class DocumentDeposeEnBrouillonTest {
                 typeService,
                 mock(MailService.class),
                 workflowClient,
-                mock(EtatsDuCircuitService.class));
+                mock(EtatsDuCircuitService.class),
+                numerotation);
 
         QmsDocumentType type = QmsDocumentType.builder()
                 .code("PRO").libelle("Procédure").folderName("Procedures").build();

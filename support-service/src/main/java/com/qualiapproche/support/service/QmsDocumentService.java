@@ -38,6 +38,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
+import com.qualiapproche.support.numerotation.NumerotationDesDocuments;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -82,6 +83,7 @@ public class QmsDocumentService {
     private final MailService mailService;
     private final WorkflowClient workflowClient;
     private final EtatsDuCircuitService etatsDuCircuit;
+    private final NumerotationDesDocuments numerotationDesDocuments;
 
     /**
      * Creates a new Quality Document (auto-numbering, classification, upload to Minio, persist metadata).
@@ -1935,23 +1937,9 @@ public class QmsDocumentService {
         return getSharedDocuments(currentUserId);
     }
 
+    /** Tiré de la série du préfixe, dans la transaction de création (voir NumerotationDesDocuments). */
     private String generateDocumentNumber(String typeCode, String serviceSigle) {
-        String year = String.valueOf(LocalDate.now().getYear());
-        String prefix = typeCode.toUpperCase() + "-" + serviceSigle.toUpperCase() + "-" + year + "-";
-
-        String maxDocNum = documentRepository.findMaxDocumentNumberByPrefix(prefix);
-        int nextSeq = 1;
-
-        if (maxDocNum != null && maxDocNum.startsWith(prefix)) {
-            String seqStr = maxDocNum.substring(prefix.length());
-            try {
-                nextSeq = Integer.parseInt(seqStr) + 1;
-            } catch (NumberFormatException e) {
-                log.warn("Failed to parse sequence suffix from: {}", maxDocNum);
-            }
-        }
-
-        return prefix + String.format("%03d", nextSeq);
+        return numerotationDesDocuments.attribuer(typeCode, serviceSigle, LocalDate.now().getYear());
     }
 
     public String getDocumentDisplayState(DocumentQms doc) {

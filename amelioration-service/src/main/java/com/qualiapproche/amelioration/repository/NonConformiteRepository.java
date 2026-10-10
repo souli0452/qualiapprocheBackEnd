@@ -43,10 +43,13 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId, Pageable pageable);
 
+        /** Le plus grand rang déjà émis : point de départ d'une série créée après coup. */
         @Query("SELECT MAX(CAST(SUBSTRING(n.numeroReference, LENGTH(n.numeroReference) - 4) AS integer)) " +
                         "FROM NonConformite n WHERE n.structureSoumissionId = :structureSoumissionId " +
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
         Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
+
+        boolean existsByStructureSoumissionIdAndNumeroReference(String structureSoumissionId, String numeroReference);
 
         /** Le dossier déjà ouvert pour cet écart d'origine, s'il l'a été : voir NonConformite.cleOrigine. */
         java.util.Optional<NonConformite> findByCleOrigine(String cleOrigine);
