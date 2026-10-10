@@ -95,6 +95,19 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(ApiResponse.error(message, status.value()), status);
     }
 
+    /**
+     * Une écriture que la base refuse — clé étrangère, unicité — est un conflit avec l'état des
+     * données, pas une panne. Les services qui savent nommer la cause le font eux-mêmes ; ceci est
+     * le filet des autres, qui répondaient 500.
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        LOG.warn("Écriture refusée par une contrainte de la base : {}", ex.getMostSpecificCause().getMessage());
+        return new ResponseEntity<>(ApiResponse.error("Opération refusée : elle contredit l'état des données "
+                + "(élément encore employé ailleurs, ou déjà existant).", HttpStatus.CONFLICT.value()), HttpStatus.CONFLICT);
+    }
+
     /** Un paramètre d'adresse du mauvais type (un identifiant qui n'est pas un UUID) est une erreur de l'appelant. */
     @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(

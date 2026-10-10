@@ -577,11 +577,55 @@ public class NonConformiteServiceImpl
 
     @Override
     public NonConformiteDto getNonConformiteById(UUID id) {
-        if (nonConformiteRepository.existsById(id)) {
-            return populateAttachments(nonConformiteMapper.toDto(nonConformiteRepository.getReferenceById(id)));
-        } else {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.");
+        NonConformite nc = nonConformiteRepository.findById(id)
+                .filter(this::peutConsulter)
+                // Même réponse qu'un dossier inexistant : « il existe, mais pas pour vous » en dirait trop.
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas."));
+        return populateAttachments(nonConformiteMapper.toDto(nc));
+    }
+
+    /**
+     * Qui peut ouvrir la fiche d'un dossier.
+     *
+     * <p>La fiche se lisait par son seul identifiant, sans aucune borne, alors que la liste l'est :
+     * tout agent connecté lisait le dossier de n'importe quelle structure, pièces jointes comprises.
+     * La règle est désormais celle de la liste — sa structure, déclaré ou imputé, portée
+     * transverse — élargie aux acteurs du dossier qu'une autre structure peut fournir : le
+     * responsable d'un de ses plans d'action, et quiconque doit décider à une étape de son circuit
+     * ou de celui d'un de ses plans. Les appels au service de circuit ne se font qu'en dernier
+     * recours.</p>
+     */
+    public boolean peutConsulter(NonConformite nc) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES, PermissionsPortee.DECIDER_PARTOUT)) {
+            return true;
         }
+        String structure = SecurityUtils.getCurrentUserStructureId();
+        String moi = SecurityUtils.getCurrentUserId();
+        if (structure != null && (structure.equals(nc.getStructureSoumissionId()) || structure.equals(nc.getOrigineId()))) {
+            return true;
+        }
+        if (moi == null) {
+            return false;
+        }
+        if (moi.equals(nc.getCreatedById()) || moi.equals(nc.getUserImputId())) {
+            return true;
+        }
+        List<PlanAction> plans = planActionRepository.findPlanActionsByNonConformeId(nc.getId());
+        if (plans.stream().anyMatch(p -> p.getResponsableId() != null && moi.equals(p.getResponsableId().toString()))) {
+            return true;
+        }
+        try {
+            if (workflowClient.ressourcesADecider("NON_CONFORMITE").contains(nc.getId())) {
+                return true;
+            }
+            if (!plans.isEmpty()) {
+                List<UUID> aDecider = workflowClient.ressourcesADecider("PLAN_ACTION");
+                return plans.stream().anyMatch(p -> aDecider.contains(p.getId()));
+            }
+        } catch (Exception e) {
+            log.warn("Circuit injoignable pour juger de l'accès au dossier {} : accès refusé. {}", nc.getId(), e.getMessage());
+        }
+        return false;
     }
 
     @Override

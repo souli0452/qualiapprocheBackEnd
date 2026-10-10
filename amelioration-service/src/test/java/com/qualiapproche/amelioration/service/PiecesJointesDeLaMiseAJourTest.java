@@ -86,9 +86,8 @@ class PiecesJointesDeLaMiseAJourTest {
         enBase = new NonConformite();
         enBase.setId(DOSSIER);
         when(nonConformiteRepository.findById(DOSSIER)).thenReturn(Optional.of(enBase));
-        // La lecture par identifiant passe par existsById/getReferenceById, non par findById.
-        when(nonConformiteRepository.existsById(DOSSIER)).thenReturn(true);
-        when(nonConformiteRepository.getReferenceById(DOSSIER)).thenReturn(enBase);
+        // Appelant de portée transverse : ce test porte sur les pièces, non sur l'accès à la fiche.
+        when(permissionChecker.detient(org.mockito.ArgumentMatchers.any(String[].class))).thenReturn(true);
         when(nonConformiteRepository.save(any(NonConformite.class))).thenAnswer(a -> a.getArgument(0));
         when(nonConformiteMapper.toDto(any(NonConformite.class))).thenReturn(new NonConformiteDto());
     }

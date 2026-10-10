@@ -72,8 +72,9 @@ class PlansVisiblesSurLaFicheTest {
         fiche = new NonConformiteDto();
         fiche.setId(dossier);
 
-        when(nonConformiteRepository.existsById(dossier)).thenReturn(true);
-        when(nonConformiteRepository.getReferenceById(dossier)).thenReturn(new NonConformite());
+        when(nonConformiteRepository.findById(dossier)).thenReturn(java.util.Optional.of(new NonConformite()));
+        // Appelant de portée transverse : ce test porte sur les plans montrés, non sur l'accès à la fiche.
+        when(permissionChecker.detient(org.mockito.ArgumentMatchers.any(String[].class))).thenReturn(true);
         when(nonConformiteMapper.toDto(any(NonConformite.class))).thenReturn(fiche);
         when(fichierService.getPjByEntityId(any())).thenReturn(List.of());
     }

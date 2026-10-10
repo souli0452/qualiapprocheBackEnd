@@ -94,4 +94,55 @@ class NonConformiteVisibiliteTest {
         verify(nonConformiteRepository).findAll(any(Pageable.class));
         verify(nonConformiteRepository, never()).findVisiblesPar(anyString(), anyString(), any());
     }
+
+    // ------------------------------------------------------------------ la fiche d'un dossier
+
+    private com.qualiapproche.amelioration.entities.NonConformite dossier(String structure, String imputeA) {
+        com.qualiapproche.amelioration.entities.NonConformite nc = new com.qualiapproche.amelioration.entities.NonConformite();
+        nc.setId(java.util.UUID.randomUUID());
+        nc.setStructureSoumissionId(structure);
+        nc.setUserImputId(imputeA);
+        return nc;
+    }
+
+    private void connecte(String sub, String structure) {
+        org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t")
+                .header("alg", "none").subject(sub).claim("structure_id", structure).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void deconnecter() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("La fiche d'un dossier d'une autre structure, sans lien avec l'appelant, est introuvable")
+    void fiche_d_une_autre_structure_introuvable() {
+        connecte("agent-gsi", "GSI");
+        var nc = dossier("DQA", "quelqu-un");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+        when(nonConformiteRepository.findById(nc.getId())).thenReturn(java.util.Optional.of(nc));
+        when(workflowClient.ressourcesADecider(anyString())).thenReturn(java.util.List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getNonConformiteById(nc.getId()))
+                .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatusCode().value()).isEqualTo(404));
+    }
+
+    @Test
+    @DisplayName("La fiche s'ouvre à sa structure, à l'imputé, et à qui doit décider sur son circuit")
+    void fiche_ouverte_aux_acteurs() {
+        var nc = dossier("DQA", "impute-1");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+        when(workflowClient.ressourcesADecider("NON_CONFORMITE")).thenReturn(java.util.List.of(nc.getId()));
+
+        connecte("x", "DQA");
+        org.assertj.core.api.Assertions.assertThat(service.peutConsulter(nc)).isTrue();
+        connecte("impute-1", "GSI");
+        org.assertj.core.api.Assertions.assertThat(service.peutConsulter(nc)).isTrue();
+        connecte("decideur-gmq", "GMQ");
+        org.assertj.core.api.Assertions.assertThat(service.peutConsulter(nc)).isTrue();
+    }
 }
