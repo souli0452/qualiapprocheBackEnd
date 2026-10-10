@@ -1,5 +1,6 @@
 package com.qualiapproche.userservice.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.userservice.entities.AppRole;
@@ -10,6 +11,7 @@ import com.qualiapproche.userservice.service.AppRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,8 +24,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Rôles applicatifs : les permissions effectives de chacun.
+ *
+ * <p>La lecture reste ouverte (l'écran d'attribution et les circuits listent les rôles) ; créer,
+ * modifier ou attribuer un rôle exige {@code ROLE_MANAGE}. C'était jusqu'ici ouvert à tout compte
+ * connecté, qui pouvait donc se forger un rôle aux permissions de son choix et se l'attribuer.</p>
+ */
 @RestController
 @RequestMapping("/api/v1/app-roles")
+@RequirePermissions(
+        create = {"ROLE_MANAGE"},
+        update = {"ROLE_MANAGE"},
+        read = {},
+        delete = {"ROLE_MANAGE"}
+)
 @RequiredArgsConstructor
 public class AppRoleController {
 
@@ -55,11 +70,13 @@ public class AppRoleController {
      * n'importe quelle réécriture, renommage compris ; les règles sont désormais portées par
      * {@link AppRoleService#enregistrer(AppRole)}.
      */
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping
     public AppRole createRole(@RequestBody AppRole role) {
         return appRoleService.enregistrer(role);
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PostMapping("/assign")
     public UserRoleAssignment assignRoleToUser(@RequestParam String userId, @RequestParam UUID roleId) {
         AppRole role = appRoleRepository.findById(roleId)

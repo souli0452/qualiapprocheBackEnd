@@ -1,14 +1,23 @@
 package com.qualiapproche.userservice.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Création et modification des rôles applicatifs, sous la règle qui fait du <b>nom</b> du rôle son
@@ -34,6 +43,11 @@ import java.util.List;
  *       de ces résolutions, et ferait lever {@code findByName}.</li>
  * </ul>
  *
+ * <p>Troisième règle : <b>un rôle ne porte que des permissions du dictionnaire</b>
+ * ({@code permissions.json}, celui que l'écran propose). Le point d'entrée acceptait n'importe
+ * quelle chaîne : {@code SUPER_ADMIN}, {@code SERVICE_TECHNIQUE} ou une permission d'un autre
+ * service se forgeaient, puis la passerelle les relayait à tous les services.</p>
+ *
  * <p>Le libellé reste donc figé une fois publié, comme le code d'une étape ou d'une entrée de
  * catalogue. La description, elle, se modifie librement : c'est là que se corrige la formulation
  * présentée à l'écran d'attribution.</p>
@@ -42,7 +56,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AppRoleService {
 
+    private static final String DICTIONNAIRE = "permissions.json";
+
     private final AppRoleRepository appRoleRepository;
+
+    /** Les valeurs du dictionnaire, lues une fois. */
+    private volatile Set<String> permissionsConnues;
 
     @Transactional
     public AppRole enregistrer(AppRole role) {
@@ -51,8 +70,36 @@ public class AppRoleService {
             throw new BusinessException("Le nom du rôle est obligatoire.", HttpStatus.BAD_REQUEST);
         }
         role.setName(nom);
+        exigerDesPermissionsConnues(role.getPermissions());
 
         return role.getId() == null ? creer(role) : modifier(role, nom);
+    }
+
+    private void exigerDesPermissionsConnues(List<String> permissions) {
+        if (permissions == null || permissions.isEmpty()) {
+            return;
+        }
+        Set<String> connues = permissionsConnues();
+        List<String> inconnues = permissions.stream().filter(p -> p == null || !connues.contains(p)).toList();
+        if (!inconnues.isEmpty()) {
+            throw new BusinessException("Permission(s) inconnue(s) du dictionnaire : " + inconnues
+                    + ". Un rôle ne porte que les permissions proposées à l'écran d'administration.",
+                    HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private Set<String> permissionsConnues() {
+        Set<String> connues = permissionsConnues;
+        if (connues == null) {
+            try (InputStream is = new ClassPathResource(DICTIONNAIRE).getInputStream()) {
+                List<Map<String, String>> entrees = new ObjectMapper().readValue(is, new TypeReference<>() { });
+                connues = entrees.stream().map(e -> e.get("value")).collect(Collectors.toUnmodifiableSet());
+            } catch (IOException e) {
+                throw new UncheckedIOException("Dictionnaire des permissions illisible : " + DICTIONNAIRE, e);
+            }
+            permissionsConnues = connues;
+        }
+        return connues;
     }
 
     private AppRole creer(AppRole role) {

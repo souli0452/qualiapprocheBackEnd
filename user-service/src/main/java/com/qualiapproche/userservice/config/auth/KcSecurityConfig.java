@@ -65,7 +65,6 @@ public class KcSecurityConfig {
                             "/swagger-ui/**",
                             "/v3/api-docs/**",
                             "/webjars/**",
-                            "/test/**",
                             "/api/v1/login",
                             "/api/v1/refresh",
                             "/api/v1/logout",

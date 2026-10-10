@@ -1,6 +1,7 @@
 package com.qualiapproche.userservice.service;
 
 import com.qualiapproche.common.service.SendMailService;
+import com.qualiapproche.userservice.entities.JetonDeCompte;
 import com.qualiapproche.userservice.config.auth.CookieUtils;
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
 
@@ -59,6 +60,7 @@ public class KcUserService {
     private final SendMailService sendMailService;
     private final PlafondDUtilisateurs plafondDUtilisateurs;
     private final ProfilPersonnel profilPersonnel;
+    private final JetonsDeCompte jetons;
     @Value("${frontend.url}")
     private String frontendUrl;
 
@@ -194,7 +196,9 @@ public class KcUserService {
 
         // Envoi de l'email de vérification avec le mot de passe temporaire
         try {
-            String token = java.util.UUID.randomUUID().toString();
+            // Le jeton était tiré au hasard puis oublié : la vérification ne le lisait pas.
+            String token = jetons.emettre(userId, JetonDeCompte.Usage.VERIFICATION_COURRIEL,
+                    JetonsDeCompte.DUREE_VERIFICATION);
             String verificationUrl = frontendUrl + "/verify-email?token=" + token + "&userId=" + userId;
             sendMailService.sendVerificationEmail(
                 kcUserDto.getEmail(),
@@ -262,6 +266,9 @@ public class KcUserService {
     }
 
     public void emailVerification(String userId, String token) {
+        // Le jeton du lien d'abord : sans lui, connaître l'identifiant d'un compte suffisait à
+        // en marquer l'adresse vérifiée et à rendre permanent son mot de passe temporaire.
+        jetons.consommer(userId, JetonDeCompte.Usage.VERIFICATION_COURRIEL, token);
         UserResource userResource = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId);
         UserRepresentation user = userResource.toRepresentation();
 
@@ -283,10 +290,37 @@ public class KcUserService {
         return keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation().isEmailVerified();
     }
 
+    /**
+     * Envoie un lien de réinitialisation à l'adresse, si un compte actif la porte.
+     *
+     * <p>La réponse est la même dans tous les cas : dire « aucun compte » permettrait de sonder
+     * l'annuaire adresse par adresse. Une panne d'envoi se journalise sans se dire, pour la même
+     * raison.</p>
+     */
     public void initiatePasswordReset(String email) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        List<UserRepresentation> trouves = keycloak.realm(kcAuthProperties.getRealm()).users()
+                .searchByEmail(email.trim(), true);
+        if (trouves.size() != 1 || !Boolean.TRUE.equals(trouves.get(0).isEnabled())) {
+            log.info("Réinitialisation demandée pour une adresse sans compte actif unique");
+            return;
+        }
+        String userId = trouves.get(0).getId();
+        String token = jetons.emettre(userId, JetonDeCompte.Usage.REINITIALISATION,
+                JetonsDeCompte.DUREE_REINITIALISATION);
+        String lien = frontendUrl + "/reset-password?token=" + token + "&userId=" + userId;
+        try {
+            sendMailService.sendReinitializePasswordEmail(trouves.get(0).getEmail(), lien);
+        } catch (Exception e) {
+            log.error("Lien de réinitialisation non envoyé au compte {} : {}", userId, e.getMessage());
+        }
     }
 
+    /** Fixe le nouveau mot de passe, sur présentation du jeton reçu par courriel — et de lui seul. */
     public void reinitializePwd(String userId, String password, String token) {
+        jetons.consommer(userId, JetonDeCompte.Usage.REINITIALISATION, token);
         updatePassword(userId, password);
     }
 

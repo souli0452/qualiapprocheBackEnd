@@ -128,4 +128,29 @@ class AppRoleServiceTest {
 
         verify(depot, never()).save(any(AppRole.class));
     }
+
+    @Test
+    @DisplayName("Une permission absente du dictionnaire est refusée : on ne se forge pas SUPER_ADMIN")
+    void permissionInconnue_refusee() {
+        when(depot.findAllByName("PIRATE")).thenReturn(List.of());
+        AppRole forge = role(null, "PIRATE");
+        forge.setPermissions(List.of("MANAGE_USER", "SUPER_ADMIN", "SERVICE_TECHNIQUE"));
+
+        assertThatThrownBy(() -> service.enregistrer(forge))
+                .isInstanceOfSatisfying(BusinessException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getMessage()).contains("SUPER_ADMIN", "SERVICE_TECHNIQUE").doesNotContain("MANAGE_USER,");
+                });
+        verify(depot, never()).save(any(AppRole.class));
+    }
+
+    @Test
+    @DisplayName("Des permissions du dictionnaire passent")
+    void permissionsConnues_acceptees() {
+        when(depot.findAllByName("ADMIN_COMPTES")).thenReturn(List.of());
+        AppRole role = role(null, "ADMIN_COMPTES");
+        role.setPermissions(List.of("MANAGE_USER", "ROLE_MANAGE"));
+
+        assertThat(service.enregistrer(role).getPermissions()).containsExactly("MANAGE_USER", "ROLE_MANAGE");
+    }
 }

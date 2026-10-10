@@ -1,5 +1,6 @@
 package com.qualiapproche.userservice.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.auth.KcLoginRequestDto;
 import com.qualiapproche.common.dto.auth.KcUserDto;
 import com.qualiapproche.common.dto.auth.ProfilPersonnelDto;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,8 +30,22 @@ import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
 import com.qualiapproche.common.dto.DestinataireDto;
 
+/**
+ * Comptes et authentification.
+ *
+ * <p>La lecture de l'annuaire reste ouverte à tout compte connecté : les sélecteurs d'utilisateurs
+ * de tous les modules s'en servent. Créer, modifier, désactiver un compte ou en fixer le mot de
+ * passe exige {@code MANAGE_USER} — jusqu'ici, n'importe quel agent connecté pouvait le faire,
+ * y compris sur le compte d'un administrateur.</p>
+ */
 @RestController
 @RequestMapping("/api/v1")
+@RequirePermissions(
+        create = {"MANAGE_USER"},
+        update = {"MANAGE_USER"},
+        read = {},
+        delete = {"MANAGE_USER"}
+)
 //@CrossOrigin("*")
 @RequiredArgsConstructor
 @Tag(name = "Gestion des Utilisateurs", description = "Endpoints pour l'authentification et la gestion des utilisateurs Keycloak")
@@ -151,23 +167,28 @@ public class KcUserController {
         return ResponseEntity.ok(ApiResponse.success(kcUserService.getUsersByRole(role, structureId)));
     }
 
+    /** Un compte de service crée aussi des comptes : l'administrateur d'une organisation, à son provisionnement. */
+    @PreAuthorize("@perm.canCreate(this) or @perm.appelDeService()")
     @PostMapping("/users/create")
     public ResponseEntity<KcUserDto> createUser(@RequestBody KcUserDto kcUserDto) {
         return ResponseEntity.ok(kcUserService.createUser(kcUserDto));
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping("/users/update")
     public ResponseEntity<Void> updateUser(@RequestBody KcUserDto kcUserDto) {
         kcUserService.updateUser(kcUserDto);
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PatchMapping("/users/reset-password")
     public ResponseEntity<Void> resetPassword(@RequestParam String userId, @RequestParam String password) {
         kcUserService.updatePassword(userId, password);
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping("/users/change-status")
     public ResponseEntity<Void> changeStatus(@RequestParam String userId, @RequestParam Boolean enabled) {
         kcUserService.changeUserStatus(userId, enabled);
@@ -185,10 +206,14 @@ public class KcUserController {
         return kcUserService.isEmailVerified(userId);
     }
 
+    /**
+     * Demande d'un lien de réinitialisation. Même réponse que l'adresse ait un compte ou non.
+     * Le type {@code String} déclaré ici faisait échouer l'enveloppe de réponse : 500 à chaque appel.
+     */
     @PostMapping("/initiate-reset-pwd")
-    public ResponseEntity<String> initiatePasswordReset(@RequestParam String email) {
-            kcUserService.initiatePasswordReset(email);
-            return ResponseEntity.ok().build();
+    public ResponseEntity<Void> initiatePasswordReset(@RequestParam String email) {
+        kcUserService.initiatePasswordReset(email);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/reinitialize-pwd")
