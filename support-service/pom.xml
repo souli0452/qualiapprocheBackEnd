@@ -12,6 +12,11 @@
     <description>Support Service for quali-sira</description>
 
     <dependencies>
+        <!-- Messagerie entre services : outbox publiée sur Artemis (voir common/messagerie). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-artemis</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.qualiapproche</groupId>
             <artifactId>common</artifactId>

@@ -15,6 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ComponentScan(basePackages = {"com.qualiapproche.referentiel", "com.qualiapproche.common"})
 @EntityScan(basePackages = {
     "com.qualiapproche.referentiel.entities",
+    "com.qualiapproche.referentiel.messagerie",
     "com.qualiapproche.common.entities"
 })
 public class ReferentielApplication {

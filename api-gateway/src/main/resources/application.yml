@@ -84,7 +84,13 @@ spring:
             - RewritePath=/ia-service/(?<segment>.*), /${segment}
 
 springdoc:
+  # L'interface Swagger agrégée décrit chaque point d'entrée de chaque service : une carte offerte à
+  # qui la trouve, et un scanner de sécurité la relève au premier passage. Coupée par défaut ;
+  # QUALISIRA_SWAGGER=true la rouvre sur un poste de développement.
+  api-docs:
+    enabled: ${QUALISIRA_SWAGGER:false}
   swagger-ui:
+    enabled: ${QUALISIRA_SWAGGER:false}
     urls:
       - name: referentiel-service
         url: /referentiel-service/v3/api-docs
@@ -118,19 +124,70 @@ qualisira:
     # origines nommées — et alors vider « motifs-origines ».
     origines: ${QUALISIRA_CORS_ORIGINES:}
 
-    # « * » : toutes les origines. Le frontal change de domaine au gré des environnements, et rien
-    # ne sert de le nommer tant qu'ils ne sont pas arrêtés.
+    # Motifs : les frontaux où le produit est servi, nommés un à un — app.test.qualisira.com, le
+    # frontal de test, qui appelle api-gateway.test.qualisira.com — et le poste de développement sur
+    # localhost, quel qu'en soit le port. Ni qualisira.test.qualisira.com ni qualisira.horeb.tech :
+    # aucun des deux ne résout ; ni qualisira.com, qui sert le site vitrine. Pas de motif
+    # « *.horeb.tech » ni « *.qualisira.com » : un domaine entier rend fiable tout hôte qui y sert du
+    # contenu déposé (s3.horeb.tech, le stockage MinIO, en est un), et une page posée là agirait au
+    # nom de l'utilisateur connecté. Pour un nouveau frontal, surcharger par
+    # QUALISIRA_CORS_MOTIFS_ORIGINES en le nommant et en recopiant la liste ci-dessous : la variable
+    # la remplace, elle ne s'y ajoute pas.
     #
-    # Un motif, et non « origines: * » : la norme refuse le joker comme origine dès que la requête
-    # porte des identifiants — et la nôtre en porte, l'authentification passant par un cookie. Le
-    # motif fait renvoyer à la place l'origine réellement appelante, ce que la norme accepte.
+    # Le défaut était « * » : n'importe quel site visité par un utilisateur connecté pouvait appeler
+    # cette API avec ses cookies de session (SameSite=None), et donc agir en son nom. Le joker reste
+    # possible pour un environnement de test — un avertissement le signale alors à chaque démarrage.
     #
-    # CE QUE CELA COÛTE, puisque cela ne se voit pas : n'importe quel site visité par un
-    # utilisateur connecté peut appeler cette API avec ses cookies de session, et donc agir en son
-    # nom. Rien d'autre ne s'y oppose ici — la protection CSRF est désactivée et le cookie est
-    # SameSite=None. Avant une mise en production, nommer le frontal dans « origines » ci-dessus et
-    # vider cette ligne ; ou, à défaut, la restreindre à « https://*.qualisira.com ».
-    motifs-origines: ${QUALISIRA_CORS_MOTIFS_ORIGINES:*}
+    # Un motif, et non une origine exacte, pour le port variable du poste de développement. Avec
+    # identifiants (notre cookie), la norme refuse « * » comme origine ; un motif fait renvoyer
+    # l'origine réellement appelante, ce qu'elle accepte.
+    #
+    # La même liste sert au filtre anti-CSRF (FiltreAntiCsrf) : une écriture venue d'une origine
+    # qu'elle ne couvre pas est refusée.
+    motifs-origines: ${QUALISIRA_CORS_MOTIFS_ORIGINES:https://app.test.qualisira.com,http://localhost:[*],http://127.0.0.1:[*]}
+
+  # Limitation du rythme des appels d'authentification, par adresse cliente (FiltreLimiteDeDebit).
+  # En mémoire : la passerelle tourne en un seul exemplaire.
+  limites:
+    actif: ${QUALISIRA_LIMITES_ACTIF:true}
+    # Nombre de mandataires à nous devant la passerelle (Traefik du déploiement : 1). L'adresse
+    # cliente est lue dans X-Forwarded-For à ce rang en partant de la fin — le début de la liste
+    # est écrit par le client et ne prouve rien. 0 : l'en-tête est ignoré, l'adresse de la
+    # connexion fait foi.
+    sauts-de-confiance: ${QUALISIRA_LIMITES_SAUTS_DE_CONFIANCE:1}
+    taille-max: 100000
+    regles:
+      # Une organisation entière sort souvent par une seule adresse publique : le seuil doit
+      # absorber l'arrivée du matin, tout en rendant vain l'essai de mots de passe en série.
+      connexion:
+        chemins:
+          - /user-service/api/v1/login
+        capacite: ${QUALISIRA_LIMITE_CONNEXION:20}
+        periode: 1m
+      # Le frontal rafraîchit seul la session à chaque expiration du jeton, pour chaque onglet :
+      # un seuil trop bas déconnecterait des utilisateurs qui n'ont rien fait.
+      rafraichissement:
+        chemins:
+          - /user-service/api/v1/refresh
+        capacite: ${QUALISIRA_LIMITE_RAFRAICHISSEMENT:60}
+        periode: 1m
+      # Chaque appel envoie un courriel : c'est ici qu'un abus coûte le plus — et qu'il vise un
+      # collaborateur, dont la boîte se remplirait de liens qu'il n'a pas demandés.
+      reinitialisation:
+        chemins:
+          - /user-service/api/v1/initiate-reset-pwd
+        capacite: ${QUALISIRA_LIMITE_REINITIALISATION:5}
+        periode: 1m
+      # Ce qui éprouve un secret sans passer par la connexion : l'ancien mot de passe
+      # (update-pwd), le jeton reçu par courriel (reinitialize-pwd, verify-email). Laissés sans
+      # limite, ils offraient un second guichet à l'essai de mots de passe en série.
+      mot-de-passe:
+        chemins:
+          - /user-service/api/v1/update-pwd
+          - /user-service/api/v1/reinitialize-pwd
+          - /user-service/api/v1/verify-email
+        capacite: ${QUALISIRA_LIMITE_MOT_DE_PASSE:10}
+        periode: 1m
 
 eureka:
   client:

@@ -40,7 +40,7 @@ class SuppressionDUnRoleTest {
     void preparer() {
         roles = mock(AppRoleRepository.class);
         rattachements = mock(UserRoleAssignmentRepository.class);
-        service = new KcRoleService(null, null, null, roles, rattachements);
+        service = new KcRoleService(null, null, null, roles, rattachements, null, null);
     }
 
     private AppRole role(String nom) {

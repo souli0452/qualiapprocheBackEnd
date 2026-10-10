@@ -1,7 +1,6 @@
 package com.qualiapproche.userservice.service.impl;
 
-import com.qualiapproche.userservice.courriel.CourrielSortant;
-import com.qualiapproche.common.courriel.FileDeCourriels;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.common.service.SendMailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,13 +14,16 @@ import java.util.Map;
 
 /**
  * Courriels des comptes (vérification d'adresse, réinitialisation, mot de passe temporaire) :
- * rendus par leur gabarit, puis déposés dans la file du service ({@link FileDeCourriels}), que la
+ * rendus par leur gabarit, puis déposés dans la boîte d'envoi du service ({@link Courriels}), que la
  * tournée remet au serveur de messagerie.
  *
  * <p>Ils partaient directement depuis la requête : une panne du serveur de messagerie perdait le
  * lien de réinitialisation, et l'utilisateur ne le recevait jamais. Déposés dans la
  * transaction de l'appelant, ils n'existent que si elle est validée, et sont rejoués jusqu'à leur
  * remise.</p>
+ *
+ * <p>Ceux qui portent un mot de passe ou un lien à jeton sont confidentiels : leur contenu est
+ * effacé de la boîte d'envoi dès qu'il est parti.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -29,7 +31,7 @@ import java.util.Map;
 public class SendMailServiceImpl implements SendMailService {
 
     private final TemplateEngine templateEngine;
-    private final FileDeCourriels<CourrielSortant> file;
+    private final Courriels courriels;
 
     @Override
     public void sendVerificationEmail(String recipientEmail, String firstName, String lastName, String password,
@@ -39,14 +41,14 @@ public class SendMailServiceImpl implements SendMailService {
         variables.put("lastName", lastName);
         variables.put("temporaryPassword", password);
         variables.put("verificationLink", url);
-        deposer(recipientEmail, null, "Vérification de votre compte", "verificationEmailTemplate.html", variables);
+        deposerConfidentiel(recipientEmail, "Vérification de votre compte", "verificationEmailTemplate.html", variables);
     }
 
     @Override
     public void sendReinitializePasswordEmail(String recipientEmail, String resetUrl) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("resetLink", resetUrl);
-        deposer(recipientEmail, null, "Réinitialisation de votre mot de passe",
+        deposerConfidentiel(recipientEmail, "Réinitialisation de votre mot de passe",
                 "reinitializePasswordEmailTemplate.html", variables);
     }
 
@@ -55,7 +57,7 @@ public class SendMailServiceImpl implements SendMailService {
         Map<String, Object> variables = new HashMap<>();
         variables.put("temporaryPassword", temporaryPassword);
         variables.put("url", url);
-        deposer(recipientEmail, null, "Votre nouveau mot de passe temporaire", "resetPasswordEmailTemplate.html",
+        deposerConfidentiel(recipientEmail, "Votre nouveau mot de passe temporaire", "resetPasswordEmailTemplate.html",
                 variables);
     }
 
@@ -78,12 +80,22 @@ public class SendMailServiceImpl implements SendMailService {
             // La file ne garde que du HTML : un texte brut y entre échappé, ses lignes préservées.
             corps = HtmlUtils.htmlEscape(corps).replace("\n", "<br>");
         }
-        file.deposer(recipientEmail, null, subject, corps, "message");
+        courriels.envoyer(recipientEmail, null, subject, corps, "message");
+    }
+
+    /**
+     * Un courriel qui porte un mot de passe ou un lien à jeton : il part comme les autres, mais son
+     * contenu ne reste pas dans la boîte d'envoi une fois publié.
+     */
+    private void deposerConfidentiel(String destinataire, String sujet, String gabarit, Map<String, Object> variables) {
+        Context context = new Context();
+        context.setVariables(variables);
+        courriels.envoyerConfidentiel(destinataire, sujet, templateEngine.process(gabarit, context), gabarit);
     }
 
     private void deposer(String destinataire, String copie, String sujet, String gabarit, Map<String, Object> variables) {
         Context context = new Context();
         context.setVariables(variables);
-        file.deposer(destinataire, copie, sujet, templateEngine.process(gabarit, context), gabarit);
+        courriels.envoyer(destinataire, copie, sujet, templateEngine.process(gabarit, context), gabarit);
     }
 }

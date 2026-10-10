@@ -1,64 +1,77 @@
 package com.qualiapproche.workflow.event;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.common.dto.DestinataireDto;
+import com.qualiapproche.common.messagerie.AdressesMessagerie;
+import com.qualiapproche.common.messagerie.BoiteDEnvoi;
+import com.qualiapproche.common.messagerie.CourrielAEnvoyer;
+import com.qualiapproche.common.messagerie.Courriels;
+import com.qualiapproche.common.messagerie.Dedoublonnage;
 import com.qualiapproche.workflow.config.EmailTemplateEngineConfig;
 import com.qualiapproche.workflow.config.LienVersLeDossier;
+import com.qualiapproche.workflow.messagerie.MessageSortant;
+import com.qualiapproche.workflow.messagerie.MessageTraite;
+import com.qualiapproche.workflow.messagerie.RemiseDesCourriels;
 import com.qualiapproche.workflow.model.EmailTemplate;
-import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
-import com.qualiapproche.workflow.repository.WorkflowNotificationRepository;
-import com.qualiapproche.workflow.service.AmeliorationWebhookClient;
+import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
 import com.qualiapproche.workflow.service.CopieAuResponsableQualite;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
 import com.qualiapproche.workflow.service.PiedDeCourriel;
 import com.qualiapproche.workflow.service.ReglagesOrganisation;
-import com.qualiapproche.workflow.service.SmtpEmailService;
-import com.qualiapproche.workflow.service.SupportWebhookClient;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
+import com.qualiapproche.workflow.service.RenduDesCourriels;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import jakarta.mail.internet.MimeMultipart;
 
 /**
  * Le courriel d'étape part réellement — de l'étape franchie jusqu'au serveur SMTP.
  *
- * <p>Les autres tests couvrent chacun un maillon : l'enregistrement au registre, la remise, le rendu
- * du gabarit. Celui-ci les enchaîne avec les vraies classes, ne simulant que le serveur SMTP et la
- * base. C'est le seul moyen de montrer qu'un franchissement d'étape produit bien un message remis, et
- * non trois maillons corrects reliés par un chaînon manquant — la panne d'envoi ne s'est pas vue
- * autrement.</p>
+ * <p>Les autres tests couvrent chacun un maillon : le dépôt dans la boîte d'envoi, la remise, le
+ * rendu du gabarit. Celui-ci les enchaîne avec les vraies classes — {@link Courriels},
+ * {@link RenduDesCourriels}, {@link RemiseDesCourriels} — et ne simule que la base, le courtier et
+ * le serveur SMTP. C'est le seul moyen de montrer qu'un franchissement d'étape produit bien un
+ * message remis, et non trois maillons corrects reliés par un chaînon manquant — la panne d'envoi
+ * ne s'est pas vue autrement.</p>
+ *
+ * <p>Le courtier est réduit à sa plus simple expression : une liste des courriels déposés, que
+ * {@link #messagesExpedies()} livre au consommateur. Il en a la propriété qui compte ici — un
+ * courriel déposé reste à livrer tant que sa remise échoue.</p>
  */
 class CourrielsDEtapeTest {
 
     private static final String BOITE_AUTHENTIFIEE = "noreply@qualisira.com";
 
     private JavaMailSender mailSender;
-    private WorkflowNotificationRepository notificationRepository;
+    private BoiteDEnvoi<MessageSortant> boiteDEnvoi;
+    /** Ce que la boîte d'envoi a publié sur la file des courriels, et que le courtier livrera. */
+    private final List<CourrielAEnvoyer> file = new ArrayList<>();
+    private RemiseDesCourriels remise;
     private DestinatairesEtapeService destinatairesEtapeService;
     private WorkflowValidationInstanceRepository instances;
     private EmailTemplateRepository gabaritsPartages;
@@ -66,38 +79,30 @@ class CourrielsDEtapeTest {
     private NotificateurEtapeParEmail notificateur;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         mailSender = mock(JavaMailSender.class);
         when(mailSender.createMimeMessage())
                 .thenAnswer(i -> new MimeMessage((jakarta.mail.Session) null));
+        ObjectProvider<JavaMailSender> messagerie = mock(ObjectProvider.class);
+        when(messagerie.getIfAvailable()).thenReturn(mailSender);
+        Dedoublonnage<MessageTraite> dedoublonnage = mock(Dedoublonnage.class);
+        when(dedoublonnage.premiereLivraison(any())).thenReturn(true);
+        remise = new RemiseDesCourriels(messagerie, dedoublonnage, null, BOITE_AUTHENTIFIEE);
 
         reglages = mock(ReglagesOrganisation.class);
         when(reglages.valeurs()).thenReturn(Map.of());
 
-        SmtpEmailService emailService = new SmtpEmailService(mailSender,
+        RenduDesCourriels rendu = new RenduDesCourriels(
                 new EmailTemplateEngineConfig().moteurGabaritEmail(), new PiedDeCourriel(reglages));
-        ReflectionTestUtils.setField(emailService, "fromEmail", BOITE_AUTHENTIFIEE);
 
-        notificationRepository = mock(WorkflowNotificationRepository.class);
-        when(notificationRepository.save(any(WorkflowNotification.class))).thenAnswer(i -> {
-            WorkflowNotification notification = i.getArgument(0);
-            if (notification.getId() == null) {
-                notification.setId(UUID.randomUUID());
-            }
-            when(notificationRepository.findById(notification.getId()))
-                    .thenReturn(Optional.of(notification));
-            return notification;
-        });
-        when(notificationRepository.revendiquer(any(), any(), anyCollection(), any(), any()))
-                .thenReturn(1);
-
-        WorkflowNotificationService notificationService = new WorkflowNotificationService(
-                notificationRepository, mock(SupportWebhookClient.class), emailService,
-                new CopieAuResponsableQualite(reglages), mock(AmeliorationWebhookClient.class),
-                new ObjectMapper());
-        // Le service s'appelle lui-même par son proxy pour séparer les transactions ; hors
-        // conteneur, il se suffit à lui-même.
-        ReflectionTestUtils.setField(notificationService, "self", notificationService);
+        boiteDEnvoi = mock(BoiteDEnvoi.class);
+        when(boiteDEnvoi.deposer(eq(AdressesMessagerie.COURRIELS), eq(AdressesMessagerie.TYPE_COURRIEL), any()))
+                .thenAnswer(i -> {
+                    file.add(i.getArgument(2));
+                    return UUID.randomUUID();
+                });
+        Courriels courriels = new Courriels(boiteDEnvoi);
 
         gabaritsPartages = mock(EmailTemplateRepository.class);
         EmailTemplateRepository gabarits = gabaritsPartages;
@@ -123,8 +128,9 @@ class CourrielsDEtapeTest {
         DestinatairesDeLEtape destinatairesDeLEtape = new DestinatairesDeLEtape(
                 destinatairesEtapeService, instances,
                 org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
-        notificateur = new NotificateurEtapeParEmail(gabarits, notificationService,
-                destinatairesDeLEtape, destinatairesEtapeService, liens, instances,
+        notificateur = new NotificateurEtapeParEmail(gabarits, courriels, rendu,
+                new CopieAuResponsableQualite(reglages), destinatairesDeLEtape, destinatairesEtapeService,
+                liens, instances,
                 org.mockito.Mockito.mock(com.qualiapproche.workflow.service.StructureUtilisateurService.class));
     }
 
@@ -156,7 +162,11 @@ class CourrielsDEtapeTest {
                 .email("claire@exemple.fr").nomComplet("Claire Martin").build();
     }
 
+    /** Le courtier livre chaque courriel déposé au consommateur ; rend ce qui est parti par SMTP. */
     private List<MimeMessage> messagesExpedies() {
+        for (CourrielAEnvoyer courriel : file) {
+            remise.remettre(courriel, UUID.randomUUID().toString());
+        }
         ArgumentCaptor<MimeMessage> aMessage = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender, org.mockito.Mockito.atLeastOnce()).send(aMessage.capture());
         return aMessage.getAllValues();
@@ -196,6 +206,8 @@ class CourrielsDEtapeTest {
         // Sans expéditeur, le relais authentifié refuse le message.
         assertThat(message.getFrom()[0].toString()).contains(BOITE_AUTHENTIFIEE);
         assertThat(message.getSubject()).isEqualTo("Un dossier vous attend");
+        // L'origine suit le courriel jusqu'au consommateur : c'est elle qui dit, au rebut, d'où il vient.
+        assertThat(file.get(0).getOrigine()).isEqualTo("etape-NOTIF_ETAPE");
     }
 
     @Test
@@ -284,23 +296,28 @@ class CourrielsDEtapeTest {
     // ------------------------------------------------------------------ l'envoi échoue
 
     @Test
-    @DisplayName("Serveur SMTP indisponible : la notification reste à reprendre, elle n'est pas perdue")
-    void serveurIndisponible_notificationReprenable() {
+    @DisplayName("Serveur SMTP indisponible : le courriel reste à livrer, il n'est pas perdu")
+    void serveurIndisponible_courrielRelivre() throws Exception {
         responsables(claire());
         doThrow(new MailSendException("hôte injoignable"))
                 .when(mailSender).send(any(MimeMessage.class));
 
         notificateur.notifier(etapeVerification(), etapeFranchieSur("DOCUMENT", "42"));
 
-        // C'est tout l'intérêt du registre : l'échec était jadis une ligne de journal, et le
-        // responsable n'était jamais prévenu.
-        ArgumentCaptor<WorkflowNotification> aSauvegardee =
-                ArgumentCaptor.forClass(WorkflowNotification.class);
-        verify(notificationRepository, org.mockito.Mockito.atLeastOnce()).save(aSauvegardee.capture());
-        WorkflowNotification derniere = aSauvegardee.getValue();
-        assertThat(derniere.getStatut())
-                .isEqualTo(WorkflowNotification.NotificationStatut.A_REMETTRE);
-        assertThat(derniere.getDerniereErreur()).contains("hôte injoignable");
+        // Le dépôt a réussi : le franchissement n'a rien su du serveur SMTP.
+        assertThat(file).hasSize(1);
+        CourrielAEnvoyer depose = file.get(0);
+        // L'échec remonte du consommateur : le courtier reprend le message et le relivrera. C'était
+        // jadis une ligne de journal, et le responsable n'était jamais prévenu.
+        assertThatThrownBy(() -> remise.remettre(depose, UUID.randomUUID().toString()))
+                .isInstanceOf(MailSendException.class)
+                .hasMessageContaining("hôte injoignable");
+
+        // Le serveur revenu, la livraison suivante part.
+        doNothing().when(mailSender).send(any(MimeMessage.class));
+        remise.remettre(depose, UUID.randomUUID().toString());
+        assertThat(depose.getDestinataire()).isEqualTo("claire@exemple.fr");
+        verify(mailSender, org.mockito.Mockito.times(2)).send(any(MimeMessage.class));
     }
 
     @Test
@@ -310,8 +327,9 @@ class CourrielsDEtapeTest {
 
         notificateur.notifier(etapeVerification(), etapeFranchieSur("DOCUMENT", "42"));
 
+        assertThat(file).isEmpty();
+        verify(boiteDEnvoi, org.mockito.Mockito.never()).deposer(anyString(), anyString(), any());
         verify(mailSender, org.mockito.Mockito.never()).send(any(MimeMessage.class));
-        verify(notificationRepository, org.mockito.Mockito.never()).save(any());
     }
 
     @Test
@@ -323,7 +341,7 @@ class CourrielsDEtapeTest {
 
         notificateur.notifier(sansGabarit, etapeFranchieSur("DOCUMENT", "42"));
 
-        verify(mailSender, org.mockito.Mockito.never()).send(any(MimeMessage.class));
+        assertThat(file).isEmpty();
     }
 
     @Test
@@ -335,7 +353,7 @@ class CourrielsDEtapeTest {
 
         notificateur.notifier(autreGabarit, etapeFranchieSur("DOCUMENT", "42"));
 
-        verify(mailSender, org.mockito.Mockito.never()).send(any(MimeMessage.class));
+        assertThat(file).isEmpty();
     }
 
     // ------------------------------------------------------------------ référence du dossier

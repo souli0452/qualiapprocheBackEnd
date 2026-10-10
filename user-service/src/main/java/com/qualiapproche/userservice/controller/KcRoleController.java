@@ -28,7 +28,11 @@ import org.springdoc.core.annotations.ParameterObject;
 /**
  * Rôles Keycloak et leur attribution. La lecture reste ouverte (les écrans des circuits, des
  * non-conformités et de la confidentialité listent les rôles) ; toute écriture exige
- * {@code ROLE_MANAGE}.
+ * {@code ROLE_MANAGE}, et celles qui touchent un rôle du realm Keycloak (création, modification,
+ * suppression par le nom, attribution) sont en outre réservées au SUPER_ADMIN par
+ * {@link KcRoleService} : ces rôles passent dans le jeton et ouvrent des droits sans contrôle. La
+ * suppression d'un rôle applicatif ({@code /role/{id}}), qu'utilise l'écran des rôles, reste
+ * sous {@code ROLE_MANAGE}.
  */
 @RestController
 @RequestMapping("/api/v1/roles")

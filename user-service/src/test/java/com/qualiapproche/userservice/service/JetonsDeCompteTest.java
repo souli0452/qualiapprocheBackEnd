@@ -54,6 +54,20 @@ class JetonsDeCompteTest {
             return j;
         });
         when(depot.findByEmpreinte(anyString())).thenAnswer(i -> Optional.ofNullable(parEmpreinte.get(i.getArgument(0))));
+        // La mise à jour conditionnelle, telle que la base l'exécute : une ligne touchée au plus.
+        when(depot.marquerServi(any(), any())).thenAnswer(i -> {
+            java.util.UUID id = i.getArgument(0);
+            java.time.LocalDateTime quand = i.getArgument(1);
+            synchronized (parEmpreinte) {
+                for (JetonDeCompte j : parEmpreinte.values()) {
+                    if (j.getId().equals(id) && j.getUtiliseLe() == null && j.getExpireLe().isAfter(quand)) {
+                        j.setUtiliseLe(quand);
+                        return 1;
+                    }
+                }
+                return 0;
+            }
+        });
     }
 
     private void refuse(Runnable geste) {
@@ -98,6 +112,59 @@ class JetonsDeCompteTest {
         maintenant = maintenant.plus(Duration.ofMinutes(31));
 
         refuse(() -> jetons.consommer(COMPTE, Usage.REINITIALISATION, jeton));
+    }
+
+    @Test
+    @DisplayName("Deux présentations simultanées du même jeton : une seule passe")
+    void deux_requetes_simultanees_une_seule_passe() throws Exception {
+        String jeton = jetons.emettre(COMPTE, Usage.REINITIALISATION, Duration.ofMinutes(30));
+        // Les deux requêtes lisent le jeton libre avant que l'une ou l'autre ne le consomme : c'est
+        // la fenêtre qu'ouvrait l'ancien « lire, vérifier, enregistrer ».
+        java.util.concurrent.CyclicBarrier lecturesFaites = new java.util.concurrent.CyclicBarrier(2);
+        when(depot.findByEmpreinte(anyString())).thenAnswer(i -> {
+            JetonDeCompte lu = parEmpreinte.get(i.getArgument(0));
+            JetonDeCompte copie = JetonDeCompte.builder().id(lu.getId()).userId(lu.getUserId())
+                    .usage(lu.getUsage()).empreinte(lu.getEmpreinte()).expireLe(lu.getExpireLe())
+                    .utiliseLe(lu.getUtiliseLe()).creeLe(lu.getCreeLe()).build();
+            lecturesFaites.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            return Optional.of(copie);
+        });
+
+        java.util.concurrent.ExecutorService fils = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<Boolean> presentation = () -> {
+                try {
+                    jetons.consommer(COMPTE, Usage.REINITIALISATION, jeton);
+                    return true;
+                } catch (BusinessException refus) {
+                    return false;
+                }
+            };
+            java.util.List<java.util.concurrent.Future<Boolean>> issues =
+                    fils.invokeAll(java.util.List.of(presentation, presentation));
+            long reussites = 0;
+            for (java.util.concurrent.Future<Boolean> issue : issues) {
+                if (issue.get()) {
+                    reussites++;
+                }
+            }
+            assertThat(reussites).isEqualTo(1);
+        } finally {
+            fils.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("Le jeton n'est plus enregistré entier : seule la mise à jour conditionnelle le consomme")
+    void la_consommation_passe_par_la_mise_a_jour_conditionnelle() {
+        String jeton = jetons.emettre(COMPTE, Usage.REINITIALISATION, Duration.ofMinutes(30));
+        org.mockito.Mockito.clearInvocations(depot);
+
+        jetons.consommer(COMPTE, Usage.REINITIALISATION, jeton);
+
+        verify(depot).marquerServi(any(), org.mockito.ArgumentMatchers.eq(
+                java.time.LocalDateTime.ofInstant(maintenant, ZoneOffset.UTC)));
+        verify(depot, org.mockito.Mockito.never()).save(any(JetonDeCompte.class));
     }
 
     @Test

@@ -30,6 +30,25 @@ public class SecurityUtils {
         return "Système";
     }
 
+    /**
+     * Qui a fait le geste en cours, pour l'attribuer : l'utilisateur du jeton, sinon l'auteur
+     * transmis avec un message ({@link AuteurDuGeste}), sinon {@code null}. À ne jamais employer
+     * pour décider d'un droit.
+     */
+    public static String getAuteurId() {
+        String id = getCurrentUserId();
+        return id != null ? id : AuteurDuGeste.id();
+    }
+
+    /** Le nom de l'auteur du geste en cours, à la manière de {@link #getAuteurId()} ; « Système » à défaut. */
+    public static String getAuteurNom() {
+        if (getJwt() != null) {
+            return getCurrentUserFullName();
+        }
+        String nom = AuteurDuGeste.nom();
+        return nom != null && !nom.isBlank() ? nom : "Système";
+    }
+
     public static String getCurrentUserEmail() {
         Jwt jwt = getJwt();
         return (jwt != null) ? jwt.getClaimAsString("email") : null;

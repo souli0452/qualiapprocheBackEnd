@@ -1,7 +1,6 @@
 package com.qualiapproche.amelioration.utils;
 
-import com.qualiapproche.amelioration.courriel.CourrielSortant;
-import com.qualiapproche.common.courriel.FileDeCourriels;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.common.service.SendMailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +16,7 @@ import static com.qualiapproche.common.utils.ClesReglages.RESPONSABLE_QUALITE_EM
 
 /**
  * Courriels du module Non-conformités : rendus par leur gabarit, puis déposés dans la file du
- * service ({@link FileDeCourriels}), que la tournée remet au serveur de messagerie.
+ * service ({@link Courriels}), que workflow-service remet au serveur de messagerie.
  *
  * <p>Ils partaient directement, depuis la requête ou la tournée de nuit : une panne du serveur de
  * messagerie faisait échouer le geste de l'utilisateur, ou perdait la relance. Déposés dans la
@@ -30,7 +29,7 @@ import static com.qualiapproche.common.utils.ClesReglages.RESPONSABLE_QUALITE_EM
 public class SendMailServiceImpl implements SendMailService {
 
     private final TemplateEngine templateEngine;
-    private final FileDeCourriels<CourrielSortant> file;
+    private final Courriels courriels;
     private final ReglagesOrganisation reglagesOrganisation;
 
     @Override
@@ -80,13 +79,13 @@ public class SendMailServiceImpl implements SendMailService {
             // La file ne garde que du HTML : un texte brut y entre échappé, ses lignes préservées.
             corps = HtmlUtils.htmlEscape(corps).replace("\n", "<br>");
         }
-        file.deposer(recipientEmail, null, subject, corps, "message");
+        courriels.envoyer(recipientEmail, null, subject, corps, "message");
     }
 
     private void deposer(String destinataire, String copie, String sujet, String gabarit, Map<String, Object> variables) {
         Context context = new Context();
         context.setVariables(variables);
-        file.deposer(destinataire, copie, sujet, templateEngine.process(gabarit, context), gabarit);
+        courriels.envoyer(destinataire, copie, sujet, templateEngine.process(gabarit, context), gabarit);
     }
 
     /**

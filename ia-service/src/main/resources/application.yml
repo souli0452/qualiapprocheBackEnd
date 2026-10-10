@@ -117,3 +117,22 @@ spring:
           default:
             connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
             read-timeout: ${FEIGN_READ_TIMEOUT:10000}
+
+---
+# Surface d'exposition : la sonde de santé, et elle seule, sans détail. Les détails nommaient la
+# base, le courtier et l'espace disque — de quoi cartographier l'installation sans s'authentifier.
+# La documentation OpenAPI décrit chaque point d'entrée et ses paramètres : coupée par défaut, elle
+# se rallume en développement par QUALISIRA_SWAGGER=true (la passerelle l'agrège alors).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  api-docs:
+    enabled: ${QUALISIRA_SWAGGER:false}
+  swagger-ui:
+    enabled: ${QUALISIRA_SWAGGER:false}

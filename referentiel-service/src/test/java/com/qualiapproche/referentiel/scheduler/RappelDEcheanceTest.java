@@ -3,7 +3,7 @@ package com.qualiapproche.referentiel.scheduler;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.enumeration.TypeStructure;
-import com.qualiapproche.common.service.SendMailService;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.referentiel.client.UserClient;
 import com.qualiapproche.referentiel.entities.Structure;
 import com.qualiapproche.referentiel.repository.StructureRepository;
@@ -41,7 +41,7 @@ class RappelDEcheanceTest {
     private LicenceInstalleeService licence;
     private StructureRepository structures;
     private UserClient utilisateurs;
-    private SendMailService courriels;
+    private Courriels courriels;
     private LicenseScheduler scheduler;
 
     @BeforeEach
@@ -49,7 +49,7 @@ class RappelDEcheanceTest {
         licence = mock(LicenceInstalleeService.class);
         structures = mock(StructureRepository.class);
         utilisateurs = mock(UserClient.class);
-        courriels = mock(SendMailService.class);
+        courriels = mock(Courriels.class);
 
         scheduler = new LicenseScheduler(licence, structures, utilisateurs, courriels);
         ReflectionTestUtils.setField(scheduler, "preavisJours", 3);
@@ -72,7 +72,7 @@ class RappelDEcheanceTest {
 
     private String dernierMessage() {
         ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
-        verify(courriels).sendMail(anyString(), anyString(), corps.capture(), anyBoolean());
+        verify(courriels).envoyerTexte(anyString(), anyString(), corps.capture(), anyString());
         return corps.getValue();
     }
 
@@ -84,7 +84,7 @@ class RappelDEcheanceTest {
             scheduler.checkLicenseExpirations();
         }
 
-        verify(courriels, times(4)).sendMail(eq("admin@exemple.fr"), anyString(), anyString(), anyBoolean());
+        verify(courriels, times(4)).envoyerTexte(eq("admin@exemple.fr"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -95,7 +95,7 @@ class RappelDEcheanceTest {
             scheduler.checkLicenseExpirations();
         }
 
-        verify(courriels, times(2)).sendMail(eq("admin@exemple.fr"), anyString(), anyString(), anyBoolean());
+        verify(courriels, times(2)).envoyerTexte(eq("admin@exemple.fr"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -106,7 +106,7 @@ class RappelDEcheanceTest {
             scheduler.checkLicenseExpirations();
         }
 
-        verify(courriels, never()).sendMail(anyString(), anyString(), anyString(), anyBoolean());
+        verify(courriels, never()).envoyerTexte(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -130,8 +130,8 @@ class RappelDEcheanceTest {
 
         scheduler.checkLicenseExpirations();
 
-        verify(courriels).sendMail(eq("un@exemple.fr"), anyString(), anyString(), anyBoolean());
-        verify(courriels).sendMail(eq("deux@exemple.fr"), anyString(), anyString(), anyBoolean());
+        verify(courriels).envoyerTexte(eq("un@exemple.fr"), anyString(), anyString(), anyString());
+        verify(courriels).envoyerTexte(eq("deux@exemple.fr"), anyString(), anyString(), anyString());
         verify(structures, never()).findAllByTypeStructure(any());
     }
 
@@ -147,7 +147,7 @@ class RappelDEcheanceTest {
 
         scheduler.checkLicenseExpirations();
 
-        verify(courriels).sendMail(eq("direction@exemple.fr"), anyString(), anyString(), anyBoolean());
+        verify(courriels).envoyerTexte(eq("direction@exemple.fr"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -160,6 +160,6 @@ class RappelDEcheanceTest {
                 .statut("ABSENTE").actionsOuvertes(false).modules(List.of()).build());
         scheduler.checkLicenseExpirations();
 
-        verify(courriels, never()).sendMail(anyString(), anyString(), anyString(), anyBoolean());
+        verify(courriels, never()).envoyerTexte(anyString(), anyString(), anyString(), anyString());
     }
 }

@@ -2,8 +2,7 @@ package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.config.ThymeleafConfig;
 import com.qualiapproche.common.dto.StructureDto;
-import com.qualiapproche.common.courriel.FileDeCourriels;
-import com.qualiapproche.evaluation.courriel.CourrielSortant;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.evaluation.client.AnnuaireClient;
 import com.qualiapproche.evaluation.client.StructuresClient;
 import com.qualiapproche.evaluation.entities.Audit;
@@ -50,7 +49,7 @@ class NotificationDuPiloteTest {
     @Mock private ConstatRepository constats;
     @Mock private AnnuaireClient annuaire;
     @Mock private StructuresClient structures;
-    @Mock private FileDeCourriels<CourrielSortant> file;
+    @Mock private Courriels courriels;
     @Mock private TemplateEngine moteur;
     @Mock private PlatformTransactionManager transactions;
 
@@ -61,7 +60,7 @@ class NotificationDuPiloteTest {
 
     @BeforeEach
     void preparer() {
-        notification = new NotificationDuPilote(constats, annuaire, structures, file, moteur,
+        notification = new NotificationDuPilote(constats, annuaire, structures, courriels, moteur,
                 "https://app.qualisira.com/audit/{id}", transactions);
         when(moteur.process(anyString(), any(org.thymeleaf.context.IContext.class))).thenReturn("<p>corps</p>");
         audit = Audit.builder().reference("AUD-2026-012").statut(StatutAudit.EN_COURS).processusId(processus).build();
@@ -96,7 +95,7 @@ class NotificationDuPiloteTest {
         notification.notifier(new ConstatsPublies(audit.getId(), List.of(ecart.getId(), conforme.getId())));
 
         ArgumentCaptor<String> adresses = ArgumentCaptor.forClass(String.class);
-        verify(file, times(2)).deposer(adresses.capture(), isNull(), eq("Audit AUD-2026-012 — 2 constats publiés"),
+        verify(courriels, times(2)).envoyer(adresses.capture(), isNull(), eq("Audit AUD-2026-012 — 2 constats publiés"),
                 eq("<p>corps</p>"), eq("publication-constats"));
         assertThat(adresses.getAllValues()).containsExactly("a.traore@exemple.bf", "b.ouedraogo@exemple.bf");
         ArgumentCaptor<org.thymeleaf.context.Context> contextes = ArgumentCaptor.forClass(org.thymeleaf.context.Context.class);
@@ -117,7 +116,7 @@ class NotificationDuPiloteTest {
         notification.notifier(new ConstatsPublies(audit.getId(), List.of(compile.getId())));
 
         verify(annuaire, never()).porteursDuRole(anyString(), anyString());
-        verify(file, never()).deposer(any(), any(), any(), any(), any());
+        verify(courriels, never()).envoyer(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -129,7 +128,7 @@ class NotificationDuPiloteTest {
 
         notification.notifier(new ConstatsPublies(audit.getId(), List.of(c.getId())));
 
-        verify(file, never()).deposer(any(), any(), any(), any(), any());
+        verify(courriels, never()).envoyer(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -138,11 +137,11 @@ class NotificationDuPiloteTest {
         Constat c = constat(StatutConstat.PUBLIE, true);
         when(constats.findAllById(any())).thenReturn(List.of(c));
         doThrow(new RuntimeException("base indisponible"))
-                .when(file).deposer(eq("a.traore@exemple.bf"), any(), any(), any(), any());
+                .when(courriels).envoyer(eq("a.traore@exemple.bf"), any(), any(), any(), any());
 
         notification.apresPublication(new ConstatsPublies(audit.getId(), List.of(c.getId())));
 
-        verify(file, times(2)).deposer(any(), any(), any(), any(), any());
+        verify(courriels, times(2)).envoyer(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -154,7 +153,7 @@ class NotificationDuPiloteTest {
 
         notification.apresPublication(new ConstatsPublies(audit.getId(), List.of(c.getId())));
 
-        verify(file, never()).deposer(any(), any(), any(), any(), any());
+        verify(courriels, never()).envoyer(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -180,14 +179,13 @@ class NotificationDuPiloteTest {
     }
 
     @Test
-    @DisplayName("La validation ne parle jamais à la messagerie : elle dépose, la tournée remettra")
+    @DisplayName("La validation ne parle jamais au serveur de messagerie : elle dépose, workflow-service remettra")
     void laValidationDeposeSeulement() {
         Constat c = constat(StatutConstat.PUBLIE, true);
         when(constats.findAllById(any())).thenReturn(List.of(c));
 
         notification.apresPublication(new ConstatsPublies(audit.getId(), List.of(c.getId())));
 
-        verify(file, times(2)).deposer(any(), any(), any(), any(), eq("publication-constats"));
-        verify(file, never()).tournee(org.mockito.ArgumentMatchers.anyInt());
+        verify(courriels, times(2)).envoyer(any(), any(), any(), any(), eq("publication-constats"));
     }
 }

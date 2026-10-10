@@ -75,4 +75,20 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
     @Query("SELECT p FROM PlanAction p, NonConformite n WHERE p.nonConformeId = n.id "
             + "AND (n.structureSoumissionId = :structureId OR n.origineId = :structureId)")
     Page<PlanAction> findPlanActionsByStructureId(@Param("structureId") String structureId, Pageable pageable);
+
+    /**
+     * Plans d'action qu'un utilisateur a le droit de voir.
+     *
+     * <p>Un plan se voit là où se voit sa non-conformité : les critères sont ceux de
+     * {@link NonConformiteRepository#findVisiblesPar} — sa structure, émettrice ou destinataire,
+     * les dossiers qu'il a déclarés ou qui lui sont imputés —, auxquels s'ajoutent les plans dont
+     * il est le responsable, qu'une autre structure peut lui confier.</p>
+     */
+    @Query("SELECT p FROM PlanAction p WHERE p.responsableId = :responsableId "
+            + "OR EXISTS (SELECT n.id FROM NonConformite n WHERE n.id = p.nonConformeId AND ("
+            + "n.structureSoumissionId = :structureId OR n.origineId = :structureId "
+            + "OR n.createdById = :userId OR n.userImputId = :userId))")
+    Page<PlanAction> findVisiblesPar(@Param("structureId") String structureId,
+            @Param("userId") String userId, @Param("responsableId") UUID responsableId,
+            Pageable pageable);
 }

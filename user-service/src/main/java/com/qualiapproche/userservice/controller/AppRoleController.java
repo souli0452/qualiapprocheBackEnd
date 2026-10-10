@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.entities.UserRoleAssignment;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
-import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
 import com.qualiapproche.userservice.service.AppRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
@@ -43,7 +42,6 @@ import java.util.UUID;
 public class AppRoleController {
 
     private final AppRoleRepository appRoleRepository;
-    private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final AppRoleService appRoleService;
     private final ObjectMapper objectMapper;
 
@@ -76,17 +74,14 @@ public class AppRoleController {
         return appRoleService.enregistrer(role);
     }
 
+    /**
+     * Attribue un rôle à un compte, sous les règles de {@link AppRoleService#attribuer} : nul
+     * n'attribue un rôle dont il ne détient pas toutes les permissions, ni ne touche à ses propres
+     * rôles.
+     */
     @PreAuthorize("@perm.canUpdate(this)")
     @PostMapping("/assign")
     public UserRoleAssignment assignRoleToUser(@RequestParam String userId, @RequestParam UUID roleId) {
-        AppRole role = appRoleRepository.findById(roleId)
-                .orElseThrow(() -> new RuntimeException("Role not found"));
-
-        UserRoleAssignment assignment = UserRoleAssignment.builder()
-                .userId(userId)
-                .role(role)
-                .build();
-
-        return userRoleAssignmentRepository.save(assignment);
+        return appRoleService.attribuer(userId, roleId);
     }
 }

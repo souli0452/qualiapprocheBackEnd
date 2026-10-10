@@ -207,7 +207,7 @@ public class QmsDocumentController {
         QmsDocumentService.ExportedDocument exported = documentService.securedExportPdf(id);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exported.getFilename() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(exported.getFilename()))
                 .contentType(MediaType.parseMediaType(exported.getContentType()))
                 .body(exported.getBytes());
     }

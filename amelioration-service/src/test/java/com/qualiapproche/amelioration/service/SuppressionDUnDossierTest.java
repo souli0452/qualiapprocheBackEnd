@@ -81,6 +81,9 @@ class SuppressionDUnDossierTest {
     @BeforeEach
     void ouvrirUneTransaction() {
         TransactionSynchronizationManager.initSynchronization();
+        // L'appelant a la portée transverse : la suppression par identifiant applique désormais la
+        // règle de visibilité de la fiche, que ces tests ne jugent pas.
+        when(permissionChecker.detient(any(String[].class))).thenReturn(true);
     }
 
     @AfterEach

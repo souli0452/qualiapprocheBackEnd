@@ -105,8 +105,15 @@ public class WorkflowConditionAdapter implements ITransitionCondition<IWorkflowD
             return true;
         }
 
-        // Le repli sur le jeton couvre les circuits dont l'habilitation désigne un rôle du realm.
-        boolean porteLeRole = rolesUtilisateur.contains(attendu) || SecurityUtils.hasRole(requiredRole);
+        // Les rôles applicatifs seuls : plus de repli sur les rôles du jeton. Ce repli devait
+        // couvrir des circuits dont l'habilitation aurait désigné un rôle du realm Keycloak ; il
+        // n'en existe aucun — l'éditeur de circuits ne propose que les rôles applicatifs, les
+        // circuits livrés n'en nomment pas d'autres, et RoleResponsableNormalizer a retiré le
+        // préfixe ROLE_ des anciens. Il ouvrait en revanche l'étape à quiconque portait dans le
+        // realm un rôle homonyme, créé hors de l'administration des rôles applicatifs et sans
+        // qu'aucun courriel d'étape ne le désigne jamais (user-service ne résout que ceux-là).
+        // user-service injoignable, l'étape se refuse — après la dernière valeur connue du cache.
+        boolean porteLeRole = rolesUtilisateur.contains(attendu);
 
         return porteLeRole && dansLaStructureDuDossier(pContexte, rolesUtilisateur);
     }

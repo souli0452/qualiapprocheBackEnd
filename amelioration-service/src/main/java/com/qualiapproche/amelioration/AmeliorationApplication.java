@@ -17,11 +17,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableFeignClients
 @EnableJpaRepositories(basePackages = {
         "com.qualiapproche.amelioration.repository",
-        "com.qualiapproche.amelioration.courriel"
+        "com.qualiapproche.amelioration.messagerie"
 })
 @EntityScan(basePackages = {
         "com.qualiapproche.amelioration.entities",
-        "com.qualiapproche.amelioration.courriel",
+        "com.qualiapproche.amelioration.messagerie",
         "com.qualiapproche.common.entities"
 })
 

@@ -42,6 +42,9 @@ import lombok.RequiredArgsConstructor;
 import com.qualiapproche.amelioration.client.UtilisateurClient;
 import com.qualiapproche.amelioration.entities.mappers.NonConformiteResumeMapper;
 import org.springframework.beans.factory.annotation.Value;
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.utils.PermissionsPortee;
+import com.qualiapproche.common.utils.SecurityUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +65,7 @@ public class PlanActionServiceImpl implements PlanActionService {
     private final PieceJointeStockageService fichierService;
     private final PlansActionDeLaNonConformiteService plansActionService;
     private final WorkflowClient workflowClient;
+    private final PermissionChecker permissionChecker;
 
     /**
      * Repère stable de l'alerte d'échéance, partagé avec la cloche.
@@ -115,6 +119,20 @@ public class PlanActionServiceImpl implements PlanActionService {
     public PlanActionDto createPlanActionDto(PlanActionDto dto) throws IOException {
         PlanAction planAction = planActionMapper.toEntity(dto);
 
+        // Une création est une création. Le mapper recopie l'identifiant du DTO : avec un id, save()
+        // fusionnait au lieu d'insérer, et réécrivait le plan existant qui le porte — d'une autre
+        // structure au besoin, en le rattachant au dossier fourni, avec un auteur et une date de
+        // création venus de la saisie (@PrePersist ne passe pas sur une fusion). Ce qui relève du
+        // serveur ou du circuit n'est donc jamais repris du DTO, comme dans corriger().
+        planAction.setId(null);
+        planAction.setWorkflowId(null);
+        planAction.setWorkflowStatus(null);
+        planAction.setDateTraitement(null);
+        planAction.setDateRejet(null);
+        planAction.setUpdateAt(null);
+        planAction.setUpdateById(null);
+        planAction.setCurrentUserStructure(null);
+
         NonConformite nonConformite = nonConformiteRepository.findById(dto.getNonConformeId())
                 .orElseThrow(() -> new RuntimeException("Ce plan d'action n'est associé à aucune non-conformité!"));
 
@@ -142,9 +160,7 @@ public class PlanActionServiceImpl implements PlanActionService {
         // validation qualité qu'il est confié à son responsable et entre dans son circuit
         // (cf. PlansActionDeLaNonConformiteService#confierLesPlans). Ouvrir le circuit ici
         // engageait le responsable sur une action que personne n'avait encore validée.
-        if (planAction.getStatus() == null) {
-            planAction.setStatus(StatutEnum.INACTIF);
-        }
+        planAction.setStatus(StatutEnum.INACTIF);
 
         planAction = planActionRepository.save(planAction);
 
@@ -426,7 +442,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public Page<PlanActionDto> allPlanActions(Pageable pageable) {
-        return avecLeurDossier(planActionRepository.findAll(pageable)
+        return avecLeurDossier(visiblesParLAppelant(pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
@@ -436,6 +452,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public Page<PlanActionDto> planActionByResponsable(String responsable, StatutEnum statut, Pageable pageable) {
+        exigerSaPropreAdresse(responsable);
         return avecLeurDossier(planActionRepository.findPlanActionsByResponsableEmailAndStatus(responsable, statut, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
@@ -455,6 +472,7 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public Page<PlanActionDto> planActionByResponsableAll(String responsable, Pageable pageable) {
+        exigerSaPropreAdresse(responsable);
         return avecLeurDossier(planActionRepository.findPlanActionsByResponsableEmail(responsable, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
@@ -632,12 +650,80 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Override
     public Page<PlanActionDto> getPlanActionsByStructure(String structureId, Pageable pageable) {
+        exigerSonProprePerimetre(structureId, SecurityUtils.getCurrentUserStructureId(),
+                "Ces plans d'action sont ceux d'une autre structure.");
         return avecLeurDossier(planActionRepository.findPlanActionsByStructureId(structureId, pageable)
                 .map(planActionMapper::toDto)
                 .map(dto -> {
                     dto.setFichiers(fichierService.getPjByEntityId(dto.getId()));
                     return dto;
                 }));
+    }
+
+    /**
+     * Les plans d'action que l'appelant a le droit de voir.
+     *
+     * <p>La liste générale rendait la table entière, chaque plan accompagné de la non-conformité
+     * qui le motive : la borne posée sur les dossiers se contournait par leurs plans. La règle est
+     * celle de la liste des non-conformités, sans en inventer une autre — la portée transverse
+     * voit tout, les autres voient les plans des dossiers qu'ils voient, et ceux qu'on leur a
+     * confiés.</p>
+     */
+    private Page<PlanAction> visiblesParLAppelant(Pageable pageable) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
+            return planActionRepository.findAll(pageable);
+        }
+        return planActionRepository.findVisiblesPar(SecurityUtils.getCurrentUserStructureId(),
+                SecurityUtils.getCurrentUserId(), identifiantDeLAppelant(), pageable);
+    }
+
+    /**
+     * L'identifiant de l'appelant, tel que le plan range son responsable.
+     *
+     * <p>Le sujet du jeton est un UUID Keycloak ; s'il ne l'était pas, l'appelant ne peut être
+     * responsable d'aucun plan, et la requête ne doit pas échouer pour autant.</p>
+     */
+    private static UUID identifiantDeLAppelant() {
+        String moi = SecurityUtils.getCurrentUserId();
+        if (moi == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(moi);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Les listes « par responsable » ne se lisent que pour soi.
+     *
+     * <p>L'adresse venait de l'URL et personne ne la confrontait à l'appelant : il suffisait de
+     * connaître celle d'un collègue pour lire les actions qu'on lui a confiées, dossiers compris.
+     * L'adresse se compare sans tenir compte de la casse, comme la saisit un annuaire.</p>
+     */
+    private void exigerSaPropreAdresse(String email) {
+        String sienne = SecurityUtils.getCurrentUserEmail();
+        exigerSonProprePerimetre(email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT),
+                sienne == null ? null : sienne.trim().toLowerCase(java.util.Locale.ROOT),
+                "Ces plans d'action sont ceux d'une autre personne.");
+    }
+
+    /**
+     * Refuse une liste demandée sur un périmètre qui n'est pas celui de l'appelant.
+     *
+     * <p>La même règle que pour les listes de non-conformités par structure ou par personne
+     * ({@code NonConformiteServiceImpl}) : la portée transverse — la responsabilité qualité,
+     * l'administration — passe outre ; les autres ne lisent que le leur. 403 et non 404 : le
+     * périmètre demandé existe et l'appelant le sait.</p>
+     */
+    private void exigerSonProprePerimetre(String demande, String sien, String refus) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
+            return;
+        }
+        if (demande == null || sien == null || !demande.equals(sien)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, refus);
+        }
     }
 
     @Override

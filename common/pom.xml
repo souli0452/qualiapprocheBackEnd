@@ -69,6 +69,15 @@
             <groupId>net.javacrumbs.shedlock</groupId>
             <artifactId>shedlock-provider-jdbc-template</artifactId>
         </dependency>
+        <!--
+            Messagerie entre services (ActiveMQ Artemis, JMS). Optionnelle ici : seuls les services
+            qui publient ou consomment la redéclarent ; les autres n'ouvrent aucune connexion.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-artemis</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>

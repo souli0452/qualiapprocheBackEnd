@@ -79,7 +79,7 @@ class CorsConfigTest {
     @Test
     @DisplayName("Le motif « * » ouvre à toutes les origines, cookies compris")
     void jokerEnMotif_ouvreATous() {
-        // C'est la configuration livrée. Le joker doit être posé comme MOTIF et non comme origine :
+        // Possible pour un environnement de test. Le joker doit être posé comme MOTIF et non comme origine :
         // la norme refuse « * » comme origine dès que la requête porte des identifiants, et le
         // navigateur rejette alors la réponse — un échec impossible à distinguer d'un blocage CORS
         // ordinaire.
@@ -98,6 +98,64 @@ class CorsConfigTest {
                 .isEqualTo("http://localhost:4200");
         assertThat(config.checkOrigin("https://un-site-quelconque.fr"))
                 .isEqualTo("https://un-site-quelconque.fr");
+    }
+
+    @Test
+    @DisplayName("Le défaut couvre les domaines du produit et le poste de développement")
+    void defaut_couvreLesDomainesDuProduit() {
+        // C'est la configuration livrée quand aucune variable n'est posée : le frontal déployé doit
+        // passer sans réglage, sans quoi la connexion échouerait sur une erreur CORS.
+        CorsConfiguration config = configuration("", CorsConfig.MOTIFS_PAR_DEFAUT);
+
+        assertThat(config.checkOrigin("https://app.test.qualisira.com"))
+                .isEqualTo("https://app.test.qualisira.com");
+        assertThat(config.checkOrigin("http://localhost:4200")).isNotNull();
+        assertThat(config.checkOrigin("http://127.0.0.1:4200")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Le défaut n'ouvre plus à un site quelconque")
+    void defaut_refuseLesSitesEtrangers() {
+        // Le défaut était « * » : n'importe quel site pouvait agir au nom d'un utilisateur connecté.
+        CorsConfiguration config = configuration("", CorsConfig.MOTIFS_PAR_DEFAUT);
+
+        assertThat(config.getAllowedOriginPatterns()).doesNotContain("*");
+        assertThat(config.checkOrigin("https://un-site-quelconque.fr")).isNull();
+        assertThat(config.checkOrigin("https://qualisira.com.attaquant.fr")).isNull();
+        assertThat(config.checkOrigin("http://app.test.qualisira.com"))
+                .as("le frontal déployé n'est servi qu'en HTTPS")
+                .isNull();
+        assertThat(config.checkOrigin("null")).isNull();
+    }
+
+    @Test
+    @DisplayName("Le défaut ne fait pas confiance aux autres hôtes des domaines du produit")
+    void defaut_refuseLesHotesVoisins() {
+        // s3.horeb.tech sert le stockage objet : une page HTML déposée dans un compartiment
+        // pourrait, sinon, lire les données de l'utilisateur connecté et écrire en son nom.
+        CorsConfiguration config = configuration("", CorsConfig.MOTIFS_PAR_DEFAUT);
+
+        assertThat(config.checkOrigin("https://s3.horeb.tech")).isNull();
+        assertThat(config.checkOrigin("https://console.horeb.tech")).isNull();
+        assertThat(config.checkOrigin("https://mail.qualisira.com")).isNull();
+        assertThat(config.getAllowedOriginPatterns())
+                .noneMatch(motif -> motif.startsWith("https://*"));
+    }
+
+    @Test
+    @DisplayName("Le défaut n'admet que le frontal de test, pas les autres hôtes de test.qualisira.com")
+    void defaut_refuseLesAutresHotesDeTest() {
+        // Seul app.test.qualisira.com sert l'application. Le domaine de test lui-même, la passerelle
+        // et les noms cités naguère (qui ne résolvent pas) n'ont pas à écrire dans l'API ; le
+        // domaine nu qualisira.com sert le site vitrine.
+        CorsConfiguration config = configuration("", CorsConfig.MOTIFS_PAR_DEFAUT);
+
+        assertThat(config.checkOrigin("https://test.qualisira.com")).isNull();
+        assertThat(config.checkOrigin("https://qualisira.test.qualisira.com")).isNull();
+        assertThat(config.checkOrigin("https://api-gateway.test.qualisira.com")).isNull();
+        assertThat(config.checkOrigin("https://app.test.qualisira.com.attaquant.fr")).isNull();
+        assertThat(config.checkOrigin("https://qualisira.horeb.tech")).isNull();
+        assertThat(config.checkOrigin("https://qualisira.com")).isNull();
     }
 
     @Test

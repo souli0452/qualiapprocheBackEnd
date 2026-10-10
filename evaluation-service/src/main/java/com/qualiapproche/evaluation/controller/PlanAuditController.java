@@ -74,7 +74,7 @@ public class PlanAuditController {
     @GetMapping("/fichier")
     public ResponseEntity<InputStreamResource> telecharger(@PathVariable("auditId") UUID auditId) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"plan-audit\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("plan-audit"))
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(new InputStreamResource(service.contenuDuFichier(auditId)));
     }

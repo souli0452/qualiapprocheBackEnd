@@ -23,6 +23,8 @@ public class KcAccessDenied implements AccessDeniedHandler {
 
         KcResponseDto errorResponse = KcResponseDto.builder()
                 .status("ACCESS_DENIED")
+                // Un refus sans message laissait l'écran afficher une erreur vide.
+                .message("Accès refusé : vous n'avez pas la permission requise pour cette action.")
                 .build();
 
         ObjectMapper mapper = new ObjectMapper();

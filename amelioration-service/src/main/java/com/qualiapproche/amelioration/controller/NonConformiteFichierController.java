@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
 import com.qualiapproche.amelioration.entities.PieceJointe;
+import com.qualiapproche.amelioration.service.impl.AccesAuxDossiers;
 import com.qualiapproche.amelioration.service.impl.NonConformiteFichierService;
 import com.qualiapproche.amelioration.utils.EnTeteFichier;
 import com.qualiapproche.common.annotation.RequirePermissions;
@@ -51,6 +52,7 @@ public class NonConformiteFichierController {
 
     private final NonConformiteFichierService fichierService;
     private final PieceJointeStockageService stockage;
+    private final AccesAuxDossiers acces;
 
     /**
      * Dépose un fichier et rend sa référence.
@@ -66,6 +68,8 @@ public class NonConformiteFichierController {
     public ResponseEntity<ApiResponse<String>> deposer(
             @PathVariable("ncId") UUID ncId,
             @RequestPart("file") MultipartFile file) {
+        // La permission du module ne suffit pas : le dossier doit être de ceux que l'appelant voit.
+        acces.exigerLaNonConformite(ncId);
         return ResponseEntity.ok(ApiResponse.success(fichierService.deposer(ncId, file)));
     }
 
@@ -79,6 +83,7 @@ public class NonConformiteFichierController {
             @PathVariable("ncId") UUID ncId,
             @RequestParam("reference") String reference) {
 
+        acces.exigerLaNonConformite(ncId);
         PieceJointe pieceJointe = fichierService.pieceJointe(ncId, reference);
         Resource contenu = new InputStreamResource(stockage.contenu(pieceJointe));
 

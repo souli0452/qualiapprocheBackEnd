@@ -76,6 +76,14 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
 
     NonConformiteDto getByNumeroRef(String numeroRef);
 
+    /**
+     * L'appelant peut-il lire ce dossier ?
+     *
+     * <p>Une seule règle pour tout ce qui sert un dossier désigné par son identifiant — fiche,
+     * fiche de clôture, état imprimé : deux règles auraient fini par ne plus dire la même chose.</p>
+     */
+    boolean peutConsulter(com.qualiapproche.amelioration.entities.NonConformite nc);
+
     Map<String, Map<String, Long>> getStatsMensuellesParService(int annee, String origineServiceId);
 
     Map<String, Map<String, Map<String, Long>>> getStatsDetailleesServiceParAnnee(int annee, String origineServiceId);

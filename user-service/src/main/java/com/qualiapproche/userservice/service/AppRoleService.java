@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.userservice.entities.AppRole;
+import com.qualiapproche.userservice.entities.UserRoleAssignment;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
+import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
@@ -15,8 +17,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -48,6 +52,10 @@ import java.util.stream.Collectors;
  * quelle chaîne : {@code SUPER_ADMIN}, {@code SERVICE_TECHNIQUE} ou une permission d'un autre
  * service se forgeaient, puis la passerelle les relayait à tous les services.</p>
  *
+ * <p>Quatrième règle : <b>nul ne met dans un rôle une permission qu'il ne détient pas</b>, ni ne
+ * l'en retire ({@link GardeDesHabilitations}). Sans elle, un gestionnaire des rôles ajoutait au
+ * sien la permission de son choix et la recevait à sa prochaine requête.</p>
+ *
  * <p>Le libellé reste donc figé une fois publié, comme le code d'une étape ou d'une entrée de
  * catalogue. La description, elle, se modifie librement : c'est là que se corrige la formulation
  * présentée à l'écran d'attribution.</p>
@@ -58,7 +66,21 @@ public class AppRoleService {
 
     private static final String DICTIONNAIRE = "permissions.json";
 
+    /**
+     * Noms qu'aucun rôle ne peut recevoir par l'écran d'administration, quelle que soit leur casse.
+     *
+     * <p>{@link GardeDesHabilitations} reconnaît le SUPER_ADMIN à son nom, sans égard à la casse,
+     * et ne le borne en rien. La création, elle, ne refusait que l'homonyme exact : un gestionnaire
+     * des rôles créait {@code super_admin} avec les seules permissions qu'il détenait, se le faisait
+     * attribuer par un collègue, et devenait administrateur total. Le rôle {@code SUPER_ADMIN}
+     * légitime est posé au démarrage par {@code RoleInitializer}, qui ne passe pas par ici ;
+     * {@code SERVICE_TECHNIQUE} est refusé comme côté Keycloak ({@link KcRoleService}).</p>
+     */
+    private static final Set<String> NOMS_RESERVES = Set.of("SUPER_ADMIN", "SUPERADMIN", "SERVICE_TECHNIQUE");
+
     private final AppRoleRepository appRoleRepository;
+    private final UserRoleAssignmentRepository affectations;
+    private final GardeDesHabilitations garde;
 
     /** Les valeurs du dictionnaire, lues une fois. */
     private volatile Set<String> permissionsConnues;
@@ -73,6 +95,40 @@ public class AppRoleService {
         exigerDesPermissionsConnues(role.getPermissions());
 
         return role.getId() == null ? creer(role) : modifier(role, nom);
+    }
+
+    /**
+     * Attribue un rôle à un compte, en plus de ceux qu'il porte.
+     *
+     * <p>Le contrôle porte sur l'état qui en résulte : le demandeur doit détenir toutes les
+     * permissions du rôle, et ne peut pas viser son propre compte.</p>
+     *
+     * @throws BusinessException 404 si le rôle n'existe pas, 403 si l'attribution est refusée
+     */
+    @Transactional
+    public UserRoleAssignment attribuer(String userId, UUID roleId) {
+        AppRole role = appRoleRepository.findById(roleId)
+                .orElseThrow(() -> new BusinessException("Aucun rôle ne porte cet identifiant : " + roleId,
+                        HttpStatus.NOT_FOUND));
+        List<AppRole> resultat = new java.util.ArrayList<>(affectations.findByUserId(userId).stream()
+                .map(UserRoleAssignment::getRole).filter(java.util.Objects::nonNull).toList());
+        resultat.add(role);
+        garde.exigerAttributionPermise(userId, resultat);
+
+        return affectations.save(UserRoleAssignment.builder()
+                .userId(userId)
+                .role(role)
+                .build());
+    }
+
+    /**
+     * Les permissions du dictionnaire ({@code permissions.json}).
+     *
+     * <p>Publiques pour {@link KcRoleService}, qui refuse un rôle Keycloak homonyme d'une
+     * permission : les rôles du jeton comptent comme permissions.</p>
+     */
+    public Set<String> permissionsDuDictionnaire() {
+        return permissionsConnues();
     }
 
     private void exigerDesPermissionsConnues(List<String> permissions) {
@@ -102,12 +158,26 @@ public class AppRoleService {
         return connues;
     }
 
+    /**
+     * Crée un rôle, sous un nom ni réservé ni déjà pris — l'un et l'autre sans égard à la casse.
+     *
+     * <p>Les rôles déjà en base ne sont pas revus : leur reconnaissance reste celle d'hier. Seuls
+     * les noms nouveaux sont tenus à la règle.</p>
+     */
     private AppRole creer(AppRole role) {
-        if (!appRoleRepository.findAllByName(role.getName()).isEmpty()) {
+        if (NOMS_RESERVES.contains(role.getName().toUpperCase(Locale.ROOT))) {
             throw new BusinessException(
-                    "Un rôle nommé « " + role.getName() + " » existe déjà. Les étapes des circuits "
-                            + "désignent leur responsable par ce nom : deux rôles homonymes rendraient "
-                            + "indécidable qui est habilité.",
+                    "Le nom de rôle « " + role.getName() + " » est réservé : il désigne l'administration "
+                            + "totale ou les appels de service, que nul ne reçoit par l'écran "
+                            + "d'administration.",
+                    HttpStatus.FORBIDDEN);
+        }
+        garde.exigerPermissionsDetenues(List.of(), role.getPermissions());
+        if (!appRoleRepository.findAllByNameIgnoreCase(role.getName()).isEmpty()) {
+            throw new BusinessException(
+                    "Un rôle nommé « " + role.getName() + " » existe déjà, à la casse près. Les étapes "
+                            + "des circuits désignent leur responsable par ce nom : deux rôles homonymes "
+                            + "rendraient indécidable qui est habilité.",
                     HttpStatus.CONFLICT);
         }
         return appRoleRepository.save(role);
@@ -131,6 +201,7 @@ public class AppRoleService {
         existant.setDescription(role.getDescription());
         List<String> permissions = role.getPermissions();
         if (permissions != null) {
+            garde.exigerPermissionsDetenues(existant.getPermissions(), permissions);
             existant.setPermissions(permissions);
         }
         return appRoleRepository.save(existant);

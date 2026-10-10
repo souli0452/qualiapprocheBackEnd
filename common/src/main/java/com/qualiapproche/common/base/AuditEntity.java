@@ -56,8 +56,8 @@ public class AuditEntity {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        this.createdById = SecurityUtils.getCurrentUserId();
-        this.currentUserfullName = SecurityUtils.getCurrentUserFullName();
+        this.createdById = SecurityUtils.getAuteurId();
+        this.currentUserfullName = SecurityUtils.getAuteurNom();
         this.currentUserEmail = SecurityUtils.getCurrentUserEmail();
         this.directionId = SecurityUtils.getCurrentDirectionId();
     }
@@ -65,6 +65,6 @@ public class AuditEntity {
     @PreUpdate
     protected void onUpdate() {
         updateAt = LocalDateTime.now();
-        this.updateById = SecurityUtils.getCurrentUserId();
+        this.updateById = SecurityUtils.getAuteurId();
     }
 }

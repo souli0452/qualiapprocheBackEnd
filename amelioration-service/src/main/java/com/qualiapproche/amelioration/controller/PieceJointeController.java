@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.controller;
 
 import com.qualiapproche.amelioration.entities.PieceJointe;
+import com.qualiapproche.amelioration.service.impl.AccesAuxDossiers;
 import com.qualiapproche.amelioration.service.impl.PieceJointeStockageService;
 import com.qualiapproche.amelioration.utils.EnTeteFichier;
 import com.qualiapproche.common.annotation.RequirePermissions;
@@ -44,12 +45,15 @@ import static com.qualiapproche.common.utils.ApiUrls.QUALI_APPROCHE_ROOT_URL;
 public class PieceJointeController {
 
     private final PieceJointeStockageService stockage;
+    private final AccesAuxDossiers acces;
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/{id}/contenu")
     @Operation(summary = "Télécharger une pièce jointe")
     public ResponseEntity<Resource> telecharger(@PathVariable("id") UUID id) {
         PieceJointe piece = stockage.piece(id);
+        // La pièce se suit comme son dossier : son identifiant ne vaut pas droit de la lire.
+        acces.exigerLaPiece(piece);
         Resource contenu = new InputStreamResource(stockage.contenu(piece));
 
         return ResponseEntity.ok()
@@ -62,6 +66,8 @@ public class PieceJointeController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Supprimer une pièce jointe, contenu compris")
     public ResponseEntity<Void> supprimer(@PathVariable("id") UUID id) {
+        // Supprimer détruit une preuve : on ne le permet que sur un dossier que l'appelant voit.
+        acces.exigerLaPiece(stockage.piece(id));
         stockage.deleteById(id);
         return ResponseEntity.noContent().build();
     }

@@ -18,7 +18,7 @@ public class QmsAuditLogService {
     private final QmsAuditLogRepository auditLogRepository;
 
     public void logAction(String action, String documentNumber, String details) {
-        String username = SecurityUtils.getCurrentUserFullName();
+        String username = SecurityUtils.getAuteurNom();
         if ("Système".equalsIgnoreCase(username)) {
             username = "system";
         }

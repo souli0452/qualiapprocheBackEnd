@@ -76,8 +76,19 @@ class ImputationEtTitulaireDAccordTest {
     @Mock private PlanActionRepository planActionRepository;
     @Mock private WorkflowClient workflowClient;
     @Mock private PlansActionDeLaNonConformiteService plansActionService;
+    @Mock private com.qualiapproche.common.config.PermissionChecker permissionChecker;
 
     @InjectMocks private NonConformiteServiceImpl service;
+
+    /**
+     * L'appelant a la portée transverse : la mise à jour par identifiant applique désormais la règle
+     * de visibilité de la fiche, que ces tests ne jugent pas — ils jugent l'accord entre l'imputé
+     * et le titulaire.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void porteeTransverse() {
+        when(permissionChecker.detient(any(String[].class))).thenReturn(true);
+    }
 
     private static final String ANCIEN = "agent-1";
     private static final String NOUVEAU = "agent-2";

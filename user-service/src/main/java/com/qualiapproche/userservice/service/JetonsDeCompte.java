@@ -69,7 +69,12 @@ public class JetonsDeCompte {
         return jeton;
     }
 
-    /** Consomme le jeton, ou refuse en 400 s'il n'est pas valide pour ce compte et cet usage. */
+    /**
+     * Consomme le jeton, ou refuse en 400 s'il n'est pas valide pour ce compte et cet usage.
+     *
+     * <p>Deux présentations simultanées du même jeton n'en laissent passer qu'une
+     * ({@link JetonDeCompteRepository#marquerServi}).</p>
+     */
     @Transactional
     public void consommer(String userId, Usage usage, String jeton) {
         LocalDateTime maintenant = LocalDateTime.now(horloge);
@@ -80,12 +85,12 @@ public class JetonsDeCompte {
                 && trouve.getUsage() == usage
                 && trouve.getUtiliseLe() == null
                 && trouve.getExpireLe().isAfter(maintenant);
-        if (!valide) {
+        // La consommation elle-même est conditionnelle et atomique : si une requête simultanée a
+        // servi le jeton entre la lecture ci-dessus et maintenant, aucune ligne n'est touchée.
+        if (!valide || depot.marquerServi(trouve.getId(), maintenant) != 1) {
             throw new BusinessException("Ce lien est invalide ou a expiré. Demandez-en un nouveau.",
                     HttpStatus.BAD_REQUEST);
         }
-        trouve.setUtiliseLe(maintenant);
-        depot.save(trouve);
     }
 
     static String empreinte(String jeton) {

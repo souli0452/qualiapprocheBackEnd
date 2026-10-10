@@ -883,12 +883,7 @@ public class QmsDocumentService {
 
             // 4. Apply password confidentiality encryption
             if (doc.isConfidentiel()) {
-                AccessPermission ap = new AccessPermission();
-                ap.setCanPrint(true);
-                ap.setCanExtractContent(false);
-                StandardProtectionPolicy spp = new StandardProtectionPolicy("qmssecure", "", ap);
-                spp.setEncryptionKeyLength(128);
-                pdDoc.protect(spp);
+                protegerContreLExtraction(pdDoc);
                 log.info("Confidential document password-protected successfully (no open password prompt)");
             }
 
@@ -900,6 +895,37 @@ public class QmsDocumentService {
             return new ExportedDocument(baos.toByteArray(), filename, "application/pdf");
         }
     }
+
+    /**
+     * Interdit l'extraction du contenu d'un export confidentiel, sans mot de passe d'ouverture.
+     *
+     * <p>Le mot de passe <i>propriétaire</i> — celui qui lève ces restrictions — était
+     * « qmssecure », écrit ici même : quiconque lisait le code, ou ce dépôt, ôtait la protection de
+     * tous les exports confidentiels. Il est désormais tiré au hasard à chaque export et jamais
+     * conservé : rien ne rouvre ces fichiers, l'original reste dans le stockage, sans protection,
+     * et chaque téléchargement en produit un nouvel exemplaire. Personne n'a donc à le connaître.</p>
+     *
+     * <p>Ce n'est pas un chiffrement de confidentialité : le mot de passe d'ouverture reste vide,
+     * à dessein, pour que le document s'ouvre sans saisie. La protection se limite à ce que les
+     * lecteurs PDF respectent — l'impression permise, la copie refusée.</p>
+     */
+    static void protegerContreLExtraction(PDDocument pdDoc) throws IOException {
+        AccessPermission ap = new AccessPermission();
+        ap.setCanPrint(true);
+        ap.setCanExtractContent(false);
+        StandardProtectionPolicy spp = new StandardProtectionPolicy(motDePasseProprietaireAleatoire(), "", ap);
+        spp.setEncryptionKeyLength(128);
+        pdDoc.protect(spp);
+    }
+
+    /** 32 octets d'un générateur cryptographique, en base64 : imprévisible, et propre à chaque export. */
+    static String motDePasseProprietaireAleatoire() {
+        byte[] octets = new byte[32];
+        ALEA_MOT_DE_PASSE.nextBytes(octets);
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(octets);
+    }
+
+    private static final java.security.SecureRandom ALEA_MOT_DE_PASSE = new java.security.SecureRandom();
 
     public List<QmsDocumentVersion> getVersionHistory(UUID id) {
         exigerAccesInterne(chargerSansControle(id));

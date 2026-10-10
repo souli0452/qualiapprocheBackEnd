@@ -25,20 +25,21 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.common.dto.auth.KcResponseDto;
+import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.userservice.config.WebClientConfig.ReponseKeycloakEnErreur;
+import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.common.utils.PermissionsPortee;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.userservice.client.StructureClient;
@@ -61,11 +62,19 @@ public class KcUserService {
     private final PlafondDUtilisateurs plafondDUtilisateurs;
     private final ProfilPersonnel profilPersonnel;
     private final JetonsDeCompte jetons;
+    private final GardeDesHabilitations garde;
+
+    /**
+     * Préfixe que Keycloak donne aux comptes de service ({@code client_credentials}).
+     * {@code PermissionChecker.appelDeService} s'y fie pour reconnaître un appel entre services :
+     * un utilisateur créé sous ce nom passerait pour un service.
+     */
+    static final String PREFIXE_COMPTE_DE_SERVICE = "service-account-";
     @Value("${frontend.url}")
     private String frontendUrl;
 
     public Map<String, Object> login(KcLoginRequestDto kcLoginRequest, HttpServletResponse response) {
-        KcTokenDto kcTokenDto = kcTokenService.getAccessToken(kcLoginRequest);
+        KcTokenDto kcTokenDto = jetonsPourIdentifiants(kcLoginRequest);
 
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
                 .users()
@@ -139,6 +148,26 @@ public class KcUserService {
         return responseData;
     }
 
+    /**
+     * Échange les identifiants contre des jetons Keycloak.
+     *
+     * <p>Des identifiants refusés remontaient en 500 « erreur interne » : indiscernables d'une
+     * panne, et signalés comme telle par les outils d'audit. Tout refus de Keycloak — mot de passe
+     * faux, compte inconnu, désactivé ou non finalisé — devient un même 401, au même message : dire
+     * lequel permettrait de sonder l'annuaire. Keycloak injoignable ou en erreur reste une erreur du
+     * serveur.</p>
+     */
+    private KcTokenDto jetonsPourIdentifiants(KcLoginRequestDto identifiants) {
+        try {
+            return kcTokenService.getAccessToken(identifiants);
+        } catch (ReponseKeycloakEnErreur e) {
+            if (e.refusDeLAppelant()) {
+                throw new BusinessException("Identifiant ou mot de passe incorrect.", HttpStatus.UNAUTHORIZED);
+            }
+            throw e;
+        }
+    }
+
     public Page<KcUserDto> getAllUsers(Pageable pageable) {
         List<KcUserDto> allUsers = keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
                 .map(this::mapUserToDto)
@@ -164,6 +193,10 @@ public class KcUserService {
     }
 
     public KcUserDto createUser(KcUserDto kcUserDto) {
+        exigerUnNomDUtilisateur(kcUserDto.getUsername());
+        // Les rôles demandés sont contrôlés avant que le compte n'existe : refusés après coup, ils
+        // laisseraient dans Keycloak un compte sans rôle que personne n'a voulu.
+        garde.exigerAttributionPermise(null, rolesNommes(kcUserDto.getRoles()));
         // Avant tout le reste : la licence borne le nombre de comptes actifs, et le dépassement
         // se dit à l'utilisateur plutôt qu'après coup. Créer le compte puis le refuser laisserait
         // un compte à demi formé dans Keycloak.
@@ -187,6 +220,12 @@ public class KcUserService {
         credential.setTemporary(!kcUserDto.isEmailVerified());
         user.setCredentials(Collections.singletonList(credential));
         Response response = keycloak.realm(kcAuthProperties.getRealm()).users().create(user);
+        if (response.getStatus() == HttpStatus.CONFLICT.value()) {
+            // 409 et non 500 : referentiel-service, qui provisionne l'administrateur à chaque
+            // démarrage, reconnaît à ce statut un compte déjà créé.
+            throw new BusinessException("Un compte porte déjà ce nom d'utilisateur ou cette adresse.",
+                    HttpStatus.CONFLICT);
+        }
         if (response.getStatus() != 201) {
             throw new RuntimeException("Erreur création utilisateur");
         }
@@ -214,7 +253,15 @@ public class KcUserService {
         return kcUserDto;
     }
 
+    /**
+     * Modifie un compte depuis l'administration : identité, adresse, activation, structure, rôles.
+     *
+     * <p>Le demandeur doit détenir au moins tout ce que détient le compte : changer l'adresse d'un
+     * administrateur puis demander un lien de réinitialisation suffisait à prendre son compte.</p>
+     */
     public void updateUser(KcUserDto kcUserDto) {
+        garde.exigerAscendantSur(kcUserDto.getId(), "modifier sa fiche");
+        garde.exigerAttributionPermise(kcUserDto.getId(), rolesNommes(kcUserDto.getRoles()));
         UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId())
                 .toRepresentation();
         user.setFirstName(kcUserDto.getFirstName());
@@ -246,15 +293,82 @@ public class KcUserService {
         }
     }
 
+    /** Rôles applicatifs désignés par leur nom ; un nom inconnu est ignoré, comme à l'enregistrement. */
+    private List<AppRole> rolesNommes(List<String> noms) {
+        if (noms == null) {
+            return List.of();
+        }
+        return noms.stream()
+                .map(appRoleRepository::findByName)
+                .flatMap(java.util.Optional::stream)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Refuse un nom de connexion vide ou réservé aux comptes de service.
+     *
+     * <p>{@code PermissionChecker.appelDeService} reconnaît un service au préfixe
+     * {@code service-account-} de son nom : un utilisateur ainsi nommé se verrait ouvrir les points
+     * d'entrée réservés au dialogue entre services.</p>
+     */
+    private static void exigerUnNomDUtilisateur(String username) {
+        if (username == null || username.isBlank()) {
+            throw new BusinessException("Le nom d'utilisateur est obligatoire.", HttpStatus.BAD_REQUEST);
+        }
+        if (username.trim().toLowerCase(java.util.Locale.ROOT).startsWith(PREFIXE_COMPTE_DE_SERVICE)) {
+            throw new BusinessException("Le préfixe « " + PREFIXE_COMPTE_DE_SERVICE + " » est réservé aux "
+                    + "comptes de service : choisissez un autre nom d'utilisateur.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Mot de passe fixé par un gestionnaire des utilisateurs.
+     *
+     * <p>Réservé à qui détient au moins tout ce que détient le compte : sinon, fixer le mot de passe
+     * d'un administrateur suffisait à ouvrir sa session.</p>
+     */
+    public void fixerMotDePasseParGestionnaire(String userId, String password) {
+        garde.exigerAscendantSur(userId, "réinitialiser son mot de passe");
+        updatePassword(userId, password);
+    }
+
+    /**
+     * Fixe le mot de passe, puis ferme toutes les sessions ouvertes du compte.
+     *
+     * <p>Un mot de passe se change parce qu'on le croit connu d'un autre : laisser vivantes les
+     * sessions ouvertes avec l'ancien, c'était laisser l'intrus dedans jusqu'à l'expiration de son
+     * jeton de renouvellement. Une déconnexion qui échoue ne défait pas le changement — le nouveau
+     * mot de passe vaut déjà — elle est journalisée.</p>
+     *
+     * <p>Un mot de passe que la politique de Keycloak refuse est une erreur de l'appelant (400),
+     * pas une panne.</p>
+     */
     public void updatePassword(String userId, String password) {
         CredentialRepresentation credential = new CredentialRepresentation();
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue(password);
         credential.setTemporary(false);
-        keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).resetPassword(credential);
+        UserResource compte = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId);
+        try {
+            compte.resetPassword(credential);
+        } catch (jakarta.ws.rs.BadRequestException e) {
+            throw new BusinessException("Ce mot de passe ne respecte pas la politique de sécurité "
+                    + "(longueur, caractères exigés, ou mot de passe déjà employé).", HttpStatus.BAD_REQUEST);
+        }
+        fermerLesSessions(compte, userId);
+    }
+
+    private void fermerLesSessions(UserResource compte, String userId) {
+        try {
+            compte.logout();
+        } catch (Exception e) {
+            log.warn("Mot de passe changé pour le compte {}, mais ses sessions n'ont pas pu être fermées : {}",
+                    userId, e.getMessage());
+        }
     }
 
     public void changeUserStatus(String userId, boolean enabled) {
+        garde.exigerAscendantSur(userId, enabled ? "réactiver ce compte" : "désactiver ce compte");
         if (enabled) {
             // Réactiver reprend une place. Sans ce contrôle, le plafond se contournait en trois
             // gestes : désactiver, créer, réactiver.
@@ -324,38 +438,60 @@ public class KcUserService {
         updatePassword(userId, password);
     }
 
+    /**
+     * Changement de mot de passe sur présentation de l'ancien.
+     *
+     * <p>Le contrôle que {@code username} est bien celui du demandeur se fait au contrôleur, qui
+     * connaît la règle d'exception des gestionnaires. Ici : la règle d'ascendance d'abord, puis
+     * l'ancien mot de passe, vérifié par une ouverture de session auprès de Keycloak ; son refus
+     * (ou un compte inconnu) répond « ancien mot de passe incorrect ». Un nouveau mot de passe refusé par la politique de Keycloak le dit à son tour,
+     * au lieu de se faire passer pour un ancien mot de passe faux.</p>
+     *
+     * <p>Quand le demandeur n'est pas le titulaire du compte, il doit détenir au moins tout ce que
+     * le compte détient ({@link GardeDesHabilitations#exigerAscendantSur}).</p>
+     */
     public ResponseEntity<Object> updatePassword(String username, String oldPassword, String password) {
+        List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm())
+                .users()
+                .search(username, true);
+        if (users.isEmpty()) {
+            // Même réponse qu'un ancien mot de passe faux : la réponse ne dit pas si le compte existe.
+            return ancienMotDePasseIncorrect();
+        }
+        String userId = users.get(0).getId();
+        // Le contrôleur laisse un gestionnaire des utilisateurs viser un autre compte que le sien :
+        // sans cette règle, il fixait le mot de passe d'un SUPER_ADMIN dont il aurait appris
+        // l'ancien, sans jamais en détenir les habilitations. Même règle d'ascendance que pour la
+        // réinitialisation ou le statut ; le titulaire du compte, lui, passe toujours.
+        // Elle passe AVANT la vérification de l'ancien mot de passe : après, la réponse (401 si faux,
+        // 403 si juste) faisait de ce point un oracle sur le mot de passe d'un compte plus habilité.
+        garde.exigerAscendantSur(userId, "changer son mot de passe");
+
         try {
-            // 1. Vérification de l'ancien mot de passe via une tentative de login
             kcTokenService.getAccessToken(KcLoginRequestDto.builder()
                     .username(username)
                     .password(oldPassword)
                     .build());
-
-            // 2. Recherche de l'utilisateur par son username
-            List<UserRepresentation> users = keycloak.realm(kcAuthProperties.getRealm())
-                    .users()
-                    .search(username, true);
-
-            if (users.isEmpty()) {
-                throw new RuntimeException("Utilisateur non trouvé");
-            }
-
-            // 3. Mise à jour du mot de passe
-            updatePassword(users.get(0).getId(), password);
-
-            return ResponseEntity.ok(KcResponseDto.builder()
-                    .status("SUCCESS")
-                    .message("Votre mot de passe a été mis à jour avec succès.")
-                    .build());
         } catch (Exception e) {
-            log.error("Erreur lors de la mise à jour du mot de passe: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(KcResponseDto.builder()
-                            .status("ERROR")
-                            .message("Ancien mot de passe incorrect.")
-                            .build());
+            log.info("Changement de mot de passe refusé : ancien mot de passe non reconnu ({})",
+                    e.getClass().getSimpleName());
+            return ancienMotDePasseIncorrect();
         }
+
+        updatePassword(userId, password);
+
+        return ResponseEntity.ok(KcResponseDto.builder()
+                .status("SUCCESS")
+                .message("Votre mot de passe a été mis à jour avec succès.")
+                .build());
+    }
+
+    private static ResponseEntity<Object> ancienMotDePasseIncorrect() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(KcResponseDto.builder()
+                        .status("ERROR")
+                        .message("Ancien mot de passe incorrect.")
+                        .build());
     }
 
     private String getAttributeValue(Map<String, List<String>> attributes, String key) {
@@ -368,10 +504,26 @@ public class KcUserService {
         return null;
     }
 
+    /**
+     * Renouvelle les jetons à partir du cookie {@code refresh_token}.
+     *
+     * <p>Un cookie absent ou un jeton que Keycloak refuse (session expirée, fermée après un
+     * changement de mot de passe) répondait 500. C'est une session terminée : 401, que l'écran
+     * traduit en retour à la connexion.</p>
+     */
     public ResponseEntity<Object> refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = CookieUtils.getRefreshToken(request)
-                .orElseThrow(() -> new RuntimeException("Cookie refresh_token absent ou expiré"));
-        KcTokenDto kcTokenDto = kcTokenService.getRefreshToken(refreshToken);
+                .orElseThrow(() -> new BusinessException("Session expirée : reconnectez-vous.",
+                        HttpStatus.UNAUTHORIZED));
+        KcTokenDto kcTokenDto;
+        try {
+            kcTokenDto = kcTokenService.getRefreshToken(refreshToken);
+        } catch (ReponseKeycloakEnErreur e) {
+            if (e.refusDeLAppelant()) {
+                throw new BusinessException("Session expirée : reconnectez-vous.", HttpStatus.UNAUTHORIZED);
+            }
+            throw e;
+        }
 
         // Renouvellement des cookies avec les nouveaux tokens
         CookieUtils.addAccessTokenCookie(response, kcTokenDto.getAccessToken(), false);
@@ -479,11 +631,11 @@ public class KcUserService {
     }
 
     /**
-     * Retourne le profil complet de l'utilisateur actuellement connecté.
-     * L'identité est extraite depuis l'access_token stocké dans le cookie HTTP-Only.
+     * Retourne le profil complet de l'utilisateur actuellement connecté, identifié par son jeton
+     * vérifié.
      */
-    public Map<String, Object> getMe(HttpServletRequest request) {
-        return getUserById(monIdentifiant(request));
+    public Map<String, Object> getMe() {
+        return getUserById(monIdentifiant());
     }
 
     /**
@@ -494,19 +646,27 @@ public class KcUserService {
      * confiée à {@link ProfilPersonnel}, qui la borne à trois champs — {@code updateUser}, prévu
      * pour l'administration, désactiverait ici le compte et effacerait les rôles.</p>
      */
-    public Map<String, Object> mettreAJourMonProfil(HttpServletRequest request,
-                                                    com.qualiapproche.common.dto.auth.ProfilPersonnelDto profil) {
-        String userId = monIdentifiant(request);
+    public Map<String, Object> mettreAJourMonProfil(com.qualiapproche.common.dto.auth.ProfilPersonnelDto profil) {
+        String userId = monIdentifiant();
         profilPersonnel.mettreAJour(userId, profil);
         return getUserById(userId);
     }
 
-    /** L'identité portée par l'access_token du cookie HTTP-Only. */
-    private String monIdentifiant(HttpServletRequest request) {
-        String accessToken = CookieUtils.getAccessToken(request)
-                .orElseThrow(() -> new RuntimeException("Aucun access_token trouvé dans les cookies. Veuillez vous connecter."));
-
-        return extractSubFromJwt(accessToken);
+    /**
+     * L'identité du demandeur, lue dans le jeton que la chaîne de sécurité a <b>vérifié</b>.
+     *
+     * <p>Elle était tirée du cookie en décodant le jeton à la main, sans en vérifier la signature :
+     * le point d'entrée était certes authentifié, mais rien ne garantissait que le jeton décodé ici
+     * fût celui que la chaîne avait validé — l'en-tête {@code Authorization} et le cookie pouvaient
+     * porter deux jetons différents.</p>
+     */
+    private String monIdentifiant() {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException("Vous devez vous connecter pour accéder à cette ressource.",
+                    HttpStatus.UNAUTHORIZED);
+        }
+        return userId;
     }
 
     /**
@@ -689,29 +849,6 @@ public class KcUserService {
                 .anyMatch(r -> r.equalsIgnoreCase("SUPER_ADMIN") || r.equalsIgnoreCase("SUPERADMIN"));
 
         return computePermissions(appRoles, isSuperAdmin);
-    }
-
-    /**
-     * Extrait le claim {@code sub} (userId Keycloak) depuis le payload Base64 d'un JWT.
-     */
-    private String extractSubFromJwt(String jwt) {
-        try {
-            String[] parts = jwt.split("\\.");
-            if (parts.length < 2) {
-                throw new RuntimeException("Format JWT invalide.");
-            }
-            String payloadJson = new String(Base64.getUrlDecoder().decode(parts[1]));
-            @SuppressWarnings("unchecked")
-            Map<String, Object> claims = new ObjectMapper().readValue(payloadJson, Map.class);
-            Object sub = claims.get("sub");
-            if (sub == null) {
-                throw new RuntimeException("Claim 'sub' absent du token JWT.");
-            }
-            return sub.toString();
-        } catch (Exception e) {
-            log.error("Erreur lors du décodage du JWT : {}", e.getMessage());
-            throw new RuntimeException("Impossible de décoder le token JWT : " + e.getMessage());
-        }
     }
 
     private String generateRandomPassword(int length) {

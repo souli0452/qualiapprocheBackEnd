@@ -1,6 +1,16 @@
 package com.qualiapproche.userservice.controller;
 
 import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.common.config.PermissionChecker;
+import com.qualiapproche.common.dto.auth.ChangementDeMotDePasseDto;
+import com.qualiapproche.common.dto.auth.DemandeDeReinitialisationDto;
+import com.qualiapproche.common.dto.auth.MotDePasseFixeParAdministrateurDto;
+import com.qualiapproche.common.dto.auth.ReinitialisationParLienDto;
+import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.common.utils.SecurityUtils;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.Jwt;
 import com.qualiapproche.common.dto.auth.KcLoginRequestDto;
 import com.qualiapproche.common.dto.auth.KcUserDto;
 import com.qualiapproche.common.dto.auth.ProfilPersonnelDto;
@@ -37,6 +47,11 @@ import com.qualiapproche.common.dto.DestinataireDto;
  * de tous les modules s'en servent. Créer, modifier, désactiver un compte ou en fixer le mot de
  * passe exige {@code MANAGE_USER} — jusqu'ici, n'importe quel agent connecté pouvait le faire,
  * y compris sur le compte d'un administrateur.</p>
+ *
+ * <p>Mots de passe, jetons de lien et adresses voyagent dans le <b>corps</b> des requêtes, jamais
+ * dans l'URL (CWE-598) : une URL s'inscrit dans les journaux d'accès de chaque intermédiaire, dans
+ * l'historique du navigateur et dans l'en-tête {@code Referer}. Seul {@code /verify-email} garde ses
+ * paramètres : il est appelé depuis le lien du courriel, et son jeton ne sert qu'une fois.</p>
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -51,6 +66,7 @@ import com.qualiapproche.common.dto.DestinataireDto;
 @Tag(name = "Gestion des Utilisateurs", description = "Endpoints pour l'authentification et la gestion des utilisateurs Keycloak")
 public class KcUserController {
     private final KcUserService kcUserService;
+    private final PermissionChecker perm;
 
     @Operation(summary = "Authentification utilisateur",
             description = "Permet de se connecter. Les tokens JWT sont déposés dans des cookies HTTP-Only sécurisés.")
@@ -94,8 +110,8 @@ public class KcUserController {
     @Operation(summary = "Profil de l'utilisateur connecté",
             description = "Retourne le profil complet de l'utilisateur connecté en lisant l'access_token depuis les cookies HTTP-Only.")
     @GetMapping("/me")
-    public ResponseEntity<java.util.Map<String, Object>> getMe(HttpServletRequest request) {
-        return ResponseEntity.ok(kcUserService.getMe(request));
+    public ResponseEntity<java.util.Map<String, Object>> getMe() {
+        return ResponseEntity.ok(kcUserService.getMe());
     }
 
     /**
@@ -116,8 +132,8 @@ public class KcUserController {
                     + "structure, ni activation ne peuvent être touchés par cette voie.")
     @PutMapping("/me")
     public ResponseEntity<java.util.Map<String, Object>> mettreAJourMonProfil(
-            HttpServletRequest request, @RequestBody ProfilPersonnelDto profil) {
-        return ResponseEntity.ok(kcUserService.mettreAJourMonProfil(request, profil));
+            @RequestBody ProfilPersonnelDto profil) {
+        return ResponseEntity.ok(kcUserService.mettreAJourMonProfil(profil));
     }
 
     /**
@@ -181,10 +197,11 @@ public class KcUserController {
         return ResponseEntity.ok().build();
     }
 
+    /** Un gestionnaire fixe le mot de passe d'un compte qui n'est pas plus privilégié que lui. */
     @PreAuthorize("@perm.canUpdate(this)")
     @PatchMapping("/users/reset-password")
-    public ResponseEntity<Void> resetPassword(@RequestParam String userId, @RequestParam String password) {
-        kcUserService.updatePassword(userId, password);
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody MotDePasseFixeParAdministrateurDto corps) {
+        kcUserService.fixerMotDePasseParGestionnaire(corps.userId(), corps.password());
         return ResponseEntity.ok().build();
     }
 
@@ -211,22 +228,43 @@ public class KcUserController {
      * Le type {@code String} déclaré ici faisait échouer l'enveloppe de réponse : 500 à chaque appel.
      */
     @PostMapping("/initiate-reset-pwd")
-    public ResponseEntity<Void> initiatePasswordReset(@RequestParam String email) {
-        kcUserService.initiatePasswordReset(email);
+    public ResponseEntity<Void> initiatePasswordReset(@Valid @RequestBody DemandeDeReinitialisationDto corps) {
+        kcUserService.initiatePasswordReset(corps.email());
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/reinitialize-pwd")
-    public ResponseEntity<Void> reinitializePwd(@RequestParam String userId, @RequestParam String password, @RequestParam String token) {
-        kcUserService.reinitializePwd(userId, password, token);
+    public ResponseEntity<Void> reinitializePwd(@Valid @RequestBody ReinitialisationParLienDto corps) {
+        kcUserService.reinitializePwd(corps.userId(), corps.password(), corps.token());
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Changement de mot de passe sur présentation de l'ancien.
+     *
+     * <p>Le nom de compte venait de la requête sans être confronté au jeton : tout utilisateur
+     * connecté pouvait éprouver des mots de passe sur le compte de son choix, la réponse disant
+     * lesquels étaient justes. Le compte visé doit désormais être celui du jeton
+     * ({@code preferred_username}) ; seul un gestionnaire des utilisateurs — la règle de
+     * {@code @perm.canUpdate} — peut en viser un autre.</p>
+     */
     @PutMapping("/update-pwd")
-    public ResponseEntity<Object> updateTemporaryPassword(
-            @RequestParam String username,
-            @RequestParam(required = false) String oldPassword,
-            @RequestParam String password) {
-        return kcUserService.updatePassword(username, oldPassword, password);
+    public ResponseEntity<Object> updateTemporaryPassword(@Valid @RequestBody ChangementDeMotDePasseDto corps) {
+        exigerSonPropreCompte(corps.username());
+        return kcUserService.updatePassword(corps.username(), corps.oldPassword(), corps.password());
+    }
+
+    private void exigerSonPropreCompte(String username) {
+        Jwt jwt = SecurityUtils.getJwt();
+        String moi = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+        // Keycloak range les noms de connexion en minuscules : la comparaison ne tient pas à la casse.
+        if (moi != null && moi.equalsIgnoreCase(username.trim())) {
+            return;
+        }
+        if (perm.canUpdate(this)) {
+            return;
+        }
+        throw new BusinessException("Vous ne pouvez changer que le mot de passe de votre propre compte.",
+                HttpStatus.FORBIDDEN);
     }
 }

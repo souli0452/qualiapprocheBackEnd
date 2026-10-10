@@ -145,4 +145,156 @@ class NonConformiteVisibiliteTest {
         connecte("decideur-gmq", "GMQ");
         org.assertj.core.api.Assertions.assertThat(service.peutConsulter(nc)).isTrue();
     }
+
+    // ------------------------------------------------------------------ au-delà de la fiche
+
+    /** Agent de GSI, sans portée transverse, face à un dossier de DQA qui ne le concerne en rien. */
+    private com.qualiapproche.amelioration.entities.NonConformite dossierDAilleurs() {
+        connecte("agent-gsi", "GSI");
+        var nc = dossier("DQA", "quelqu-un");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+        when(nonConformiteRepository.findById(nc.getId())).thenReturn(java.util.Optional.of(nc));
+        when(workflowClient.ressourcesADecider(anyString())).thenReturn(java.util.List.of());
+        return nc;
+    }
+
+    private static void assertStatut(org.assertj.core.api.ThrowableAssert.ThrowingCallable appel, int statut) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(appel)
+                .isInstanceOfSatisfying(org.springframework.web.server.ResponseStatusException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatusCode().value()).isEqualTo(statut));
+    }
+
+    @Test
+    @DisplayName("Lu par son numéro, le dossier d'une autre structure est introuvable comme par son identifiant")
+    void numero_d_une_autre_structure_introuvable() {
+        var nc = dossierDAilleurs();
+        nc.setNumeroReference("NC-DQA-2026-001");
+        when(nonConformiteRepository.getNonConformiteByNumeroReference("NC-DQA-2026-001")).thenReturn(nc);
+
+        assertStatut(() -> service.getByNumeroRef("NC-DQA-2026-001"), 404);
+    }
+
+    @Test
+    @DisplayName("Le dossier d'une autre structure ne se met pas à jour par son identifiant")
+    void miseAJour_d_une_autre_structure_introuvable() {
+        var nc = dossierDAilleurs();
+        var saisie = new com.qualiapproche.common.dto.NonConformiteDto();
+        saisie.setId(nc.getId());
+
+        assertStatut(() -> service.updateNonConformite(nc.getId(), saisie), 404);
+        assertStatut(() -> service.update(saisie), 404);
+        assertStatut(() -> service.updateNonConformites(java.util.List.of(saisie)), 404);
+        verify(nonConformiteRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Le dossier d'une autre structure ne se supprime pas par son identifiant")
+    void suppression_d_une_autre_structure_introuvable() {
+        var nc = dossierDAilleurs();
+
+        assertStatut(() -> service.delete(nc.getId()), 404);
+        verify(nonConformiteRepository, never()).delete(any(com.qualiapproche.amelioration.entities.NonConformite.class));
+    }
+
+    @Test
+    @DisplayName("Soumettre le dossier d'une autre structure est introuvable, et rien ne part au circuit")
+    void soumission_d_une_autre_structure_introuvable() {
+        var nc = dossierDAilleurs();
+        nc.setWorkflowId(java.util.UUID.randomUUID());
+
+        // La soumission rendait le dossier entier, pièces comprises, même quand le moteur la
+        // refusait : la permission de mise à jour suffisait à lire n'importe quel dossier.
+        assertStatut(() -> service.soumettre(nc.getId()), 404);
+        verify(workflowClient, never()).validateStep(any(), any(), any());
+        verify(nonConformiteMapper, never()).toDto(any(com.qualiapproche.amelioration.entities.NonConformite.class));
+    }
+
+    @Test
+    @DisplayName("Les listes par structure ne se lisent que sur la sienne")
+    void listesParStructure_bornees() {
+        connecte("agent-gsi", "GSI");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+
+        assertStatut(() -> service.findByStructure("DQA", page), 403);
+        assertStatut(() -> service.findByStructureAllUsers("DQA", page), 403);
+        assertStatut(() -> service.getNonConformitesByStructure("DQA", page), 403);
+        assertStatut(() -> service.findAllByStructure("DQA", page), 403);
+        assertStatut(() -> service.getNcStats("DQA"), 403);
+        verify(nonConformiteRepository, never()).findAllByStructureSoumissionIdOrOrigineId(anyString(), anyString(), any());
+
+        when(nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(anyString(), anyString(), any()))
+                .thenReturn(Page.empty(page));
+        service.findByStructure("GSI", page);
+        verify(nonConformiteRepository).findAllByStructureSoumissionIdOrOrigineId("GSI", "GSI", page);
+    }
+
+    @Test
+    @DisplayName("La responsabilité qualité et l'administration lisent la liste de toute structure")
+    void listesParStructure_porteeTransverse() {
+        connecte("rq", "DQA");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(true);
+        when(nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(anyString(), anyString(), any()))
+                .thenReturn(Page.empty(page));
+
+        service.findByStructure("GSI", page);
+
+        verify(nonConformiteRepository).findAllByStructureSoumissionIdOrOrigineId("GSI", "GSI", page);
+    }
+
+    @Test
+    @DisplayName("Les listes par utilisateur ne se lisent que pour soi")
+    void listesParUtilisateur_bornees() {
+        connecte("agent-gsi", "GSI");
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+
+        assertStatut(() -> service.findByUser("collegue", page), 403);
+        assertStatut(() -> service.findAllByInitiator("collegue", page), 403);
+        assertStatut(() -> service.findImputedByUser("collegue", page), 403);
+        assertStatut(() -> service.findArchivedByUser("collegue", page), 403);
+        assertStatut(() -> service.getCountsByUser("collegue"), 403);
+        assertStatut(() -> service.findImupted("collegue", com.qualiapproche.common.enumeration.Etat.TRAITEMENT, page), 403);
+
+        when(nonConformiteRepository.findAllByCreatedById(anyString(), any())).thenReturn(Page.empty(page));
+        service.findByUser("agent-gsi", page);
+        verify(nonConformiteRepository).findAllByCreatedById("agent-gsi", page);
+    }
+
+    // ------------------------------------------------------------------ listes par état et par niveau
+
+    @Test
+    @DisplayName("Un agent de GSI ne reçoit pas les dossiers de DQA par état ni par niveau")
+    void listes_par_etat_et_niveau_bornees() {
+        connecte("agent-gsi", "GSI");
+        java.util.UUID niveau = java.util.UUID.randomUUID();
+        when(permissionChecker.detient(any(String[].class))).thenReturn(false);
+        when(nonConformiteRepository.findVisiblesParEtat(any(), any(), any(), any())).thenReturn(Page.empty(page));
+        when(nonConformiteRepository.findVisiblesParNiveau(any(), any(), any(), any())).thenReturn(Page.empty(page));
+
+        service.getNonConformitesByEtatNonConformite(com.qualiapproche.common.enumeration.Etat.values()[0], page);
+        service.getNonConformitesByNiveau(niveau, page);
+
+        // La borne est celle de la liste générale : sa structure et ses propres dossiers.
+        verify(nonConformiteRepository).findVisiblesParEtat(
+                org.mockito.ArgumentMatchers.eq(com.qualiapproche.common.enumeration.Etat.values()[0]),
+                org.mockito.ArgumentMatchers.eq("GSI"), org.mockito.ArgumentMatchers.eq("agent-gsi"), any());
+        verify(nonConformiteRepository).findVisiblesParNiveau(org.mockito.ArgumentMatchers.eq(niveau),
+                org.mockito.ArgumentMatchers.eq("GSI"), org.mockito.ArgumentMatchers.eq("agent-gsi"), any());
+        verify(nonConformiteRepository, never()).findByEtatTraitement(any(), any());
+        verify(nonConformiteRepository, never()).findAllByNiveauNonConformiteId(any(), any());
+    }
+
+    @Test
+    @DisplayName("La portée transverse reçoit tous les dossiers par état et par niveau")
+    void listes_par_etat_et_niveau_portee_transverse() {
+        when(permissionChecker.detient(any(String[].class))).thenReturn(true);
+        when(nonConformiteRepository.findByEtatTraitement(any(), any())).thenReturn(Page.empty(page));
+        when(nonConformiteRepository.findAllByNiveauNonConformiteId(any(), any())).thenReturn(Page.empty(page));
+
+        service.getNonConformitesByEtatNonConformite(com.qualiapproche.common.enumeration.Etat.values()[0], page);
+        service.getNonConformitesByNiveau(java.util.UUID.randomUUID(), page);
+
+        verify(nonConformiteRepository).findByEtatTraitement(any(), any());
+        verify(nonConformiteRepository).findAllByNiveauNonConformiteId(any(), any());
+        verify(nonConformiteRepository, never()).findVisiblesParEtat(any(), any(), any(), any());
+    }
 }

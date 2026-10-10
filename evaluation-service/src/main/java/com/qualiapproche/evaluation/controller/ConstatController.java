@@ -113,7 +113,7 @@ public class ConstatController {
         PreuveConstat preuve = service.preuve(preuveId);
         String nom = preuve.getNom() == null ? "preuve" : preuve.getNom().replace("\"", "");
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
                 .contentType(preuve.getType() == null ? MediaType.APPLICATION_OCTET_STREAM
                         : MediaType.parseMediaType(preuve.getType()))
                 .body(new InputStreamResource(service.contenu(preuve)));

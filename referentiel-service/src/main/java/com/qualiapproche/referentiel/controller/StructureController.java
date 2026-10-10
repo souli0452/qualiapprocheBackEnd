@@ -112,10 +112,12 @@ public class StructureController {
 
     // Appelé de service à service (Feign) : la gateway n'intervient pas, aucune
     // permission applicative n'y est résolue. Non gardé, comme les points de
-    // pilotage d'instances de WorkflowController.
+    // pilotage d'instances de WorkflowController. Sans jeton — l'ouverture de session de
+    // user-service —, seul l'état de la licence est rendu : voir VuesAnonymes.
     @GetMapping("/direction")
     public ResponseEntity<StructureDto> getDirection() {
-        return ResponseEntity.ok(structureService.getDirection());
+        StructureDto direction = structureService.getDirection();
+        return ResponseEntity.ok(VuesAnonymes.appelAnonyme() ? VuesAnonymes.direction(direction) : direction);
     }
 
     // Appelé de service à service (Feign) : la gateway n'intervient pas, aucune

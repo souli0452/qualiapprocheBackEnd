@@ -27,7 +27,12 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // De l'actuator, seule la santé est publique : la supervision et Eureka
+                        // l'interrogent sans jeton. Le reste (env, beans, mappings, info…) décrit
+                        // l'installation et n'a pas à être lisible par un anonyme, même exposé
+                        // par erreur dans une configuration.
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/login", "/api/v1/structures/direction").permitAll()
                         // L'état de la licence est lu par la gateway avant toute résolution
                         // d'utilisateur : c'est lui qui décide si une écriture est recevable, et

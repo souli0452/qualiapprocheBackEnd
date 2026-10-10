@@ -80,7 +80,7 @@ public class DemandeFichierEtapeController {
         String type = fichiers.typeDeContenu(reference);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + fichiers.nomPropose(reference) + "\"")
+                        EnTeteFichier.attachement(fichiers.nomPropose(reference)))
                 .contentType(type != null ? MediaType.parseMediaType(type)
                         : MediaType.APPLICATION_OCTET_STREAM)
                 .body(contenu);

@@ -3,6 +3,7 @@ package com.qualiapproche.userservice.service;
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
+import com.qualiapproche.userservice.repository.UserRoleAssignmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class AppRoleServiceTest {
     @BeforeEach
     void setUp() {
         depot = mock(AppRoleRepository.class);
-        service = new AppRoleService(depot);
+        service = new AppRoleService(depot, mock(UserRoleAssignmentRepository.class), mock(GardeDesHabilitations.class));
         when(depot.save(any(AppRole.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -52,7 +53,7 @@ class AppRoleServiceTest {
     @Test
     @DisplayName("Un rôle nouveau est enregistré, nom épuré des espaces superflus")
     void creation_enregistreLeRole() {
-        when(depot.findAllByName("PILOTE")).thenReturn(List.of());
+        when(depot.findAllByNameIgnoreCase("PILOTE")).thenReturn(List.of());
 
         AppRole enregistre = service.enregistrer(role(null, "  PILOTE  "));
 
@@ -63,13 +64,50 @@ class AppRoleServiceTest {
     @Test
     @DisplayName("Deux rôles ne peuvent pas porter le même nom")
     void creation_refuseUnHomonyme() {
-        when(depot.findAllByName("PILOTE")).thenReturn(List.of(role(UUID.randomUUID(), "PILOTE")));
+        when(depot.findAllByNameIgnoreCase("PILOTE")).thenReturn(List.of(role(UUID.randomUUID(), "PILOTE")));
 
         assertThatThrownBy(() -> service.enregistrer(role(null, "PILOTE")))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("existe déjà");
 
         verify(depot, never()).save(any(AppRole.class));
+    }
+
+    @Test
+    @DisplayName("Un homonyme à la casse près est refusé : « pilote » à côté de « PILOTE »")
+    void creation_refuseUnHomonymeALaCassePres() {
+        when(depot.findAllByNameIgnoreCase("pilote")).thenReturn(List.of(role(UUID.randomUUID(), "PILOTE")));
+
+        assertThatThrownBy(() -> service.enregistrer(role(null, "pilote")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+
+        verify(depot, never()).save(any(AppRole.class));
+    }
+
+    @Test
+    @DisplayName("Un nom réservé est refusé quelle que soit sa casse : on ne se crée pas « super_admin »")
+    void creation_refuseUnNomReserve() {
+        for (String nom : List.of("SUPER_ADMIN", "super_admin", "SuperAdmin", "service_technique")) {
+            assertThatThrownBy(() -> service.enregistrer(role(null, nom)))
+                    .as(nom)
+                    .isInstanceOfSatisfying(BusinessException.class, e -> {
+                        assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                        assertThat(e.getMessage()).contains("réservé");
+                    });
+        }
+        verify(depot, never()).save(any(AppRole.class));
+    }
+
+    @Test
+    @DisplayName("Un rôle SUPER_ADMIN déjà en base se modifie toujours : la règle ne vise que la création")
+    void modification_duSuperAdminExistant() {
+        UUID id = UUID.randomUUID();
+        when(depot.findById(id)).thenReturn(Optional.of(role(id, "SUPER_ADMIN")));
+        AppRole soumis = role(id, "SUPER_ADMIN");
+        soumis.setDescription("Accès total");
+
+        assertThat(service.enregistrer(soumis).getDescription()).isEqualTo("Accès total");
     }
 
     @Test
@@ -132,7 +170,7 @@ class AppRoleServiceTest {
     @Test
     @DisplayName("Une permission absente du dictionnaire est refusée : on ne se forge pas SUPER_ADMIN")
     void permissionInconnue_refusee() {
-        when(depot.findAllByName("PIRATE")).thenReturn(List.of());
+        when(depot.findAllByNameIgnoreCase("PIRATE")).thenReturn(List.of());
         AppRole forge = role(null, "PIRATE");
         forge.setPermissions(List.of("MANAGE_USER", "SUPER_ADMIN", "SERVICE_TECHNIQUE"));
 
@@ -147,7 +185,7 @@ class AppRoleServiceTest {
     @Test
     @DisplayName("Des permissions du dictionnaire passent")
     void permissionsConnues_acceptees() {
-        when(depot.findAllByName("ADMIN_COMPTES")).thenReturn(List.of());
+        when(depot.findAllByNameIgnoreCase("ADMIN_COMPTES")).thenReturn(List.of());
         AppRole role = role(null, "ADMIN_COMPTES");
         role.setPermissions(List.of("MANAGE_USER", "ROLE_MANAGE"));
 

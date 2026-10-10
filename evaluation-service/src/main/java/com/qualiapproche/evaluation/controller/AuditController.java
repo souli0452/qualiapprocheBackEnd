@@ -164,7 +164,7 @@ public class AuditController {
 
     private static ResponseEntity<byte[]> telechargement(DocumentsAuditService.Fichier fichier) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fichier.nom() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(fichier.nom()))
                 .contentType(MediaType.parseMediaType(fichier.typeMime()))
                 .body(fichier.contenu());
     }
@@ -187,7 +187,7 @@ public class AuditController {
     @GetMapping("/{id}/rapport/fichier")
     public ResponseEntity<InputStreamResource> telechargerRapport(@PathVariable("id") UUID id) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"rapport-audit\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("rapport-audit"))
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(new InputStreamResource(service.contenuDuRapport(id)));
     }

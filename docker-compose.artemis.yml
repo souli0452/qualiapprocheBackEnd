@@ -1,0 +1,62 @@
+# =====================================================================================
+# Courtier de messages ActiveMQ Artemis — POSTE DE DÉVELOPPEMENT UNIQUEMENT.
+#
+# Le broker de production relève du déploiement (David) : ce fichier n'en tient pas lieu.
+# Les réglages à reprendre là-bas sont ceux de docker/artemis/broker.properties.
+#
+#   docker compose -f docker-compose.artemis.yml up -d
+#   docker compose -f docker-compose.artemis.yml logs -f
+#   docker compose -f docker-compose.artemis.yml down          # arrête, garde les messages
+#   rm -rf ~/qualisira/artemis                                 # repart à vide
+#
+# Console d'administration : http://localhost:8162/console  (qualisira / artemis)
+#
+# Ports publiés : 61617 (JMS) et 8162 (console), et non les 61616/8161 habituels — ceux-ci sont
+# souvent déjà pris sur un poste qui fait aussi tourner le courtier d'un autre projet (sigatt).
+# Ajustables par QUALISIRA_ARTEMIS_PORT et QUALISIRA_ARTEMIS_CONSOLE.
+# C'est là qu'on lit ce qui attend dans une file, et ce qui est parti au rebut (DLQ).
+#
+services:
+
+  artemis:
+    # Version alignée sur le client Artemis géré par Spring Boot 3.3.5 (2.33.0) : un courtier
+    # plus ancien que son client refuse des protocoles que celui-ci propose.
+    image: apache/activemq-artemis:2.33.0
+    container_name: qualisira-artemis
+    restart: unless-stopped
+
+    environment:
+      ARTEMIS_USER: qualisira
+      ARTEMIS_PASSWORD: artemis
+      # Refuse toute connexion anonyme : le poste de développement exerce le même chemin
+      # d'authentification que la production.
+      ANONYMOUS_LOGIN: "false"
+      # --http-host 0.0.0.0 est indispensable : sans lui, la console n'écoute que la boucle
+      # locale du conteneur et http://localhost:8161 refuse la connexion depuis le poste.
+      # --autocreate : en développement, publier suffit à créer une file ; en production
+      # elles sont déclarées, pour qu'une faute de frappe ne crée pas une file que personne
+      # n'écoute. Ces arguments ne sont lus qu'à la CRÉATION de l'instance.
+      EXTRA_ARGS: >-
+        --http-host 0.0.0.0
+        --relax-jolokia
+        --no-autotune
+        --autocreate
+
+    ports:
+      # Protocole cœur / JMS — celui qu'emploie spring.artemis.broker-url
+      - "${QUALISIRA_ARTEMIS_PORT:-61617}:61616"
+      # Console d'administration et API Jolokia
+      - "${QUALISIRA_ARTEMIS_CONSOLE:-8162}:8161"
+
+    volumes:
+      # Réglages du projet (livraisons avant rebut, rebut, attente croissante). Recopiés dans
+      # etc/ À LA CRÉATION de l'instance : voir l'en-tête de broker.properties.
+      - ./docker/artemis:/var/lib/artemis-instance/etc-override:ro
+      - ${HOME}/qualisira/artemis/data:/var/lib/artemis-instance/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "/var/lib/artemis-instance/bin/artemis check node --up --user $$ARTEMIS_USER --password $$ARTEMIS_PASSWORD || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s

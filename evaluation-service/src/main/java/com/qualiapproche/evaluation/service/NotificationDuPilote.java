@@ -1,8 +1,7 @@
 package com.qualiapproche.evaluation.service;
 
-import com.qualiapproche.common.courriel.FileDeCourriels;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.evaluation.client.AnnuaireClient;
-import com.qualiapproche.evaluation.courriel.CourrielSortant;
 import com.qualiapproche.evaluation.client.StructuresClient;
 import com.qualiapproche.evaluation.entities.Audit;
 import com.qualiapproche.evaluation.entities.Constat;
@@ -39,9 +38,9 @@ import java.util.UUID;
  * validation de l'équipe reste acquise. Dans la requête qui valide, une fois committée : le jeton
  * de l'auditeur est encore là pour interroger l'annuaire.</p>
  *
- * <p><b>Les courriels sont déposés en base, puis remis par la tournée.</b> Les pilotes sont
+ * <p><b>Les courriels sont déposés en base, puis remis par workflow-service.</b> Les pilotes sont
  * résolus dans la requête, qui porte le jeton de l'auditeur que l'annuaire exige ; chaque courriel
- * est rendu puis déposé dans la file du service ({@link FileDeCourriels}). Ils partaient d'une file
+ * est rendu puis déposé dans la boîte d'envoi du service ({@link Courriels}). Ils partaient d'une file
  * en mémoire : un redémarrage, ou une file pleine, les perdait sans recours. Sans messagerie
  * configurée, ils attendent qu'elle le soit.</p>
  */
@@ -55,20 +54,20 @@ public class NotificationDuPilote {
     private final ConstatRepository constats;
     private final AnnuaireClient annuaire;
     private final StructuresClient structures;
-    private final FileDeCourriels<CourrielSortant> file;
+    private final Courriels courriels;
     private final TemplateEngine moteur;
     private final String lienAudit;
     private final TransactionTemplate lecture;
 
     @Autowired
     public NotificationDuPilote(ConstatRepository constats, AnnuaireClient annuaire, StructuresClient structures,
-                                FileDeCourriels<CourrielSortant> file, TemplateEngine moteur,
+                                Courriels courriels, TemplateEngine moteur,
                                 @Value("${qualisira.audit.lien-audit:}") String lienAudit,
                                 PlatformTransactionManager transactions) {
         this.constats = constats;
         this.annuaire = annuaire;
         this.structures = structures;
-        this.file = file;
+        this.courriels = courriels;
         this.moteur = moteur;
         this.lienAudit = lienAudit;
         this.lecture = new TransactionTemplate(transactions);
@@ -115,7 +114,7 @@ public class NotificationDuPilote {
             try {
                 Context contexte = new Context();
                 contexte.setVariables(e.variables());
-                file.deposer(e.adresse(), null, sujet, moteur.process(GABARIT, contexte), "publication-constats");
+                courriels.envoyer(e.adresse(), null, sujet, moteur.process(GABARIT, contexte), "publication-constats");
             } catch (Exception ex) {
                 // Un pilote qu'on n'a pas pu inscrire n'empêche pas les autres d'être prévenus.
                 log.error("Courriel de publication des constats de {} à {} non déposé : {}",
