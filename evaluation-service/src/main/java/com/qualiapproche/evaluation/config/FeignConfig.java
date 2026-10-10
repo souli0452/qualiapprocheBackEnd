@@ -40,6 +40,11 @@ public class FeignConfig {
                 String permissions = servlet.getRequest().getHeader(PERMISSIONS);
                 if (permissions != null && !permissions.isBlank()) {
                     gabarit.header(PERMISSIONS, permissions);
+                    // La signature de la passerelle voyage avec : sans elle, le service appelé ignore l'en-tête.
+                    String signature = servlet.getRequest().getHeader("X-User-Permissions-Signature");
+                    if (signature != null) {
+                        gabarit.header("X-User-Permissions-Signature", signature);
+                    }
                 }
             }
         };

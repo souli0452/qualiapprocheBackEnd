@@ -14,9 +14,24 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Function;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class PermissionChecker {
 
     private static final String PERMISSIONS_HEADER = "X-User-Permissions";
+
+    /** Le secret partagé avec la passerelle ; sans lui, l'en-tête des permissions n'est jamais cru. */
+    private final String secret;
+
+    /** Sans secret : seuls les rôles du jeton comptent (tests, et services qui n'ont pas l'en-tête). */
+    public PermissionChecker() {
+        this(null);
+    }
+
+    public PermissionChecker(String secret) {
+        this.secret = secret == null || secret.isBlank() ? null : secret;
+    }
 
     public boolean canCreate(final Object controller) {
         return check(controller, RequirePermissions::create);
@@ -133,8 +148,11 @@ public class PermissionChecker {
      * 1. Les rôles Keycloak du JWT ({@code realm_access.roles}, convertis en GrantedAuthority) ;
      * 2. Les permissions applicatives (AppRole, base de user-service) que la gateway résout une
      *    fois par requête et transmet via l'en-tête interne {@code X-User-Permissions}
-     *    (voir {@code AuthCookieFilter} côté api-gateway). Un appel direct à un service (sans
-     *    passer par la gateway) n'aura donc que la source 1.
+     *    (voir {@code AuthCookieFilter} côté api-gateway).
+     *
+     * <p>L'en-tête n'est cru que s'il porte la signature de la passerelle pour <b>ce</b> jeton
+     * ({@link SignatureDesPermissions}). Il était cru tel quel : un appel direct à un service, avec
+     * n'importe quel jeton valide et l'en-tête de son choix, ouvrait toutes les permissions.</p>
      */
     private Set<String> resolveUserPermissions() {
         Set<String> perms = new HashSet<>();
@@ -148,6 +166,11 @@ public class PermissionChecker {
         }
 
         String header = currentRequestHeader(PERMISSIONS_HEADER);
+        if (header != null && !header.isBlank() && !signeeParLaPasserelle(header)) {
+            log.warn("En-tête {} ignoré : signature absente ou invalide{}", PERMISSIONS_HEADER,
+                    secret == null ? " (aucun secret partagé configuré : QUALISIRA_PERMISSIONS_SECRET)" : "");
+            header = null;
+        }
         if (header != null && !header.isBlank()) {
             Arrays.stream(header.split(","))
                     .map(String::trim)
@@ -157,6 +180,12 @@ public class PermissionChecker {
         }
 
         return perms;
+    }
+
+    private boolean signeeParLaPasserelle(String permissions) {
+        Jwt jwt = SecurityUtils.getJwt();
+        return jwt != null && SignatureDesPermissions.verifier(secret, jwt.getTokenValue(), permissions,
+                currentRequestHeader(SignatureDesPermissions.EN_TETE));
     }
 
     private String currentRequestHeader(String name) {

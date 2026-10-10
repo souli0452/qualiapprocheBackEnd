@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -49,10 +51,33 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
 
     private final WebClient webClient;
     private final UserPermissionsCache permissionsCache;
+    /** Partagé avec les services, qui ne croient l'en-tête des permissions que signé de lui. */
+    private final String secret;
 
+    /** Sans secret (tests) : l'en-tête part non signé, et les services l'ignoreront. */
     public AuthCookieFilter(WebClient.Builder loadBalancedWebClientBuilder, UserPermissionsCache permissionsCache) {
+        this(loadBalancedWebClientBuilder, permissionsCache, null);
+    }
+
+    @Autowired
+    public AuthCookieFilter(WebClient.Builder loadBalancedWebClientBuilder, UserPermissionsCache permissionsCache,
+                            @Value("${qualisira.permissions.secret:}") String secret) {
         this.webClient = loadBalancedWebClientBuilder.build();
         this.permissionsCache = permissionsCache;
+        this.secret = secret == null || secret.isBlank() ? null : secret;
+        if (this.secret == null) {
+            log.error("QUALISIRA_PERMISSIONS_SECRET absent : les permissions transmises aux services ne seront "
+                    + "pas signées, et les services les ignoreront.");
+        }
+    }
+
+    /** Pose les permissions et, si le secret est connu, leur signature pour ce jeton. */
+    private void poserLesPermissions(ServerHttpRequest.Builder requete, String jeton, String[] permissions) {
+        String valeur = String.join(",", permissions);
+        requete.header(PERMISSIONS_HEADER, valeur);
+        if (secret != null) {
+            requete.header(SignatureDesPermissions.EN_TETE, SignatureDesPermissions.signer(secret, jeton, valeur));
+        }
     }
 
     @Override
@@ -62,7 +87,10 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
 
         // Jamais faire confiance à un X-User-Permissions envoyé par le client : toujours écrasé.
         ServerHttpRequest.Builder requestBuilder = exchange.getRequest().mutate()
-                .headers(headers -> headers.remove(PERMISSIONS_HEADER));
+                .headers(headers -> {
+                    headers.remove(PERMISSIONS_HEADER);
+                    headers.remove(SignatureDesPermissions.EN_TETE);
+                });
 
         if (accessTokenCookie == null || accessTokenCookie.getValue().isBlank()) {
             // Pas de cookie : on laisse passer, les services protégés retourneront 401
@@ -75,7 +103,7 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
         Optional<String[]> cached = permissionsCache.get(token);
         if (cached.isPresent()) {
             log.debug("Permissions (cache) pour {} : {}", exchange.getRequest().getURI().getPath(), Arrays.toString(cached.get()));
-            requestBuilder.header(PERMISSIONS_HEADER, String.join(",", cached.get()));
+            poserLesPermissions(requestBuilder, token, cached.get());
             return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
         }
 
@@ -98,7 +126,7 @@ public class AuthCookieFilter implements GlobalFilter, Ordered {
                     return Mono.just(new String[0]);
                 })
                 .flatMap(permissions -> {
-                    requestBuilder.header(PERMISSIONS_HEADER, String.join(",", permissions));
+                    poserLesPermissions(requestBuilder, token, permissions);
                     return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
                 });
     }
