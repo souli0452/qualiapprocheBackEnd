@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.job;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class WorkflowNotificationScheduler {
     private final WorkflowNotificationService notificationService;
 
     @Scheduled(fixedDelayString = "${workflow.notifications.rejeu-delai-ms:60000}")
+    @SchedulerLock(name = "workflow-rejeu-des-notifications", lockAtMostFor = "PT10M", lockAtLeastFor = "PT5S")
     public void rejouerNotificationsEnAttente() {
         List<UUID> aRejouer = notificationService.notificationsARejouer(TAILLE_LOT);
         if (aRejouer.isEmpty()) {

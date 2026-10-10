@@ -1,8 +1,19 @@
 package com.qualiapproche.userservice.service;
 
+import com.qualiapproche.common.courriel.FileDeCourriels;
+import com.qualiapproche.common.courriel.StatutCourriel;
+import com.qualiapproche.userservice.courriel.CourrielSortant;
+import com.qualiapproche.userservice.courriel.CourrielSortantRepository;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import com.qualiapproche.common.config.MailConfig;
 import com.qualiapproche.common.config.ThymeleafConfig;
-import com.qualiapproche.common.utils.CourrielParGabarit;
 import com.qualiapproche.userservice.service.impl.SendMailServiceImpl;
 import jakarta.mail.Message;
 import jakarta.mail.internet.MimeMessage;
@@ -52,12 +63,42 @@ class CourrielsDeCompteTest {
         mailConfig.setUsername(BOITE_AUTHENTIFIEE);
         TemplateEngine moteur = ThymeleafConfig.getTemplateEngine();
 
-        service = new SendMailServiceImpl(mailSender, moteur, mailConfig,
-                new CourrielParGabarit(mailSender, mailConfig));
+        derniersCourriels.clear();
+        file = fileEnMemoire(mailSender);
+        service = new SendMailServiceImpl(moteur, file);
+    }
+
+    private FileDeCourriels<CourrielSortant> file;
+    private static final Map<UUID, CourrielSortant> derniersCourriels = new HashMap<>();
+
+    /** La vraie file, sur un dépôt en mémoire : le courriel est déposé, puis remis par la tournée. */
+    @SuppressWarnings("unchecked")
+    private static FileDeCourriels<CourrielSortant> fileEnMemoire(JavaMailSender serveur) {
+        Map<UUID, CourrielSortant> base = derniersCourriels;
+        CourrielSortantRepository depot = mock(CourrielSortantRepository.class);
+        when(depot.save(any(CourrielSortant.class))).thenAnswer(i -> {
+            CourrielSortant c = i.getArgument(0);
+            base.put(c.getId(), c);
+            return c;
+        });
+        when(depot.findById(any())).thenAnswer(i -> Optional.ofNullable(base.get((UUID) i.getArgument(0))));
+        when(depot.echus(any(), anyInt())).thenAnswer(i -> base.values().stream()
+                .filter(c -> c.getStatut() == StatutCourriel.A_ENVOYER).map(CourrielSortant::getId).toList());
+        when(depot.revendiquer(any(), any(), any(), any(), any())).thenAnswer(i -> {
+            CourrielSortant c = base.get((UUID) i.getArgument(0));
+            c.setStatut(StatutCourriel.EN_COURS);
+            c.setTentatives(c.getTentatives() + 1);
+            return 1;
+        });
+        ObjectProvider<JavaMailSender> messagerie = mock(ObjectProvider.class);
+        when(messagerie.getIfAvailable()).thenReturn(serveur);
+        return new FileDeCourriels<>(depot, CourrielSortant::new, messagerie, BOITE_AUTHENTIFIEE,
+                mock(PlatformTransactionManager.class));
     }
 
     /** Message réellement remis au serveur. */
     private MimeMessage expedie() {
+        file.tournee(50);
         ArgumentCaptor<MimeMessage> aMessage = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(aMessage.capture());
         return aMessage.getValue();
@@ -152,14 +193,23 @@ class CourrielsDeCompteTest {
     // ------------------------------------------------------------------ échecs
 
     @Test
-    @DisplayName("Un refus du serveur remonte : il ne peut pas passer pour un envoi réussi")
-    void refusDuServeur_remonte() {
+    @DisplayName("Un refus du serveur ne perd pas le courriel : il reste en file, avec sa cause, pour être retenté")
+    void refusDuServeur_courrielConserve() {
         doThrow(new MailSendException("authentification refusée"))
                 .when(mailSender).send(any(MimeMessage.class));
 
-        // C'est le silence qui a rendu la panne indétectable : l'appelant doit pouvoir la voir.
-        assertThatThrownBy(() -> service.sendVerificationEmail("claire@exemple.fr", "Claire",
-                "Martin", "MotDePasse1!", "https://qualisira.com/verifier"))
-                .isInstanceOf(MailSendException.class);
+        // Le geste de l'utilisateur aboutit : le courriel est déposé, la panne ne le concerne pas.
+        service.sendVerificationEmail("claire@exemple.fr", "Claire", "Martin", "MotDePasse1!",
+                "https://qualisira.com/verifier");
+        file.tournee(50);
+
+        // Le serveur a bien été sollicité, et son refus n'a rien effacé : le courriel attend sa
+        // prochaine tentative au lieu de disparaître dans un journal.
+        verify(mailSender).send(any(MimeMessage.class));
+        org.assertj.core.api.Assertions.assertThat(derniersCourriels.values()).singleElement()
+                .satisfies(c -> {
+                    org.assertj.core.api.Assertions.assertThat(c.getStatut()).isEqualTo(StatutCourriel.A_ENVOYER);
+                    org.assertj.core.api.Assertions.assertThat(c.getDerniereErreur()).contains("authentification refusée");
+                });
     }
 }

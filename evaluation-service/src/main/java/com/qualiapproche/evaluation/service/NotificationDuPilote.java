@@ -1,20 +1,16 @@
 package com.qualiapproche.evaluation.service;
 
-import com.qualiapproche.common.utils.CourrielParGabarit;
-import com.qualiapproche.common.utils.EmailMessage;
+import com.qualiapproche.common.courriel.FileDeCourriels;
 import com.qualiapproche.evaluation.client.AnnuaireClient;
+import com.qualiapproche.evaluation.courriel.CourrielSortant;
 import com.qualiapproche.evaluation.client.StructuresClient;
 import com.qualiapproche.evaluation.entities.Audit;
 import com.qualiapproche.evaluation.entities.Constat;
 import com.qualiapproche.evaluation.enumeration.StatutConstat;
 import com.qualiapproche.evaluation.repository.ConstatRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.DisposableBean;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.task.TaskRejectedException;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -22,6 +18,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 
 /**
  * Le pilote du processus audité apprend la publication des constats qui le concernent.
@@ -43,17 +39,15 @@ import java.util.concurrent.Executor;
  * validation de l'équipe reste acquise. Dans la requête qui valide, une fois committée : le jeton
  * de l'auditeur est encore là pour interroger l'annuaire.</p>
  *
- * <p><b>L'envoi part hors de la requête.</b> Les pilotes sont résolus dans la requête, qui porte
- * le jeton de l'auditeur que l'annuaire exige ; seul l'échange SMTP est confié à un fil à part.
- * Un serveur de messagerie lent ou injoignable ne retient donc plus la validation de l'équipe
- * jusqu'à ses délais d'attente, multipliés par le nombre de pilotes.</p>
- *
- * <p>Sans messagerie configurée ({@code spring.mail.host}), rien ne part et le journal le dit :
- * les variables de serveur relèvent du déploiement.</p>
+ * <p><b>Les courriels sont déposés en base, puis remis par la tournée.</b> Les pilotes sont
+ * résolus dans la requête, qui porte le jeton de l'auditeur que l'annuaire exige ; chaque courriel
+ * est rendu puis déposé dans la file du service ({@link FileDeCourriels}). Ils partaient d'une file
+ * en mémoire : un redémarrage, ou une file pleine, les perdait sans recours. Sans messagerie
+ * configurée, ils attendent qu'elle le soit.</p>
  */
 @Slf4j
 @Component
-public class NotificationDuPilote implements DisposableBean {
+public class NotificationDuPilote {
 
     static final String ROLE_PILOTE = "PILOTE";
     static final String GABARIT = "courriel/constatsPublies";
@@ -61,31 +55,20 @@ public class NotificationDuPilote implements DisposableBean {
     private final ConstatRepository constats;
     private final AnnuaireClient annuaire;
     private final StructuresClient structures;
-    private final ObjectProvider<CourrielParGabarit> courriel;
+    private final FileDeCourriels<CourrielSortant> file;
     private final TemplateEngine moteur;
     private final String lienAudit;
     private final TransactionTemplate lecture;
-    private final Executor envois;
-    /** Le fil d'envoi que ce composant a créé, et qu'il doit donc arrêter ; nul en test. */
-    private final ThreadPoolTaskExecutor filPropre;
 
     @Autowired
     public NotificationDuPilote(ConstatRepository constats, AnnuaireClient annuaire, StructuresClient structures,
-                                ObjectProvider<CourrielParGabarit> courriel, TemplateEngine moteur,
+                                FileDeCourriels<CourrielSortant> file, TemplateEngine moteur,
                                 @Value("${qualisira.audit.lien-audit:}") String lienAudit,
                                 PlatformTransactionManager transactions) {
-        this(constats, annuaire, structures, courriel, moteur, lienAudit, transactions, filDEnvoi());
-    }
-
-    NotificationDuPilote(ConstatRepository constats, AnnuaireClient annuaire, StructuresClient structures,
-                         ObjectProvider<CourrielParGabarit> courriel, TemplateEngine moteur, String lienAudit,
-                         PlatformTransactionManager transactions, Executor envois) {
-        this.envois = envois;
-        this.filPropre = envois instanceof ThreadPoolTaskExecutor fil ? fil : null;
         this.constats = constats;
         this.annuaire = annuaire;
         this.structures = structures;
-        this.courriel = courriel;
+        this.file = file;
         this.moteur = moteur;
         this.lienAudit = lienAudit;
         this.lecture = new TransactionTemplate(transactions);
@@ -108,12 +91,6 @@ public class NotificationDuPilote implements DisposableBean {
         if (annonce == null) {
             return;
         }
-        CourrielParGabarit envoi = courriel.getIfAvailable();
-        if (envoi == null) {
-            log.warn("Publication de {} constat(s) de {} : aucune messagerie configurée (spring.mail.host),"
-                    + " le pilote n'est pas prévenu.", annonce.constats().size(), annonce.reference());
-            return;
-        }
         List<Map<String, Object>> pilotes = pilotes(annonce.processusId());
         if (pilotes.isEmpty()) {
             log.warn("Publication de {} constat(s) de {} : la structure auditée {} n'a aucun pilote joignable.",
@@ -134,49 +111,16 @@ public class NotificationDuPilote implements DisposableBean {
             variables.put("lien", lienAudit.isBlank() ? null : lienAudit.replace("{id}", annonce.auditId().toString()));
             aFaire.add(new Envoi(texteOu(pilote.get("email"), null), variables));
         }
-        try {
-            envois.execute(() -> envoyer(envoi, annonce.reference(), sujet, aFaire));
-        } catch (TaskRejectedException e) {
-            log.error("Courriels de publication des constats de {} abandonnés : la file d'envoi est pleine"
-                    + " ({} pilote(s) non prévenu(s)).", annonce.reference(), aFaire.size());
-        }
-    }
-
-    /** Hors de la requête : rien d'ici ne doit lire le jeton ni la base. */
-    private void envoyer(CourrielParGabarit envoi, String reference, String sujet, List<Envoi> aFaire) {
         for (Envoi e : aFaire) {
             try {
-                envoi.envoyer(EmailMessage.builder().toAddress(e.adresse()).subject(sujet).build(),
-                        e.variables(), List.of(), GABARIT, moteur);
+                Context contexte = new Context();
+                contexte.setVariables(e.variables());
+                file.deposer(e.adresse(), null, sujet, moteur.process(GABARIT, contexte), "publication-constats");
             } catch (Exception ex) {
-                // Un pilote injoignable n'empêche pas les autres d'être prévenus.
-                log.error("Courriel de publication des constats de {} à {} impossible : {}",
-                        reference, e.adresse(), ex.getMessage());
+                // Un pilote qu'on n'a pas pu inscrire n'empêche pas les autres d'être prévenus.
+                log.error("Courriel de publication des constats de {} à {} non déposé : {}",
+                        annonce.reference(), e.adresse(), ex.getMessage());
             }
-        }
-    }
-
-    /**
-     * Un fil, une file bornée : les courriels d'un audit partent dans l'ordre, et un serveur de
-     * messagerie tombé n'accumule pas sans fin des envois en mémoire. À l'arrêt, les envois en
-     * cours ont le temps de finir.
-     */
-    private static ThreadPoolTaskExecutor filDEnvoi() {
-        ThreadPoolTaskExecutor fil = new ThreadPoolTaskExecutor();
-        fil.setCorePoolSize(1);
-        fil.setMaxPoolSize(1);
-        fil.setQueueCapacity(500);
-        fil.setThreadNamePrefix("courriel-audit-");
-        fil.setWaitForTasksToCompleteOnShutdown(true);
-        fil.setAwaitTerminationSeconds(30);
-        fil.initialize();
-        return fil;
-    }
-
-    @Override
-    public void destroy() {
-        if (filPropre != null) {
-            filPropre.shutdown();
         }
     }
 

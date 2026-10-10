@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.config;
 
+import com.qualiapproche.common.config.VerrouDesTachesConfig;
 import com.qualiapproche.common.config.GlobalExceptionHandler;
 import com.qualiapproche.common.config.KeycloakRoleConverter;
 import com.qualiapproche.common.config.PermissionConfig;
@@ -38,7 +39,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class, PermissionConfig.class})
+@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class, PermissionConfig.class, VerrouDesTachesConfig.class})
 public class WorkflowSecurityConfig {
 
     private final KeycloakRoleConverter keycloakRoleConverter;

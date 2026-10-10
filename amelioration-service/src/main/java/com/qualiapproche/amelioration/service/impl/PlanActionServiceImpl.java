@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.service.impl;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -73,6 +74,15 @@ public class PlanActionServiceImpl implements PlanActionService {
 
     @Value("${frontend.url}")
     private String frontendUrl;
+
+    /**
+     * La relance nocturne des échéances : éteinte par défaut ({@code qualisira.plans.rappel-echeance-actif}).
+     * Elle n'a jamais tourné en production — la planification n'était pas activée ici —, et
+     * l'allumer enverrait d'un coup toutes les relances en retard : c'est une décision de
+     * l'organisation, pas un effet de bord d'un déploiement.
+     */
+    @Value("${qualisira.plans.rappel-echeance-actif:false}")
+    private boolean rappelEcheanceActif;
 
     /**
      * Supprime un plan d'action qui n'a pas encore été confié.
@@ -502,8 +512,15 @@ public class PlanActionServiceImpl implements PlanActionService {
      * le saisir : la valeur saisie n'avait aucun effet. Réglage vide ou référentiel injoignable, les
      * deux jours d'origine s'appliquent.</p>
      */
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "${qualisira.plans.rappel-echeance-cron:0 0 0 * * *}")
+    @SchedulerLock(name = "amelioration-rappel-des-echeances", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void rappelEcheance() {
+        // Cette tournée n'a jamais tourné : la planification n'était pas activée dans ce service.
+        // Elle reste éteinte tant que l'organisation ne l'a pas décidé, pour ne pas envoyer d'un
+        // coup toutes les relances accumulées.
+        if (!rappelEcheanceActif) {
+            return;
+        }
         List<PlanAction> planActions = planActionRepository.findPlanActionsByStatus(StatutEnum.NON_TRAITER);
         LocalDate today = LocalDate.now();
         long seuilDeRappel = reglagesOrganisation.entier(ClesReglages.RAPPEL_ECHEANCE_JOURS,
@@ -514,6 +531,10 @@ public class PlanActionServiceImpl implements PlanActionService {
             String link = frontendUrl + "/traitement-action/non-traiter";
 
             LocalDate echeance = action.getDateEcheance();
+            if (echeance == null) {
+                // Un plan sans échéance n'a rien à relancer — et faisait échouer la tournée entière.
+                continue;
+            }
             long joursRestants = ChronoUnit.DAYS.between(today, echeance);
 
             if (joursRestants > seuilDeRappel) {

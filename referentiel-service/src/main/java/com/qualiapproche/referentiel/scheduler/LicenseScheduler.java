@@ -1,5 +1,6 @@
 package com.qualiapproche.referentiel.scheduler;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.enumeration.TypeStructure;
@@ -59,6 +60,7 @@ public class LicenseScheduler {
     private String jalons;
 
     @Scheduled(cron = "0 0 8 * * *") // Chaque matin, pour être lu dans la journée
+    @SchedulerLock(name = "referentiel-echeance-de-licence", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void checkLicenseExpirations() {
         EtatLicenceDto licence = licenceInstalleeService.etat();
 

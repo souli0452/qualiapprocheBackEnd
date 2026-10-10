@@ -1,5 +1,6 @@
 package com.qualiapproche.support.job;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.support.model.DocumentQms;
 import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.service.QmsAuditLogService;
@@ -25,6 +26,7 @@ public class QmsRevisionAlertScheduler {
      * Executes daily at 02:00 AM.
      */
     @Scheduled(cron = "0 0 2 * * ?")
+    @SchedulerLock(name = "support-alertes-de-revision", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     @Transactional
     public void checkDocumentRevisionDeadlines() {
         log.info("Starting QMS document revision deadlines check...");

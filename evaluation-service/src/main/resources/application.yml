@@ -88,3 +88,14 @@ spring:
           default:
             connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
             read-timeout: ${FEIGN_READ_TIMEOUT:10000}
+
+---
+# File durable des courriels (common/courriel) : déposés en base, remis par une tournée sous
+# verrou ShedLock, rejoués après un redémarrage ou une panne du serveur de messagerie.
+qualisira:
+  courriels:
+    tournee-ms: ${COURRIELS_TOURNEE_MS:15000}        # délai entre deux tournées
+    premiere-tournee-ms: 20000                        # après le démarrage
+    lot: ${COURRIELS_LOT:50}                          # courriels remis par tournée
+    conservation-jours: ${COURRIELS_CONSERVATION_JOURS:30}   # puis effacés une fois remis
+    purge-cron: "0 15 3 * * *"

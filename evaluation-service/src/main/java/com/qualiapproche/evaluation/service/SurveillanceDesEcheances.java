@@ -1,5 +1,6 @@
 package com.qualiapproche.evaluation.service;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.evaluation.entities.Audit;
 import com.qualiapproche.evaluation.entities.RegleNotification;
 import com.qualiapproche.evaluation.enumeration.StatutAudit;
@@ -48,6 +49,7 @@ public class SurveillanceDesEcheances {
     private final RappelEcheanceRepository rappels;
 
     @Scheduled(cron = "${qualisira.audit.surveillance-cron:0 30 5 * * *}")
+    @SchedulerLock(name = "evaluation-surveillance-des-echeances", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     @Transactional
     public void ronde() {
         LocalDate aujourdHui = LocalDate.now();
