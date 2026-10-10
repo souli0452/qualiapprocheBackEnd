@@ -1,6 +1,7 @@
 package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.common.spec.Filtres;
 import com.qualiapproche.evaluation.dto.AvancementDto;
 import com.qualiapproche.evaluation.dto.ComparaisonDto;
 import com.qualiapproche.evaluation.dto.FiltreProgramme;
@@ -14,9 +15,11 @@ import com.qualiapproche.evaluation.entities.NotationCritere;
 import com.qualiapproche.evaluation.entities.PlanAudit;
 import com.qualiapproche.evaluation.entities.PointControle;
 import com.qualiapproche.evaluation.enumeration.ConstatRQAPBF;
+import com.qualiapproche.evaluation.enumeration.NiveauNotationRQAPBF;
 import com.qualiapproche.evaluation.enumeration.StatutAudit;
 import com.qualiapproche.evaluation.enumeration.StatutConstat;
 import com.qualiapproche.evaluation.enumeration.StatutEvaluation;
+import com.qualiapproche.evaluation.enumeration.StatutNotation;
 import com.qualiapproche.evaluation.enumeration.StatutPlanAudit;
 import com.qualiapproche.evaluation.repository.AuditRepository;
 import com.qualiapproche.evaluation.repository.ConstatRepository;
@@ -25,7 +28,12 @@ import com.qualiapproche.evaluation.repository.NoeudReferentielRepository;
 import com.qualiapproche.evaluation.repository.NotationCritereRepository;
 import com.qualiapproche.evaluation.repository.PlanAuditRepository;
 import com.qualiapproche.evaluation.repository.RappelEcheanceRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -172,13 +180,24 @@ public class PilotageAuditService {
                 .build();
     }
 
-    /** Les critères RQAP-BF publiés au constat NC, tous audits de la direction confondus (D18). */
+    /**
+     * Les critères RQAP-BF publiés au constat « NC », de toute la direction ou d'un audit (D18),
+     * page par page et du plus récent au plus ancien.
+     */
     @Transactional(readOnly = true)
-    public List<NotationCritereDto> ecartsRqapbf(UUID auditId) {
+    public Page<NotationCritereDto> ecartsRqapbf(UUID auditId, Pageable pageable) {
         UUID directionId = Perimetre.exigerUneDirection();
-        return notations.publieesDeLaDirection(directionId).stream()
-                .filter(n -> n.constatRetenu() == ConstatRQAPBF.NC)
-                .filter(n -> auditId == null || n.getEvaluation().getAudit().getId().equals(auditId))
+        Specification<NotationCritere> ecarts = (racine, requete, cb) -> {
+            List<Predicate> conditions = new ArrayList<>();
+            conditions.add(cb.equal(racine.get("evaluation").get("directionId"), directionId));
+            conditions.add(cb.equal(racine.get("statut"), StatutNotation.PUBLIE));
+            conditions.add(racine.get("niveau").in(NiveauNotationRQAPBF.nonConformes()));
+            if (auditId != null) {
+                conditions.add(cb.equal(racine.get("evaluation").get("audit").get("id"), auditId));
+            }
+            return cb.and(conditions.toArray(new Predicate[0]));
+        };
+        return notations.findAll(ecarts, Filtres.ordonnee(pageable, Sort.by(Sort.Direction.DESC, "evaluation.dateEvaluation")))
                 .map(n -> NotationCritereDto.builder()
                         .id(n.getId())
                         .auditId(n.getEvaluation().getAudit().getId())
@@ -192,8 +211,7 @@ public class PilotageAuditService {
                         .statut(n.getStatut())
                         .nonConformiteId(n.getNonConformiteId())
                         .transmissionEnAttente(n.getNonConformiteId() == null)
-                        .build())
-                .toList();
+                        .build());
     }
 
     private ComparaisonDto.Periode periode(UUID directionId, LocalDate debut, LocalDate fin) {

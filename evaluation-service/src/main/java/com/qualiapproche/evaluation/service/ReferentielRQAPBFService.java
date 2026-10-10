@@ -221,6 +221,9 @@ public class ReferentielRQAPBFService {
     @Transactional
     public EvaluationRQAPBFDto validerEvaluation(UUID id) {
         EvaluationRQAPBF evaluation = brouillon(id);
+        // Le rapport reprend la dernière évaluation validée : en valider une après un visa
+        // changerait son annexe RQAP-BF.
+        audits.exigerRapportSansVisa(evaluation.getAudit(), "valider une évaluation RQAP-BF");
         if (evaluation.getNotations().isEmpty()) {
             throw new BusinessException("Une évaluation sans aucune note ne se valide pas.", HttpStatus.CONFLICT);
         }

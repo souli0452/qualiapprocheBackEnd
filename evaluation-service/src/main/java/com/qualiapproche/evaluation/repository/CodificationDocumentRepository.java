@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface CodificationDocumentRepository extends ReferentielRepository<CodificationDocument> {
+public interface CodificationDocumentRepository extends ParametrageRepository<CodificationDocument> {
 
     /**
      * La règle, verrouillée jusqu'à la fin de la transaction.

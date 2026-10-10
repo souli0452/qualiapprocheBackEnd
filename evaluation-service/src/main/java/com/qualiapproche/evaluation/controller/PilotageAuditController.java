@@ -1,5 +1,9 @@
 package com.qualiapproche.evaluation.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import com.qualiapproche.evaluation.service.NotificationsAuditService;
+import com.qualiapproche.evaluation.dto.NotificationsAuditResumeDto;
+import com.qualiapproche.common.dto.NotificationDto;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.evaluation.dto.AvancementDto;
@@ -8,6 +12,9 @@ import com.qualiapproche.evaluation.dto.NotationCritereDto;
 import com.qualiapproche.evaluation.dto.TableauDeBordDto;
 import com.qualiapproche.evaluation.service.PilotageAuditService;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +44,7 @@ import static com.qualiapproche.evaluation.controller.AuditUrls.AUDITS;
 public class PilotageAuditController {
 
     private final PilotageAuditService service;
+    private final NotificationsAuditService notifications;
 
     /** Indicateurs de l'année ; l'année en cours par défaut. */
     @PreAuthorize("@perm.canRead(this)")
@@ -61,11 +69,28 @@ public class PilotageAuditController {
         return ResponseEntity.ok(service.comparer(debut1, fin1, debut2, fin2));
     }
 
-    /** Les critères RQAP-BF publiés au constat NC, de toute la direction ou d'un audit. */
+    /** Les critères RQAP-BF publiés au constat NC, de toute la direction ou d'un audit, page par page. */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/ecarts-rqapbf")
-    public ResponseEntity<ApiResponse<List<NotationCritereDto>>> ecartsRqapbf(
-            @RequestParam(value = "auditId", required = false) UUID auditId) {
-        return ResponseEntity.ok(ApiResponse.success(service.ecartsRqapbf(auditId)));
+    public ResponseEntity<Page<NotationCritereDto>> ecartsRqapbf(
+            @RequestParam(value = "auditId", required = false) UUID auditId,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(service.ecartsRqapbf(auditId, pageable));
+    }
+
+    @Operation(summary = "Ce que l'utilisateur connecté a en attente dans le module Audit",
+            description = "Lignes de la cloche, recalculées à chaque appel et jamais conservées")
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/notifications")
+    public ResponseEntity<ApiResponse<List<NotificationDto>>> notifications() {
+        return ResponseEntity.ok(ApiResponse.success(notifications.pourLAppelant()));
+    }
+
+    @Operation(summary = "Ce que l'utilisateur connecté a en attente, en nombres",
+            description = "Un compteur par onglet du module, et leur somme pour la pastille du menu")
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/notifications/resume")
+    public ResponseEntity<NotificationsAuditResumeDto> resumeDesNotifications() {
+        return ResponseEntity.ok(notifications.resume());
     }
 }

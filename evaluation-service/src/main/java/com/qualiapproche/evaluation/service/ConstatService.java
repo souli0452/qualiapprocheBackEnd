@@ -45,7 +45,8 @@ import java.util.UUID;
  * </ul>
  *
  * <p>On ne saisit de constat que sur un audit en cours : avant, il n'y a rien à constater ;
- * après la clôture, le rapport est signé.</p>
+ * après la clôture, le rapport est signé. Dès le premier visa du rapport, plus aucun constat ne
+ * se saisit ni ne se publie : ce serait changer ce que le signataire a lu.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -93,6 +94,7 @@ public class ConstatService {
             throw new BusinessException("On ne saisit de constat que sur un audit en cours ; "
                     + audit.getReference() + " est " + audit.getStatut() + ".", HttpStatus.CONFLICT);
         }
+        audits.exigerRapportSansVisa(audit, "un nouveau constat");
         Auditeur moi = auditeurs.auditeurCourant();
         exigerDeLEquipe(audit, moi);
         Constat constat = Constat.builder()
@@ -154,6 +156,7 @@ public class ConstatService {
         Audit audit = constat.getAudit();
         exigerDeLEquipeOuValideur(audit);
         exigerEnCours(audit);
+        audits.exigerRapportSansVisa(audit, "publier un constat");
         constat.valider();
         Constat publie = depot.save(constat);
         annoncerLesEcarts(List.of(publie));
@@ -173,6 +176,7 @@ public class ConstatService {
         Audit audit = audits.sienOuRien(auditId);
         exigerDeLEquipeOuValideur(audit);
         exigerEnCours(audit);
+        audits.exigerRapportSansVisa(audit, "publier des constats");
         List<Constat> compiles = new ArrayList<>(depot.findAllByAuditIdAndStatutOrderByDateSaisieAsc(
                 audit.getId(), StatutConstat.COMPILE).stream()
                 .filter(c -> natureId == null || (c.getNature() != null && natureId.equals(c.getNature().getId())))

@@ -10,7 +10,7 @@
 
     <artifactId>lib-storage</artifactId>
     <name>lib-storage</name>
-    <description>Dépôt de fichiers sur MinIO, partagé par les micro-services</description>
+    <description>Dépôt de fichiers sur MinIO et rendu des documents en PDF et Word, partagés par les micro-services</description>
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -36,6 +36,36 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Rendu PDF et Word : facultatif. Un service qui exporte des documents déclare ces
+             trois bibliothèques, et RenduDocumentAutoConfiguration câble le rendu ; les autres
+             ne les embarquent pas. -->
+        <!-- Le moteur SpEL de thymeleaf-spring6, celui des services hôtes : ils n'embarquent pas
+             OGNL, qu'exige le moteur Thymeleaf simple. Exclu ici pour que les tests de ce module
+             voient le même classpath que l'hôte. -->
+        <dependency>
+            <groupId>org.thymeleaf</groupId>
+            <artifactId>thymeleaf-spring6</artifactId>
+            <optional>true</optional>
+            <exclusions>
+                <exclusion>
+                    <groupId>ognl</groupId>
+                    <artifactId>ognl</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>1.0.10</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.5.1</version>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -45,6 +75,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- MinIO tire commons-compress 1.24, que POI 5.5.1 ne sait plus employer : seuls les tests
+             de ce module le voient. Un service hôte qui déclare POI reçoit la 1.28, plus proche. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.28.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

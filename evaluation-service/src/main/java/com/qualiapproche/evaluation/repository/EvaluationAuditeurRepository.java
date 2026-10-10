@@ -19,7 +19,7 @@ public interface EvaluationAuditeurRepository extends JpaRepository<EvaluationAu
 
     Optional<EvaluationAuditeur> findByAuditIdAndAuditeurIdAndCritereId(UUID auditId, UUID auditeurId, UUID critereId);
 
-    /** La moyenne des niveaux reçus, sur l'ordre de chaque niveau ; nulle sans évaluation. */
-    @Query("SELECT AVG(e.niveau.ordre) FROM EvaluationAuditeur e WHERE e.auditeur.id = :auditeurId")
+    /** La moyenne des niveaux reçus, sur la valeur recopiée de chacun ; nulle sans évaluation. */
+    @Query("SELECT AVG(e.valeurNiveau) FROM EvaluationAuditeur e WHERE e.auditeur.id = :auditeurId")
     Double moyenne(@Param("auditeurId") UUID auditeurId);
 }

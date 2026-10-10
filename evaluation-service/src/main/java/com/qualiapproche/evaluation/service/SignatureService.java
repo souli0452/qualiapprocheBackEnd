@@ -9,7 +9,6 @@ import com.qualiapproche.evaluation.enumeration.StatutAudit;
 import com.qualiapproche.evaluation.enumeration.StatutSignature;
 import com.qualiapproche.evaluation.repository.AuditRepository;
 import com.qualiapproche.evaluation.repository.SignatureRepository;
-import com.qualiapproche.evaluation.service.referentiel.CodificationDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

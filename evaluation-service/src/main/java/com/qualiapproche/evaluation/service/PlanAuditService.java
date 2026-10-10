@@ -9,7 +9,6 @@ import com.qualiapproche.evaluation.entities.PlanAudit;
 import com.qualiapproche.evaluation.enumeration.OrigineDocument;
 import com.qualiapproche.evaluation.enumeration.StatutPlanAudit;
 import com.qualiapproche.evaluation.repository.PlanAuditRepository;
-import com.qualiapproche.evaluation.service.referentiel.CodificationDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

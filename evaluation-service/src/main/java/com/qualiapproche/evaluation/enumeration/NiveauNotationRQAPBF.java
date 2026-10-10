@@ -21,6 +21,11 @@ public enum NiveauNotationRQAPBF {
         this.score = score;
     }
 
+    /** Les niveaux dont le constat retenu est « NC » : tout ce qui n'est ni conforme ni sans objet. */
+    public static java.util.List<NiveauNotationRQAPBF> nonConformes() {
+        return java.util.Arrays.stream(values()).filter(n -> n != CONFORME && n != NON_APPLICABLE).toList();
+    }
+
     /** La part du score, sur 100 ; nulle pour un critère non applicable. */
     public Double getScore() {
         return score;

@@ -76,6 +76,12 @@ public class ApiUrls {
     public static final String DOMAINE_APPLICATION_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/domaines-application";
     public static final String PRIORITE_DOCUMENT_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/priorites-document";
 
+    /* Paramétrage partagé avec le module Audit (evaluation-service les lit par client Feign) */
+
+    public static final String SITE_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/sites";
+    public static final String CRITERE_EVALUATION_AUDITEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/criteres-evaluation-auditeur";
+    public static final String NIVEAU_EVALUATION_AUDITEUR_ROOT_URL = QUALI_APPROCHE_ROOT_URL + "/niveaux-evaluation-auditeur";
+
     /**
      * Foire aux questions. Deux lectures s'y font : l'écran d'aide, ouvert à tous, et l'assistant
      * IA qui appelle {@code /publiees} pour joindre les réponses à sa consigne.

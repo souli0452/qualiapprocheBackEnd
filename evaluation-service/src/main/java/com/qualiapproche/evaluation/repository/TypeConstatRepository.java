@@ -4,5 +4,5 @@ import com.qualiapproche.evaluation.entities.TypeConstat;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface TypeConstatRepository extends ReferentielRepository<TypeConstat> {
+public interface TypeConstatRepository extends ParametrageRepository<TypeConstat> {
 }

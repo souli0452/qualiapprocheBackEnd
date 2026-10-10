@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface AuditeurRepository extends ReferentielRepository<Auditeur> {
+public interface AuditeurRepository extends ParametrageRepository<Auditeur> {
 
     Optional<Auditeur> findByDirectionIdAndUtilisateurId(UUID directionId, String utilisateurId);
 

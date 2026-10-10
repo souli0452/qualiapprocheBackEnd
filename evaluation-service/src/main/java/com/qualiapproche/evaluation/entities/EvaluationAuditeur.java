@@ -17,6 +17,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * La note d'un auditeur sur un critère, à l'issue d'un audit.
@@ -43,13 +44,20 @@ public class EvaluationAuditeur extends AuditEntity {
     @JoinColumn(name = "auditeur_id", nullable = false)
     private Auditeur auditeur;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "critere_id", nullable = false)
-    private CritereEvaluationAuditeur critere;
+    /** Le critère, paramétré dans referentiel-service. */
+    @Column(name = "critere_id", nullable = false)
+    private UUID critereId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "niveau_id", nullable = false)
-    private NiveauEvaluationAuditeur niveau;
+    /** Le niveau reçu, paramétré dans referentiel-service. */
+    @Column(name = "niveau_id", nullable = false)
+    private UUID niveauId;
+
+    /**
+     * L'ordre du niveau au jour de l'évaluation, recopié : la moyenne se calcule sur lui, sans
+     * dépendre du référentiel, et retoucher l'échelle ne réécrit pas les évaluations passées.
+     */
+    @Column(name = "valeur_niveau", nullable = false)
+    private int valeurNiveau;
 
     @Column(name = "date_evaluation", nullable = false)
     private LocalDate dateEvaluation;

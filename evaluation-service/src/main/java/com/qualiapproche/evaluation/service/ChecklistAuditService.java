@@ -1,5 +1,6 @@
 package com.qualiapproche.evaluation.service;
 
+import com.qualiapproche.common.spec.Filtres;
 import com.qualiapproche.evaluation.dto.ChecklistAuditDto;
 import com.qualiapproche.evaluation.dto.PointControleDto;
 import com.qualiapproche.evaluation.entities.ChecklistAudit;
@@ -7,6 +8,9 @@ import com.qualiapproche.evaluation.entities.PointControle;
 import com.qualiapproche.evaluation.enumeration.StatutChecklist;
 import com.qualiapproche.evaluation.repository.ChecklistAuditRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +34,17 @@ public class ChecklistAuditService {
     public List<ChecklistAuditDto> lister() {
         return depot.findAllByDirectionIdOrderByCreatedAtAsc(Perimetre.exigerUneDirection())
                 .stream().map(this::versDto).toList();
+    }
+
+    /** Les checklists page par page, pour l'écran : filtrées par statut et par nom ou chapitre. */
+    @Transactional(readOnly = true)
+    public Page<ChecklistAuditDto> page(StatutChecklist statut, String recherche, Pageable pageable) {
+        return depot.findAll(Filtres.tous(
+                        Filtres.<ChecklistAudit>deLaDirection(Perimetre.exigerUneDirection()),
+                        Filtres.egal("statut", statut),
+                        Filtres.contient(List.of("nom", "chapitreISO"), recherche)),
+                Filtres.ordonnee(pageable, Sort.by("createdAt")))
+                .map(this::versDto);
     }
 
     @Transactional(readOnly = true)

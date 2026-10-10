@@ -44,8 +44,8 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
-        <!-- Plan et rapport d'audit exportés : PDF depuis le gabarit HTML, comme la fiche de clôture
-             des non-conformités ; Word construit directement, depuis le même modèle de document. -->
+        <!-- Plan et rapport d'audit exportés en PDF et en Word : le rendu vit dans lib-storage, qui
+             ne le câble que si le service porte ces deux bibliothèques (Thymeleaf vient de common). -->
         <dependency>
             <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>

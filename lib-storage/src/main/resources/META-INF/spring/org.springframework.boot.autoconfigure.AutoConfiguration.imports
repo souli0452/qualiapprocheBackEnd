@@ -1,1 +1,2 @@
 com.qualiapproche.storage.StorageAutoConfiguration
+com.qualiapproche.storage.RenduDocumentAutoConfiguration

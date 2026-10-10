@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.evaluation.client.Parametrage;
 import com.qualiapproche.evaluation.dto.ActionMaitriseRisqueDto;
 import com.qualiapproche.evaluation.dto.AuditDto;
 import com.qualiapproche.evaluation.dto.FiltreProgramme;
@@ -26,9 +27,7 @@ import com.qualiapproche.evaluation.repository.ConstatRepository;
 import com.qualiapproche.evaluation.repository.NoeudReferentielRepository;
 import com.qualiapproche.evaluation.repository.EvaluationRQAPBFRepository;
 import com.qualiapproche.evaluation.repository.SignatureRepository;
-import com.qualiapproche.evaluation.repository.SiteRepository;
 import com.qualiapproche.evaluation.repository.TypeAuditRepository;
-import com.qualiapproche.evaluation.service.referentiel.CodificationDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -67,7 +66,7 @@ public class AuditService {
 
     private final AuditRepository depot;
     private final TypeAuditRepository types;
-    private final SiteRepository sites;
+    private final Parametrage parametrage;
     private final ChecklistAuditRepository checklists;
     private final ConstatRepository constats;
     private final SignatureRepository signatures;
@@ -136,6 +135,12 @@ public class AuditService {
         Audit audit = sienOuRien(id);
         audit.exigerModifiable();
         recopier(saisie, audit);
+        // Validé, l'audit a passé les contrôles d'équipe : une retouche ne doit pas les contourner
+        // en y glissant un auditeur en conflit d'intérêts, ou déjà pris sur les nouvelles dates.
+        if (audit.getStatut() != StatutAudit.PLANIFIE) {
+            audit.exigerDatesEtResponsable();
+            verifierLEquipe(audit);
+        }
         return versDto(depot.save(audit));
     }
 
@@ -254,11 +259,7 @@ public class AuditService {
             throw new BusinessException("Le rapport se rédige pendant l'audit ; " + audit.getReference()
                     + " est " + audit.getStatut() + ".", HttpStatus.CONFLICT);
         }
-        if (signatures.findAllByAuditIdOrderByOrdreAsc(audit.getId()).stream()
-                .anyMatch(s -> s.getStatut() == StatutSignature.SIGNEE)) {
-            throw new BusinessException("Le rapport de " + audit.getReference() + " a déjà reçu un visa :"
-                    + " reposez le circuit avant de le reprendre.", HttpStatus.CONFLICT);
-        }
+        exigerRapportSansVisa(audit, "reprendre ses conclusions");
         audit.setConclusionsRapport(redaction.getConclusions());
         audit.setRecommandationsRapport(redaction.getRecommandations());
         return versDto(depot.save(audit));
@@ -293,6 +294,21 @@ public class AuditService {
                         + " cet identifiant dans l'audit " + audit.getReference() + ".", HttpStatus.NOT_FOUND));
         action.evaluerEfficacite(niveau);
         return versDto(depot.save(audit));
+    }
+
+    /**
+     * Refuse un geste qui changerait le rapport après qu'un signataire l'a visé.
+     *
+     * <p>Le rapport se compose à la lecture, à partir des constats publiés et de la dernière
+     * évaluation RQAP-BF validée : sans ce verrou, ce qui a été signé et ce qui s'archive
+     * pourraient différer. Reposer le circuit efface les visas et rouvre le rapport.</p>
+     */
+    public void exigerRapportSansVisa(Audit audit, String geste) {
+        if (signatures.existsByAuditIdAndStatut(audit.getId(), StatutSignature.SIGNEE)) {
+            throw new BusinessException("Le rapport de " + audit.getReference() + " a déjà reçu un visa :"
+                    + " " + geste + " changerait ce qui a été signé. Reposez le circuit de signature"
+                    + " pour le reprendre.", HttpStatus.CONFLICT);
+        }
     }
 
     public Audit sienOuRien(UUID id) {
@@ -347,8 +363,12 @@ public class AuditService {
         cible.setResponsableEquipe(saisie.getResponsableEquipeId() == null ? null
                 : auditeurs.sienOuRien(saisie.getResponsableEquipeId()));
 
-        cible.getSitesConcernes().clear();
-        ids(saisie.getSiteIds()).forEach(s -> cible.getSitesConcernes().add(Perimetre.sienneOuRien(sites, s, "site")));
+        // Seuls les sites ajoutés se vérifient : un site retiré du paramétrage depuis reste sur
+        // l'audit qui le citait, et ne doit pas en bloquer la retouche.
+        List<UUID> siteIds = ids(saisie.getSiteIds());
+        parametrage.exigerDesSitesActifs(siteIds.stream().filter(s -> !cible.getSiteIds().contains(s)).toList());
+        cible.getSiteIds().clear();
+        cible.getSiteIds().addAll(siteIds);
         cible.getMembresEquipe().clear();
         ids(saisie.getMembreEquipeIds()).forEach(m -> cible.getMembresEquipe().add(auditeurs.sienOuRien(m)));
         cible.getChecklists().clear();
@@ -429,7 +449,7 @@ public class AuditService {
                 .typeAuditLibelle(audit.getType() == null ? null : audit.getType().getLibelle())
                 .circuitExterne(audit.getType() != null && audit.getType().isCircuitExterne())
                 .processusId(audit.getProcessusId())
-                .siteIds(audit.getSitesConcernes().stream().map(s -> s.getId()).toList())
+                .siteIds(List.copyOf(audit.getSiteIds()))
                 .responsableEquipeId(audit.getResponsableEquipe() == null ? null : audit.getResponsableEquipe().getId())
                 .membreEquipeIds(audit.getMembresEquipe().stream().map(Auditeur::getId).toList())
                 .checklistIds(audit.getChecklists().stream().map(ChecklistAudit::getId).toList())

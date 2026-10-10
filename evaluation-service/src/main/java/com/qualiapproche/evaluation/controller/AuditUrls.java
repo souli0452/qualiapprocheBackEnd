@@ -21,10 +21,7 @@ public final class AuditUrls {
     public static final String EVALUATIONS_AUDITEUR = RACINE + "/evaluations-auditeur";
 
     public static final String TYPES_AUDIT = RACINE + "/types-audit";
-    public static final String SITES = RACINE + "/sites-audit";
     public static final String TYPES_CONSTAT = RACINE + "/types-constat";
-    public static final String CRITERES_EVALUATION_AUDITEUR = RACINE + "/criteres-evaluation-auditeur";
-    public static final String NIVEAUX_EVALUATION_AUDITEUR = RACINE + "/niveaux-evaluation-auditeur";
     public static final String REGLES_NOTIFICATION = RACINE + "/regles-notification-audit";
     public static final String CODIFICATIONS = RACINE + "/codifications-document";
 

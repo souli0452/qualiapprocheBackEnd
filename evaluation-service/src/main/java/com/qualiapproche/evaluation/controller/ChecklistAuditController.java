@@ -3,9 +3,13 @@ package com.qualiapproche.evaluation.controller;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.evaluation.dto.ChecklistAuditDto;
+import com.qualiapproche.evaluation.enumeration.StatutChecklist;
 import com.qualiapproche.evaluation.service.ChecklistAuditService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -36,6 +41,17 @@ public class ChecklistAuditController {
 
     private final ChecklistAuditService service;
 
+    /** L'écran des checklists, page par page, filtré par statut et par nom ou chapitre. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping
+    public ResponseEntity<Page<ChecklistAuditDto>> page(
+            @RequestParam(value = "statut", required = false) StatutChecklist statut,
+            @RequestParam(value = "search", required = false) String search,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(service.page(statut, search, pageable));
+    }
+
+    /** Toutes les checklists, pour les listes de choix. */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/all")
     public ResponseEntity<ApiResponse<List<ChecklistAuditDto>>> all() {

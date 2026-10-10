@@ -132,12 +132,12 @@ public class Audit extends AuditEntity {
     @Column(name = "processus_id")
     private UUID processusId;
 
+    /** Les sites concernés : paramétrés dans referentiel-service, ils ne sont ici que des identifiants. */
     @Builder.Default
-    @ManyToMany
-    @JoinTable(name = "audit_site",
-            joinColumns = @JoinColumn(name = "audit_id"),
-            inverseJoinColumns = @JoinColumn(name = "site_id"))
-    private Set<Site> sitesConcernes = new LinkedHashSet<>();
+    @ElementCollection
+    @CollectionTable(name = "audit_site", joinColumns = @JoinColumn(name = "audit_id"))
+    @Column(name = "site_id", nullable = false)
+    private Set<UUID> siteIds = new LinkedHashSet<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -164,11 +164,19 @@ public class Audit extends AuditEntity {
     /** Le programme est arrêté : l'audit passe en préparation de son plan. */
     public void valider() {
         exigerStatut("valider", StatutAudit.PLANIFIE);
-        if (responsableEquipe == null || dateDebutPrevue == null || dateFinPrevue == null) {
-            throw new BusinessException("Un audit ne se valide qu'avec ses dates et son responsable"
-                    + " d'équipe : " + reference + " n'en a pas encore.", HttpStatus.CONFLICT);
-        }
+        exigerDatesEtResponsable();
         statut = StatutAudit.EN_PREPARATION;
+    }
+
+    /**
+     * Ce sans quoi un audit validé ne se conduit pas : vérifié à la validation, puis à chaque
+     * retouche d'un audit déjà validé, qui ne doit pas pouvoir les retirer après coup.
+     */
+    public void exigerDatesEtResponsable() {
+        if (responsableEquipe == null || dateDebutPrevue == null || dateFinPrevue == null) {
+            throw new BusinessException("Un audit validé a ses dates et son responsable d'équipe : "
+                    + reference + " n'en a pas.", HttpStatus.CONFLICT);
+        }
     }
 
     public void demarrer() {

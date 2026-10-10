@@ -1,6 +1,7 @@
 package com.qualiapproche.evaluation.service;
 
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.common.spec.Filtres;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.evaluation.dto.AuditeurDto;
 import com.qualiapproche.evaluation.entities.Audit;
@@ -10,12 +11,16 @@ import com.qualiapproche.evaluation.repository.AuditRepository;
 import com.qualiapproche.evaluation.repository.AuditeurRepository;
 import com.qualiapproche.evaluation.repository.EvaluationAuditeurRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,6 +45,19 @@ public class AuditeurService {
     public List<AuditeurDto> lister() {
         return depot.findAllByDirectionIdOrderByCreatedAtAsc(Perimetre.exigerUneDirection())
                 .stream().map(this::versDto).toList();
+    }
+
+    /**
+     * Le vivier page par page, pour l'écran. Le nom d'un auditeur vit dans l'annuaire et non ici :
+     * la recherche par nom se résout en amont en identifiants d'utilisateurs ({@code utilisateurIds}).
+     */
+    @Transactional(readOnly = true)
+    public Page<AuditeurDto> page(Collection<String> utilisateurIds, Pageable pageable) {
+        return depot.findAll(Filtres.tous(
+                        Filtres.<Auditeur>deLaDirection(Perimetre.exigerUneDirection()),
+                        Filtres.parmi("utilisateurId", utilisateurIds)),
+                Filtres.ordonnee(pageable, Sort.by("createdAt")))
+                .map(this::versDto);
     }
 
     @Transactional(readOnly = true)
