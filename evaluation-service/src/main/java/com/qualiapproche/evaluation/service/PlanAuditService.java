@@ -34,6 +34,7 @@ public class PlanAuditService {
     private final AuditService audits;
     private final CodificationDocumentService codification;
     private final FichiersAudit fichiers;
+    private final org.springframework.context.ApplicationEventPublisher evenements;
 
     @Transactional(readOnly = true)
     public PlanAuditDto lire(UUID auditId) {
@@ -64,8 +65,10 @@ public class PlanAuditService {
         plan.setMoyensNecessaires(saisie.getMoyensNecessaires());
         List<ActivitePlan> activites = new ArrayList<>();
         for (ActivitePlanDto a : saisie.getActivites() == null ? List.<ActivitePlanDto>of() : saisie.getActivites()) {
+            verifierLeCreneau(audit, a);
             activites.add(ActivitePlan.builder()
                     .plan(plan)
+                    .jour(a.getJour())
                     .horaireDebut(a.getHoraireDebut())
                     .horaireFin(a.getHoraireFin())
                     .libelleActivite(a.getLibelleActivite())
@@ -79,10 +82,60 @@ public class PlanAuditService {
         return versDto(depot.save(plan));
     }
 
+    /**
+     * Un créneau tient dans la période de l'audit, et finit après avoir commencé : « 09:00 –
+     * 08:30 » passait tel quel jusqu'à l'aperçu (recette du 17 oct. 2026, observation 15).
+     */
+    static void verifierLeCreneau(Audit audit, ActivitePlanDto a) {
+        String quoi = a.getLibelleActivite() == null || a.getLibelleActivite().isBlank()
+                ? "Une activité" : "L'activité « " + a.getLibelleActivite().strip() + " »";
+        java.time.LocalDate jour = a.getJour();
+        if (jour != null && audit.getDateDebutPrevue() != null && audit.getDateFinPrevue() != null
+                && (jour.isBefore(audit.getDateDebutPrevue()) || jour.isAfter(audit.getDateFinPrevue()))) {
+            throw new BusinessException(quoi + " tombe hors de la période de l'audit (du "
+                    + audit.getDateDebutPrevue() + " au " + audit.getDateFinPrevue() + ").", HttpStatus.BAD_REQUEST);
+        }
+        java.time.LocalTime debut = heure(a.getHoraireDebut());
+        java.time.LocalTime fin = heure(a.getHoraireFin());
+        if (debut != null && fin != null && !fin.isAfter(debut)) {
+            throw new BusinessException(quoi + " finit (" + a.getHoraireFin().strip() + ") avant d'avoir commencé ("
+                    + a.getHoraireDebut().strip() + ").", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    /** L'heure d'un horaire « 08:30 » ; nulle si le champ est vide ou d'une autre forme. */
+    private static java.time.LocalTime heure(String horaire) {
+        if (horaire == null || horaire.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalTime.parse(horaire.strip());
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
     @Transactional
     public PlanAuditDto valider(UUID auditId) {
         PlanAudit plan = sienOuRien(auditId);
+        // L'audit d'abord, son plan ensuite : un plan se validait avant l'audit (observation 18).
+        com.qualiapproche.evaluation.enumeration.StatutAudit statut = plan.getAudit().getStatut();
+        if (statut == com.qualiapproche.evaluation.enumeration.StatutAudit.PLANIFIE) {
+            throw new BusinessException("Validez d'abord l'audit " + plan.getAudit().getReference()
+                    + " : son plan se valide ensuite.", HttpStatus.CONFLICT);
+        }
         plan.valider();
+        return versDto(depot.save(plan));
+    }
+
+    /** Rouvre le plan en brouillon, dans une nouvelle version, tant que l'audit n'est pas terminé. */
+    @Transactional
+    public PlanAuditDto reviser(UUID auditId) {
+        PlanAudit plan = sienOuRien(auditId);
+        if (plan.getAudit().getStatut() != null && plan.getAudit().getStatut().estTermine()) {
+            throw new BusinessException("L'audit est terminé : son plan ne se révise plus.", HttpStatus.CONFLICT);
+        }
+        plan.reviser(com.qualiapproche.common.utils.SecurityUtils.getAuteurNom());
         return versDto(depot.save(plan));
     }
 
@@ -90,7 +143,9 @@ public class PlanAuditService {
     public PlanAuditDto partagerAvecAudite(UUID auditId) {
         PlanAudit plan = sienOuRien(auditId);
         plan.partagerAvecAudite();
-        return versDto(depot.save(plan));
+        PlanAuditDto partage = versDto(depot.save(plan));
+        evenements.publishEvent(new AnnoncesDeLAudit.Annonce(plan.getAudit().getId(), AnnoncesDeLAudit.Geste.PARTAGE_PLAN));
+        return partage;
     }
 
     /**
@@ -179,8 +234,12 @@ public class PlanAuditService {
                 .nomFichierCharge(plan.getNomFichierRecu())
                 .statut(plan.getStatut())
                 .datePartage(plan.getDatePartage())
+                .version(plan.getVersion())
+                .reviseLe(plan.getReviseLe())
+                .revisePar(plan.getRevisePar())
                 .activites(plan.getActivites().stream().map(a -> ActivitePlanDto.builder()
                         .id(a.getId())
+                        .jour(a.getJour())
                         .horaireDebut(a.getHoraireDebut())
                         .horaireFin(a.getHoraireFin())
                         .libelleActivite(a.getLibelleActivite())

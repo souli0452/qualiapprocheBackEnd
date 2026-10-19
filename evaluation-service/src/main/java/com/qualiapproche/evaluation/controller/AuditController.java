@@ -62,6 +62,7 @@ public class AuditController {
 
     private final AuditService service;
     private final TransmissionVersM05 transmission;
+    private final com.qualiapproche.evaluation.service.AnnoncesDeLAudit annonces;
     private final DocumentsAuditService documents;
 
     @PreAuthorize("@perm.canRead(this)")
@@ -191,6 +192,15 @@ public class AuditController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
                 .contentType(EnTeteFichier.typeDe(nom))
                 .body(new InputStreamResource(service.contenuDuRapport(id)));
+    }
+
+    /** Qui un geste préviendra par courriel (VALIDATION, PARTAGE_PLAN) : la confirmation le montre avant. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/{id}/destinataires")
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.evaluation.service.AnnoncesDeLAudit.Destinataire>>> destinataires(
+            @PathVariable("id") UUID id,
+            @org.springframework.web.bind.annotation.RequestParam("geste") com.qualiapproche.evaluation.service.AnnoncesDeLAudit.Geste geste) {
+        return ResponseEntity.ok(ApiResponse.success(annonces.destinataires(service.sienOuRien(id), geste)));
     }
 
     /**

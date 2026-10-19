@@ -85,6 +85,7 @@ class ProgrammeEtClotureDAuditTest {
     @Mock private AuditeurService auditeurs;
     @Mock private CodificationDocumentService codification;
     @Mock private FichiersAudit fichiers;
+    @Mock private org.springframework.context.ApplicationEventPublisher evenements;
     @Mock private Annuaire annuaire;
 
     @InjectMocks private AuditService service;

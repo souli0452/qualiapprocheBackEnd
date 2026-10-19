@@ -42,4 +42,23 @@ class RenduDocumentTest {
             assertThat(relu.getTables()).hasSize(1);
         }
     }
+
+    @Test
+    @DisplayName("Le pied de page porte version, date d'édition et confidentialité, en PDF comme en Word")
+    void le_pied_de_page_porte_les_mentions() throws Exception {
+        ModeleDeDocument avecMentions = new ModeleDeDocument(document.titre(), document.reference(), document.sousTitre(),
+                document.sections(), "Version 2 · édité le 19/10/2026 · Document interne — diffusion restreinte");
+
+        byte[] pdf = rendu.rendre(avecMentions, RenduDocument.Format.PDF);
+        assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        try (org.apache.pdfbox.pdmodel.PDDocument lu = org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            String texte = new org.apache.pdfbox.text.PDFTextStripper().getText(lu);
+            assertThat(texte).contains("Version 2", "diffusion restreinte", "Page 1 / ");
+        }
+
+        byte[] docx = rendu.rendre(avecMentions, RenduDocument.Format.WORD);
+        try (XWPFDocument relu = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertThat(relu.getFooterList()).anySatisfy(f -> assertThat(f.getText()).contains("Version 2"));
+        }
+    }
 }

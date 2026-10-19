@@ -13,8 +13,13 @@ import java.util.List;
  * @param reference  la référence du document
  * @param sousTitre  ce dont il traite
  * @param sections   numérotées dans l'ordre
+ * @param mentions   le pied de page : version, date d'édition, confidentialité ; nul s'il n'y en a pas
  */
-public record ModeleDeDocument(String titre, String reference, String sousTitre, List<Section> sections) {
+public record ModeleDeDocument(String titre, String reference, String sousTitre, List<Section> sections, String mentions) {
+
+    public ModeleDeDocument(String titre, String reference, String sousTitre, List<Section> sections) {
+        this(titre, reference, sousTitre, sections, null);
+    }
 
     /** Une section : des paragraphes, puis éventuellement un tableau. */
     public record Section(String titre, List<String> paragraphes, Tableau tableau) {

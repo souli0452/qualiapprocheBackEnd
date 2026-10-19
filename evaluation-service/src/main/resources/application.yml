@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: evaluation-service
+  servlet:
+    # Preuves des constats, plans et rapports reçus : ReglesDePieceJointe admet 25 Mo par fichier,
+    # et un dépôt de preuves en porte plusieurs. Le défaut de Spring (1 Mo) refusait presque toute
+    # photo ou tout PDF scanné avant même la règle.
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 100MB
   datasource:
     url: ${DB_URL_EVALUATION:jdbc:postgresql://localhost:5432/bd_quali_sira_evaluation}
     username: ${DB_USERNAME:postgres}
@@ -61,6 +68,16 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
+
+# Serveur de fichiers (preuves des constats, plans et rapports reçus tout faits). Le bloc manquait :
+# sans minio.url, lib-storage ne câble aucun dépôt et tout chargement répondait 503. Les clés, sans
+# défaut ailleurs, en ont un vide ici : le serveur de fichiers reste facultatif pour ce service,
+# qui démarre sans elles et refuse alors le seul chargement, en disant ce qui manque.
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}
 
 eureka:
   client:

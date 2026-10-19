@@ -62,6 +62,10 @@ public class NotationCritere extends AuditEntity {
     @Column(name = "non_conformite_id")
     private UUID nonConformiteId;
 
+    /** Le numéro de la fiche ouverte, retenu à la transmission. */
+    @Column(name = "numero_non_conformite", length = 100)
+    private String numeroNonConformite;
+
     public boolean estNonConforme() {
         return niveau == NiveauNotationRQAPBF.NON_CONFORME;
     }
@@ -73,17 +77,21 @@ public class NotationCritere extends AuditEntity {
     }
 
     /**
-     * Le constat binaire retenu pour la synthèse.
+     * Le constat binaire retenu pour la synthèse, selon les niveaux que la direction tient pour
+     * des écarts (RegleEcartRQAPBFService#niveauxEnEcart).
      *
-     * <p>Seul « Conforme » vaut conforme : « Acceptable » et « À améliorer » sont des écarts, et
-     * partent vers les non-conformités comme « Non conforme ». Un critère non applicable, ou pas
-     * encore noté, ne donne aucun constat — il est hors du périmètre.</p>
+     * <p>Un critère non applicable, ou pas encore noté, ne donne aucun constat — il est hors du
+     * périmètre. Un critère qui a déjà ouvert une non-conformité reste un écart, quelle que soit la
+     * règle d'aujourd'hui : on ne réécrit pas ce qui a été transmis.</p>
      */
-    public ConstatRQAPBF constatRetenu() {
+    public ConstatRQAPBF constatRetenu(java.util.Set<NiveauNotationRQAPBF> niveauxEnEcart) {
+        if (nonConformiteId != null) {
+            return ConstatRQAPBF.NC;
+        }
         if (niveau == null || niveau == NiveauNotationRQAPBF.NON_APPLICABLE) {
             return null;
         }
-        return niveau == NiveauNotationRQAPBF.CONFORME ? ConstatRQAPBF.CONFORME : ConstatRQAPBF.NC;
+        return niveauxEnEcart.contains(niveau) ? ConstatRQAPBF.NC : ConstatRQAPBF.CONFORME;
     }
 
     /** Le critère entre au rapport officiel ; il ne se publie qu'une fois noté. */

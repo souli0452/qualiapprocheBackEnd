@@ -39,6 +39,7 @@ import static com.qualiapproche.evaluation.controller.AuditUrls.EVALUATIONS_RQAP
 public class EvaluationRQAPBFController {
 
     private final ReferentielRQAPBFService service;
+    private final com.qualiapproche.evaluation.service.PreuvesDesNotations preuvesDesNotations;
 
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/all")
@@ -100,6 +101,41 @@ public class EvaluationRQAPBFController {
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") UUID id) {
         service.supprimerEvaluation(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ------------------------------------------------------------ Pièces justificatives d'une notation
+
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/notations/{notationId}/preuves")
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.evaluation.dto.PreuveDto>>> preuves(@PathVariable("notationId") UUID notationId) {
+        return ResponseEntity.ok(ApiResponse.success(preuvesDesNotations.lister(notationId)));
+    }
+
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PostMapping(value = "/notations/{notationId}/preuves", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.evaluation.dto.PreuveDto>>> joindre(
+            @PathVariable("notationId") UUID notationId,
+            @org.springframework.web.bind.annotation.RequestPart("fichiers") List<org.springframework.web.multipart.MultipartFile> fichiers) {
+        return ResponseEntity.ok(ApiResponse.success(preuvesDesNotations.joindre(notationId, fichiers)));
+    }
+
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/preuves/{preuveId}")
+    public ResponseEntity<org.springframework.core.io.InputStreamResource> telechargerPreuve(@PathVariable("preuveId") UUID preuveId) {
+        com.qualiapproche.evaluation.entities.PreuveNotation preuve = preuvesDesNotations.preuve(preuveId);
+        String nom = preuve.getNom() == null ? "preuve" : preuve.getNom().replace("\"", "");
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
+                .contentType(preuve.getType() == null ? org.springframework.http.MediaType.APPLICATION_OCTET_STREAM
+                        : org.springframework.http.MediaType.parseMediaType(preuve.getType()))
+                .body(new org.springframework.core.io.InputStreamResource(preuvesDesNotations.contenu(preuve)));
+    }
+
+    @PreAuthorize("@perm.canUpdate(this)")
+    @DeleteMapping("/preuves/{preuveId}")
+    public ResponseEntity<Void> retirerPreuve(@PathVariable("preuveId") UUID preuveId) {
+        preuvesDesNotations.retirer(preuveId);
         return ResponseEntity.noContent().build();
     }
 }

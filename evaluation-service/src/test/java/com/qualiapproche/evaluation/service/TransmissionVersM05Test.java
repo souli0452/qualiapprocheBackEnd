@@ -29,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +50,7 @@ class TransmissionVersM05Test {
     @Mock private ConstatRepository constats;
     @Mock private NotationCritereRepository notations;
     @Mock private PlatformTransactionManager transactions;
+    @Mock private RegleEcartRQAPBFService regles;
 
     @InjectMocks private TransmissionVersM05 transmission;
 
@@ -62,6 +65,8 @@ class TransmissionVersM05Test {
         ouvert.setId(dossier);
         ouvert.setNumeroReference("NFQT-DOC-2026-00001");
         when(client.transmettre(any())).thenReturn(ouvert);
+        when(regles.niveauxEnEcart(any())).thenReturn(EnumSet.of(NiveauNotationRQAPBF.NON_CONFORME,
+                NiveauNotationRQAPBF.A_AMELIORER));
     }
 
     private Audit audit(UUID processusAudite) {
@@ -135,27 +140,57 @@ class TransmissionVersM05Test {
         verify(client, never()).transmettre(any());
     }
 
-    @Test
-    @DisplayName("Un critère RQAPBF acceptable est un écart, un conforme non")
-    void un_critere_rqapbf_acceptable_est_un_ecart_mais_un_conforme_non() {
+    private NotationCritere notationPubliee(NiveauNotationRQAPBF niveau) {
         EvaluationRQAPBF evaluation = EvaluationRQAPBF.builder().audit(audit(processus)).build();
         NoeudReferentiel critere = NoeudReferentiel.builder().code("E1.1-C1").libelle("Texte d'organisation").build();
-        NotationCritere acceptable = NotationCritere.builder().evaluation(evaluation).noeud(critere)
-                .niveau(NiveauNotationRQAPBF.ACCEPTABLE).statut(StatutNotation.PUBLIE).build();
-        acceptable.setId(UUID.randomUUID());
-        NotationCritere conforme = NotationCritere.builder().evaluation(evaluation).noeud(critere)
-                .niveau(NiveauNotationRQAPBF.CONFORME).statut(StatutNotation.PUBLIE).build();
-        conforme.setId(UUID.randomUUID());
-        when(notations.findById(acceptable.getId())).thenReturn(Optional.of(acceptable));
-        when(notations.findById(conforme.getId())).thenReturn(Optional.of(conforme));
+        NotationCritere n = NotationCritere.builder().evaluation(evaluation).noeud(critere)
+                .niveau(niveau).statut(StatutNotation.PUBLIE).build();
+        n.setId(UUID.randomUUID());
+        when(notations.findById(n.getId())).thenReturn(Optional.of(n));
+        return n;
+    }
+
+    @Test
+    @DisplayName("Par défaut, « À améliorer » est un écart ; « Acceptable » et « Conforme » non")
+    void par_defaut_a_ameliorer_part_mais_ni_acceptable_ni_conforme() {
+        NotationCritere aAmeliorer = notationPubliee(NiveauNotationRQAPBF.A_AMELIORER);
+        NotationCritere acceptable = notationPubliee(NiveauNotationRQAPBF.ACCEPTABLE);
+        NotationCritere conforme = notationPubliee(NiveauNotationRQAPBF.CONFORME);
 
         TransmissionDto resultat = transmission.transmettre(
-                EcartsPublies.deNotations(List.of(acceptable.getId(), conforme.getId())));
+                EcartsPublies.deNotations(List.of(aAmeliorer.getId(), acceptable.getId(), conforme.getId())));
 
         ArgumentCaptor<NonConformiteDAuditDto> envoye = ArgumentCaptor.forClass(NonConformiteDAuditDto.class);
         verify(client).transmettre(envoye.capture());
-        assertThat(envoye.getValue().getCleOrigine()).isEqualTo("AUDIT-RQAPBF:" + acceptable.getId());
-        assertThat(envoye.getValue().getJustification()).contains("E1.1-C1", "ACCEPTABLE");
+        assertThat(envoye.getValue().getCleOrigine()).isEqualTo("AUDIT-RQAPBF:" + aAmeliorer.getId());
+        assertThat(envoye.getValue().getJustification()).contains("E1.1-C1", "À améliorer");
         assertThat(resultat.getTransmis()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Une direction qui tient « Acceptable » pour un écart le transmet")
+    void une_direction_qui_tient_acceptable_pour_un_ecart_le_transmet() {
+        when(regles.niveauxEnEcart(any())).thenReturn(EnumSet.of(NiveauNotationRQAPBF.NON_CONFORME,
+                NiveauNotationRQAPBF.A_AMELIORER, NiveauNotationRQAPBF.ACCEPTABLE));
+        NotationCritere acceptable = notationPubliee(NiveauNotationRQAPBF.ACCEPTABLE);
+
+        TransmissionDto resultat = transmission.transmettre(EcartsPublies.deNotations(List.of(acceptable.getId())));
+
+        assertThat(resultat.getTransmis()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Un passage transmet un lot ; le reste est compté et attend la relance")
+    void un_passage_transmet_un_lot_et_compte_le_reste() {
+        List<UUID> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < TransmissionVersM05.LOT + 5; i++) {
+            ids.add(notationPubliee(NiveauNotationRQAPBF.NON_CONFORME).getId());
+        }
+
+        TransmissionDto resultat = transmission.transmettre(EcartsPublies.deNotations(ids));
+
+        verify(client, times(TransmissionVersM05.LOT)).transmettre(any());
+        assertThat(resultat.getTransmis()).isEqualTo(TransmissionVersM05.LOT);
+        assertThat(resultat.getRestants()).isEqualTo(5);
     }
 }

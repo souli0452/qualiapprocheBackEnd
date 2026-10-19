@@ -215,6 +215,30 @@ public class AuditeurService {
                 .noneMatch(a -> !a.getId().equals(exclu));
     }
 
+    /**
+     * Pourquoi l'auditeur ne peut pas être affecté sur la période, ou rien s'il le peut. L'alerte
+     * « inactif ou déjà engagé » ne disait ni lequel des deux ni sur quel audit (observation 8).
+     */
+    @Transactional(readOnly = true)
+    public String raisonDIndisponibilite(UUID id, LocalDate debut, LocalDate fin, UUID exclu) {
+        Auditeur auditeur = sienOuRien(id);
+        if (auditeur.getStatut() != StatutAuditeur.ACTIF) {
+            return "est inactif dans le vivier d'auditeurs";
+        }
+        if (debut == null || fin == null) {
+            return null;
+        }
+        java.time.format.DateTimeFormatter jour = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        return audits.chevauchant(auditeur.getId(), debut, fin).stream()
+                .filter(a -> !a.getId().equals(exclu))
+                .findFirst()
+                .map(a -> "est déjà " + (a.getResponsableEquipe() != null && a.getResponsableEquipe().getId().equals(id)
+                        ? "responsable" : "membre de l'équipe") + " de l'audit " + a.getReference()
+                        + (a.getDateDebutPrevue() == null ? "" : " du " + a.getDateDebutPrevue().format(jour))
+                        + (a.getDateFinPrevue() == null ? "" : " au " + a.getDateFinPrevue().format(jour)))
+                .orElse(null);
+    }
+
     @Transactional(readOnly = true)
     public boolean aConflitInteret(UUID id, UUID auditId) {
         Audit audit = Perimetre.sienneOuRien(audits, auditId, "audit");

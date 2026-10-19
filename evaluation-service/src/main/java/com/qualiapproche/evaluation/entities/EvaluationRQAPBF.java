@@ -101,6 +101,11 @@ public class EvaluationRQAPBF extends AuditEntity {
         return resultats;
     }
 
+    /** Le score provisoire, sur tout ce qui est noté, sans rien retenir. */
+    public Double calculerScoreProvisoire() {
+        return moyenne(notations);
+    }
+
     /** Le score officiel : la moyenne des seuls critères publiés. */
     public Double scoreOfficiel() {
         return moyenne(retenues(true));

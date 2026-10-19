@@ -68,6 +68,7 @@ public class NotificationsAuditService {
     private final SignatureRepository signatures;
     private final ChecklistAuditRepository checklists;
     private final NotationCritereRepository notations;
+    private final RegleEcartRQAPBFService regles;
 
     @Transactional(readOnly = true)
     public List<NotificationDto> pourLAppelant() {
@@ -173,8 +174,9 @@ public class NotificationsAuditService {
                 .filter(s -> directionId.equals(s.getAudit().getDirectionId()))
                 .filter(s -> s.getAudit().getStatut() != StatutAudit.ANNULE)
                 .count();
+        java.util.Set<com.qualiapproche.evaluation.enumeration.NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(directionId);
         e.ecarts = notations.publieesDeLaDirection(directionId).stream()
-                .filter(n -> n.constatRetenu() == ConstatRQAPBF.NC && n.getNonConformiteId() == null)
+                .filter(n -> n.constatRetenu(enEcart) == ConstatRQAPBF.NC && n.getNonConformiteId() == null)
                 .count();
         e.checklistsBrouillon = checklists.countByDirectionIdAndStatut(directionId, StatutChecklist.BROUILLON);
         return e;

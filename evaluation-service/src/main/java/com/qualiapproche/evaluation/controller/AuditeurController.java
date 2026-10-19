@@ -86,6 +86,17 @@ public class AuditeurController {
         return ResponseEntity.noContent().build();
     }
 
+    /** La raison pour laquelle l'auditeur n'est pas libre sur la période ; vide s'il l'est. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/{id}/indisponibilite")
+    public ResponseEntity<ApiResponse<String>> indisponibilite(
+            @PathVariable("id") UUID id,
+            @RequestParam("debut") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate debut,
+            @RequestParam("fin") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(value = "auditId", required = false) UUID auditId) {
+        return ResponseEntity.ok(ApiResponse.success(service.raisonDIndisponibilite(id, debut, fin, auditId)));
+    }
+
     /** Libre sur la période ? {@code auditId} écarte l'audit qu'on est en train de composer. */
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping("/{id}/disponibilite")

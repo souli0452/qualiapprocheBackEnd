@@ -30,6 +30,8 @@ public class AuditDto {
     private LocalDate dateDebutPrevue;
     private LocalDate dateFinPrevue;
     private Integer dureeEstimeeJours;
+    /** Lecture seule : posée au démarrage. */
+    private LocalDate dateDebutReelle;
     private NiveauRisque niveauRisque;
     private String descriptionRisque;
     private StatutAudit statut;

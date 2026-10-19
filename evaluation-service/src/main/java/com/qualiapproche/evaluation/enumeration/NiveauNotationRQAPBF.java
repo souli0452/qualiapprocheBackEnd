@@ -9,21 +9,32 @@ package com.qualiapproche.evaluation.enumeration;
  * pour la structure ne doit pas faire baisser sa note.</p>
  */
 public enum NiveauNotationRQAPBF {
-    NON_CONFORME(0.0),
-    A_AMELIORER(45.0),
-    ACCEPTABLE(75.0),
-    CONFORME(100.0),
-    NON_APPLICABLE(null);
+    NON_CONFORME(0.0, "Non conforme"),
+    A_AMELIORER(45.0, "À améliorer"),
+    ACCEPTABLE(75.0, "Acceptable"),
+    CONFORME(100.0, "Conforme"),
+    NON_APPLICABLE(null, "Non applicable");
 
     private final Double score;
+    private final String libelle;
 
-    NiveauNotationRQAPBF(Double score) {
+    NiveauNotationRQAPBF(Double score, String libelle) {
         this.score = score;
+        this.libelle = libelle;
     }
 
-    /** Les niveaux dont le constat retenu est « NC » : tout ce qui n'est ni conforme ni sans objet. */
-    public static java.util.List<NiveauNotationRQAPBF> nonConformes() {
-        return java.util.Arrays.stream(values()).filter(n -> n != CONFORME && n != NON_APPLICABLE).toList();
+    /** Les niveaux dont une direction choisit s'ils ouvrent une non-conformité (RegleEcartRQAPBF). */
+    public static java.util.List<NiveauNotationRQAPBF> parametrables() {
+        return java.util.List.of(NON_CONFORME, A_AMELIORER, ACCEPTABLE);
+    }
+
+    /** La règle tant qu'une direction n'en a pas posé d'autre : « Acceptable » n'est pas un écart. */
+    public boolean ouvreUneNonConformiteParDefaut() {
+        return this == NON_CONFORME || this == A_AMELIORER;
+    }
+
+    public String getLibelle() {
+        return libelle;
     }
 
     /** La part du score, sur 100 ; nulle pour un critère non applicable. */

@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.entities;
 
 import com.qualiapproche.common.base.AuditEntity;
 import jakarta.persistence.Column;
+import java.time.LocalDate;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -27,7 +28,11 @@ public class ActivitePlan extends AuditEntity {
     @JoinColumn(name = "plan_audit_id", nullable = false)
     private PlanAudit plan;
 
-    /** « 2026-10-12 08:30 » : horodatage libre, tel que le plan l'annonce. */
+    /** Le jour de l'activité, dans la période de l'audit ; nul sur les plans antérieurs. */
+    @Column(name = "jour")
+    private LocalDate jour;
+
+    /** « 08:30 » : l'heure, que le jour complète. */
     @Column(name = "horaire_debut", length = 30)
     private String horaireDebut;
 

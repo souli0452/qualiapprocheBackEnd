@@ -319,14 +319,19 @@ class SaisieEtPublicationDesConstatsTest {
     }
 
     @Test
-    @DisplayName("Le renvoi en brouillon garde la raison donnée par l'équipe")
-    void le_renvoi_en_brouillon_garde_sa_raison() {
+    @DisplayName("Le renvoi garde sa raison à part, sans effacer le commentaire de la réunion")
+    void le_renvoi_garde_sa_raison_sans_effacer_le_commentaire_de_reunion() {
         Constat compile = constat(collegue, StatutConstat.COMPILE, ecart);
+        compile.setCommentaireEquipe("Requalifié en mineure après échange avec le pilote");
 
         ConstatDto renvoye = service.retirerVersBrouillon(compile.getId(), "  Preuve manquante ");
 
         assertThat(renvoye.getStatut()).isEqualTo(StatutConstat.BROUILLON);
-        assertThat(renvoye.getCommentaireEquipe()).isEqualTo("Preuve manquante");
+        assertThat(renvoye.isRenvoye()).isTrue();
+        assertThat(renvoye.getMotifRenvoi()).isEqualTo("Preuve manquante");
+        assertThat(renvoye.getRenvoyeLe()).isNotNull();
+        // Le motif s'écrivait dans ce champ et effaçait la réunion (recette du 17 oct. 2026, obs. 23).
+        assertThat(renvoye.getCommentaireEquipe()).isEqualTo("Requalifié en mineure après échange avec le pilote");
     }
 
     // ------------------------------------------------------------------ Publication

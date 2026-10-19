@@ -72,6 +72,19 @@ public class Constat extends AuditEntity {
     @Column(name = "commentaire_equipe", columnDefinition = "TEXT")
     private String commentaireEquipe;
 
+    /**
+     * Pourquoi l'équipe l'a renvoyé à son auteur, par qui et quand. À part du commentaire de
+     * réunion, que le motif écrasait : les deux se lisent, l'un ne remplace pas l'autre.
+     */
+    @Column(name = "motif_renvoi", columnDefinition = "TEXT")
+    private String motifRenvoi;
+
+    @Column(name = "renvoye_le")
+    private LocalDateTime renvoyeLe;
+
+    @Column(name = "renvoye_par")
+    private String renvoyePar;
+
     /** Sa nature : point fort, piste d'amélioration, non-conformité... */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "type_constat_id")
@@ -93,6 +106,10 @@ public class Constat extends AuditEntity {
     @Column(name = "non_conformite_id")
     private UUID nonConformiteId;
 
+    /** Le numéro de cette fiche, retenu à la transmission : le rapport le cite. */
+    @Column(name = "numero_non_conformite", length = 100)
+    private String numeroNonConformite;
+
     /** Son auteur le verse à la compilation d'équipe. */
     public void publier() {
         exigerStatut(StatutConstat.BROUILLON, "versé à la compilation d'équipe");
@@ -103,10 +120,18 @@ public class Constat extends AuditEntity {
         statut = StatutConstat.COMPILE;
     }
 
-    /** L'équipe le renvoie à son auteur pour retravail. */
-    public void retirerVersBrouillon() {
+    /** L'équipe le renvoie à son auteur pour retravail, en disant pourquoi et qui le fait. */
+    public void retirerVersBrouillon(String motif, String par) {
         exigerStatut(StatutConstat.COMPILE, "renvoyé en brouillon");
         statut = StatutConstat.BROUILLON;
+        motifRenvoi = motif == null || motif.isBlank() ? null : motif.strip();
+        renvoyeLe = LocalDateTime.now();
+        renvoyePar = par;
+    }
+
+    /** Un brouillon revenu de la compilation : l'auteur a de quoi le retravailler. */
+    public boolean estRenvoye() {
+        return statut == StatutConstat.BROUILLON && renvoyeLe != null;
     }
 
     /** Validé en réunion d'équipe : verrouillé, il alimente le rapport et la transmission. */

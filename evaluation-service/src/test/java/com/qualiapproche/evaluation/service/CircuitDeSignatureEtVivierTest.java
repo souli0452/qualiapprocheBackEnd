@@ -74,6 +74,7 @@ class CircuitDeSignatureEtVivierTest {
         @Mock private AuditService audits;
         @Mock private AuditRepository depotDesAudits;
         @Mock private CodificationDocumentService codification;
+        @Mock private RelanceDeSignature relance;
 
         @InjectMocks private SignatureService service;
 
@@ -111,6 +112,67 @@ class CircuitDeSignatureEtVivierTest {
             assertThat(circuit).allSatisfy(s -> assertThat(s.getStatut()).isEqualTo(StatutSignature.EN_ATTENTE));
             assertThat(audit.getReferenceRapport()).isEqualTo("RAP-2026-001");
             verify(depot).deleteAllByAuditId(audit.getId());
+        }
+
+        @Test
+        @DisplayName("Remplacer un signataire en attente garde son visa, marqué remplacé, et les signatures données")
+        void remplacer_un_signataire_garde_l_historique() {
+            Signature signe = visa("chef-equipe", StatutSignature.SIGNEE, 1);
+            signe.setId(UUID.randomUUID());
+            Signature absent = visa("super-admin", StatutSignature.EN_ATTENTE, 2);
+            absent.setId(UUID.randomUUID());
+            absent.setRole(com.qualiapproche.evaluation.enumeration.RoleVisa.APPROUVE);
+            when(depot.findAllByAuditIdOrderByOrdreAsc(audit.getId())).thenReturn(List.of(signe, absent));
+            org.mockito.ArgumentCaptor<Signature> enregistre = org.mockito.ArgumentCaptor.forClass(Signature.class);
+
+            service.remplacer(audit.getId(), absent.getId(),
+                    SignatureDto.builder().signataireId("directeur-qualite").fonctionSignataire("Directeur qualité").build());
+
+            verify(depot, org.mockito.Mockito.times(2)).save(enregistre.capture());
+            assertThat(absent.getStatut()).isEqualTo(StatutSignature.REMPLACEE);
+            assertThat(absent.getRemplaceLe()).isNotNull();
+            Signature nouveau = enregistre.getAllValues().get(1);
+            assertThat(nouveau.getSignataireId()).isEqualTo("directeur-qualite");
+            assertThat(nouveau.getStatut()).isEqualTo(StatutSignature.EN_ATTENTE);
+            assertThat(nouveau.getOrdre()).isEqualTo(2);
+            assertThat(nouveau.getRole()).isEqualTo(com.qualiapproche.evaluation.enumeration.RoleVisa.APPROUVE);
+            assertThat(signe.getStatut()).isEqualTo(StatutSignature.SIGNEE);
+            verify(depot, never()).deleteAllByAuditId(any());
+        }
+
+        @Test
+        @DisplayName("Un visa déjà donné ne se remplace pas")
+        void un_visa_donne_ne_se_remplace_pas() {
+            Signature signe = visa("chef-equipe", StatutSignature.SIGNEE, 1);
+            signe.setId(UUID.randomUUID());
+            when(depot.findAllByAuditIdOrderByOrdreAsc(audit.getId())).thenReturn(List.of(signe));
+
+            assertThatThrownBy(() -> service.remplacer(audit.getId(), signe.getId(),
+                    SignatureDto.builder().signataireId("dq").build())).isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("Une même personne ne figure pas deux fois au circuit")
+        void pas_de_doublon_dans_le_circuit() {
+            assertThatThrownBy(() -> service.poserLeCircuit(audit.getId(), List.of(
+                    SignatureDto.builder().signataireId("dq").build(),
+                    SignatureDto.builder().signataireId(" dq ").build())))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("deux fois");
+        }
+
+        @Test
+        @DisplayName("Seul un visa en attente se relance")
+        void seul_un_visa_en_attente_se_relance() {
+            Signature attendu = visa("dq", StatutSignature.EN_ATTENTE, 1);
+            attendu.setId(UUID.randomUUID());
+            Signature signe = visa("chef", StatutSignature.SIGNEE, 2);
+            signe.setId(UUID.randomUUID());
+            when(depot.findAllByAuditIdOrderByOrdreAsc(audit.getId())).thenReturn(List.of(attendu, signe));
+
+            service.relancer(audit.getId(), attendu.getId());
+
+            verify(relance).relancer(org.mockito.ArgumentMatchers.eq(attendu), any());
+            assertThatThrownBy(() -> service.relancer(audit.getId(), signe.getId())).isInstanceOf(BusinessException.class);
         }
 
         @Test

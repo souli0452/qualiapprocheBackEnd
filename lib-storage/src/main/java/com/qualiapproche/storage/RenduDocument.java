@@ -90,9 +90,16 @@ public class RenduDocument {
             paragraphe(docx, document.titre(), 18, true, ParagraphAlignment.CENTER);
             paragraphe(docx, document.sousTitre(), 12, false, ParagraphAlignment.CENTER);
             paragraphe(docx, "Réf. " + document.reference(), 9, false, ParagraphAlignment.CENTER);
+            if (document.mentions() != null) {
+                org.apache.poi.xwpf.usermodel.XWPFFooter pied = docx.createFooter(org.apache.poi.wp.usermodel.HeaderFooterType.DEFAULT);
+                XWPFRun run = pied.createParagraph().createRun();
+                run.setFontSize(8);
+                run.setText(document.mentions());
+            }
             int numero = 1;
             for (ModeleDeDocument.Section section : document.sections()) {
-                paragraphe(docx, numero++ + ". " + section.titre(), 12, true, ParagraphAlignment.LEFT);
+                paragraphe(docx, numero++ + ". " + section.titre(), 12, true, ParagraphAlignment.LEFT)
+                        .setKeepNext(true);
                 section.paragraphes().forEach(p -> paragraphe(docx, p, 10, false, ParagraphAlignment.LEFT));
                 if (section.tableau() != null) {
                     tableau(docx, section.tableau());
@@ -106,7 +113,7 @@ public class RenduDocument {
         }
     }
 
-    private static void paragraphe(XWPFDocument docx, String texte, int taille, boolean gras, ParagraphAlignment alignement) {
+    private static XWPFParagraph paragraphe(XWPFDocument docx, String texte, int taille, boolean gras, ParagraphAlignment alignement) {
         XWPFParagraph p = docx.createParagraph();
         p.setAlignment(alignement);
         String[] lignes = (texte == null ? "" : texte).split("\n");
@@ -119,6 +126,7 @@ public class RenduDocument {
             }
             run.setText(lignes[i]);
         }
+        return p;
     }
 
     private static void tableau(XWPFDocument docx, ModeleDeDocument.Tableau tableau) {

@@ -27,6 +27,11 @@ public class ConstatDto {
     private LocalDateTime datePublication;
     private LocalDateTime dateSaisie;
     private String commentaireEquipe;
+    /** Revenu de la compilation : le motif, qui l'a renvoyé et quand (lecture seule). */
+    private boolean renvoye;
+    private String motifRenvoi;
+    private LocalDateTime renvoyeLe;
+    private String renvoyePar;
     private UUID natureId;
     private String natureLibelle;
     private String natureCouleur;

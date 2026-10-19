@@ -57,6 +57,13 @@ public class PlanAuditController {
         return ResponseEntity.ok(service.valider(auditId));
     }
 
+    /** Rouvre un plan validé ou partagé, dans une nouvelle version (observation 18). */
+    @PreAuthorize("@perm.canValidate(this)")
+    @PutMapping("/reviser")
+    public ResponseEntity<PlanAuditDto> reviser(@PathVariable("auditId") UUID auditId) {
+        return ResponseEntity.ok(service.reviser(auditId));
+    }
+
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping("/partager")
     public ResponseEntity<PlanAuditDto> partager(@PathVariable("auditId") UUID auditId) {

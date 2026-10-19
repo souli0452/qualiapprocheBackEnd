@@ -43,6 +43,8 @@ public class ReferentielRQAPBFService {
     private final EvaluationRQAPBFRepository evaluations;
     private final AuditService audits;
     private final ApplicationEventPublisher evenements;
+    private final RegleEcartRQAPBFService regles;
+    private final GrilleDesMentionsRQAPBF mentions;
 
     // ------------------------------------------------------------------ Référentiel
 
@@ -241,10 +243,12 @@ public class ReferentielRQAPBFService {
      */
     @Transactional(readOnly = true)
     public List<NotationCritereDto> ecarts(UUID evaluationId) {
-        return evaluation(evaluationId).getNotations().stream()
+        EvaluationRQAPBF evaluation = evaluation(evaluationId);
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(evaluation.getDirectionId());
+        return evaluation.getNotations().stream()
                 .filter(NotationCritere::estPublie)
-                .filter(n -> n.constatRetenu() == ConstatRQAPBF.NC)
-                .map(this::versDto)
+                .filter(n -> n.constatRetenu(enEcart) == ConstatRQAPBF.NC)
+                .map(n -> versDto(n, enEcart))
                 .toList();
     }
 
@@ -258,8 +262,9 @@ public class ReferentielRQAPBFService {
      * critères déjà transmis sont écartés par la transmission elle-même : on peut annoncer large.
      */
     private void annoncerLesEcarts(EvaluationRQAPBF evaluation) {
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(evaluation.getDirectionId());
         List<UUID> ecarts = evaluation.getNotations().stream()
-                .filter(n -> n.estPublie() && n.constatRetenu() == ConstatRQAPBF.NC && n.getNonConformiteId() == null)
+                .filter(n -> n.estPublie() && n.constatRetenu(enEcart) == ConstatRQAPBF.NC && n.getNonConformiteId() == null)
                 .map(NotationCritere::getId).toList();
         if (!ecarts.isEmpty()) {
             evenements.publishEvent(EcartsPublies.deNotations(ecarts));
@@ -292,6 +297,7 @@ public class ReferentielRQAPBFService {
     }
 
     private EvaluationRQAPBFDto versDto(EvaluationRQAPBF e) {
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(e.getDirectionId());
         return EvaluationRQAPBFDto.builder()
                 .id(e.getId())
                 .auditId(e.getAudit().getId())
@@ -302,14 +308,16 @@ public class ReferentielRQAPBFService {
                 .resultatsParDomaine(e.genererResultatsParDomaine())
                 .scoreOfficiel(e.scoreOfficiel())
                 .resultatsOfficielsParDomaine(e.genererResultatsParDomaine(true))
+                .mention(mentions.mentionDe(e, false))
+                .mentionOfficielle(mentions.mentionDe(e, true))
                 .scoresParNoeud(e.scoresParNoeud(false))
                 .criteresNotes(e.getNotations().size())
                 .criteresPublies((int) e.getNotations().stream().filter(NotationCritere::estPublie).count())
-                .notations(e.getNotations().stream().map(this::versDto).toList())
+                .notations(e.getNotations().stream().map(n -> versDto(n, enEcart)).toList())
                 .build();
     }
 
-    private NotationCritereDto versDto(NotationCritere n) {
+    private NotationCritereDto versDto(NotationCritere n, Set<NiveauNotationRQAPBF> enEcart) {
         return NotationCritereDto.builder()
                 .id(n.getId())
                 .noeudId(n.getNoeud().getId())
@@ -320,10 +328,10 @@ public class ReferentielRQAPBFService {
                 .score(n.getScore())
                 .preuve(n.getPreuve())
                 .commentaire(n.getCommentaire())
-                .constatRetenu(n.constatRetenu())
+                .constatRetenu(n.constatRetenu(enEcart))
                 .statut(n.getStatut())
                 .nonConformiteId(n.getNonConformiteId())
-                .transmissionEnAttente(n.estPublie() && n.constatRetenu() == ConstatRQAPBF.NC
+                .transmissionEnAttente(n.estPublie() && n.constatRetenu(enEcart) == ConstatRQAPBF.NC
                         && n.getNonConformiteId() == null)
                 .build();
     }

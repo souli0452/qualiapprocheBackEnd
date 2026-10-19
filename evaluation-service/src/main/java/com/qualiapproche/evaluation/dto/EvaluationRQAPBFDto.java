@@ -31,6 +31,9 @@ public class EvaluationRQAPBFDto {
     /** Résultats officiels : sur les seuls critères publiés, comme le rapport. */
     private Double scoreOfficiel;
     private Map<String, Double> resultatsOfficielsParDomaine;
+    /** Ce que vaut le score selon la grille des mentions : provisoire, puis officielle. */
+    private MentionRQAPBFDto mention;
+    private MentionRQAPBFDto mentionOfficielle;
     /** Prévisualisation, par code de nœud : le score de chaque section, exigence... */
     private Map<String, Double> scoresParNoeud;
     private int criteresNotes;

@@ -18,6 +18,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Scores RQAPBF, numérotation, échéances, signatures et checklists. */
 class CalculsDuModuleTest {
 
+    /** La règle d'une direction qui n'en a pas posé d'autre. */
+    private static final java.util.Set<NiveauNotationRQAPBF> PAR_DEFAUT = java.util.EnumSet.of(
+            NiveauNotationRQAPBF.NON_CONFORME, NiveauNotationRQAPBF.A_AMELIORER);
+
+
     private static NotationCritere note(NoeudReferentiel critere, NiveauNotationRQAPBF niveau) {
         return NotationCritere.builder().noeud(critere).niveau(niveau).build();
     }
@@ -45,7 +50,7 @@ class CalculsDuModuleTest {
         assertThat(parDomaine).containsKeys("D1 — Gouvernance", "D2 — Ressources");
         assertThat(parDomaine.get("D1 — Gouvernance")).isEqualTo(50.0);
         assertThat(parDomaine.get("D2 — Ressources")).isNull();
-        assertThat(evaluation.getNotations().get(1).constatRetenu()).isEqualTo(ConstatRQAPBF.NC);
+        assertThat(evaluation.getNotations().get(1).constatRetenu(PAR_DEFAUT)).isEqualTo(ConstatRQAPBF.NC);
     }
 
     @Test
@@ -100,13 +105,18 @@ class CalculsDuModuleTest {
     }
 
     @Test
-    @DisplayName("Seul « conforme » vaut conforme et le non applicable ne donne aucun constat")
-    void seul_conforme_vaut_conforme_et_le_non_applicable_ne_donne_aucun_constat() {
+    @DisplayName("Par défaut, « Acceptable » n'est pas un écart ; le non applicable ne donne aucun constat")
+    void par_defaut_acceptable_n_est_pas_un_ecart_et_le_non_applicable_ne_donne_aucun_constat() {
         NoeudReferentiel critere = NoeudReferentiel.builder().code("E1.1-C1").libelle("x").build();
-        assertThat(note(critere, NiveauNotationRQAPBF.CONFORME).constatRetenu()).isEqualTo(ConstatRQAPBF.CONFORME);
-        assertThat(note(critere, NiveauNotationRQAPBF.ACCEPTABLE).constatRetenu()).isEqualTo(ConstatRQAPBF.NC);
-        assertThat(note(critere, NiveauNotationRQAPBF.A_AMELIORER).constatRetenu()).isEqualTo(ConstatRQAPBF.NC);
-        assertThat(note(critere, NiveauNotationRQAPBF.NON_APPLICABLE).constatRetenu()).isNull();
+        assertThat(note(critere, NiveauNotationRQAPBF.CONFORME).constatRetenu(PAR_DEFAUT)).isEqualTo(ConstatRQAPBF.CONFORME);
+        assertThat(note(critere, NiveauNotationRQAPBF.ACCEPTABLE).constatRetenu(PAR_DEFAUT)).isEqualTo(ConstatRQAPBF.CONFORME);
+        assertThat(note(critere, NiveauNotationRQAPBF.A_AMELIORER).constatRetenu(PAR_DEFAUT)).isEqualTo(ConstatRQAPBF.NC);
+        assertThat(note(critere, NiveauNotationRQAPBF.NON_CONFORME).constatRetenu(PAR_DEFAUT)).isEqualTo(ConstatRQAPBF.NC);
+        assertThat(note(critere, NiveauNotationRQAPBF.NON_APPLICABLE).constatRetenu(PAR_DEFAUT)).isNull();
+        // Une direction qui tient « Acceptable » pour un écart, comme la maquette le voulait.
+        assertThat(note(critere, NiveauNotationRQAPBF.ACCEPTABLE).constatRetenu(java.util.EnumSet.of(
+                NiveauNotationRQAPBF.NON_CONFORME, NiveauNotationRQAPBF.A_AMELIORER, NiveauNotationRQAPBF.ACCEPTABLE)))
+                .isEqualTo(ConstatRQAPBF.NC);
         assertThat(note(critere, NiveauNotationRQAPBF.A_AMELIORER).calculerScore()).isEqualTo(45.0);
         assertThatThrownBy(note(critere, null)::publier).isInstanceOf(BusinessException.class);
     }

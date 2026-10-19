@@ -37,6 +37,12 @@ public class AvancementDto {
     private long criteresPublies;
     private Double pourcentageRqapbf;
 
+    /**
+     * Écarts publiés — constats et critères RQAP-BF — qui n'ont pas encore de dossier au module
+     * Non-conformités : la fiche propose de reprendre leur transmission tant qu'il en reste.
+     */
+    private long ecartsEnAttente;
+
     private boolean cloturable;
     private List<String> raisonsDeNePasCloturer;
 }

@@ -45,12 +45,13 @@ public class RegleNotification extends AuditEntity {
      * La règle se déclenche-t-elle aujourd'hui pour cet audit ?
      *
      * <p>Le jour exact seulement, et non « à moins de N jours » : l'alerte part une fois, au lieu
-     * de se répéter chaque nuit jusqu'au début de l'audit. Un audit terminé ou sans date de début
-     * ne déclenche rien.</p>
+     * de se répéter chaque nuit jusqu'au début de l'audit. Un audit déjà démarré, terminé ou sans
+     * date de début ne déclenche rien : un rappel « J-10 » partait pour un audit en cours
+     * (recette du 17 oct. 2026, observation 14).</p>
      */
     public boolean declencherSiEcheance(Audit audit, LocalDate dateJour) {
         if (!actif || audit == null || audit.getDateDebutPrevue() == null
-                || audit.getStatut() == null || audit.getStatut().estTermine()) {
+                || audit.getStatut() == null || !audit.getStatut().estModifiable()) {
             return false;
         }
         return ChronoUnit.DAYS.between(dateJour, audit.getDateDebutPrevue()) == delaiJours;

@@ -3,6 +3,12 @@ server:
 spring:
   application:
     name: referentiel-service
+  servlet:
+    # Pièces jointes de la FAQ : ReglesDePieceJointe admet 25 Mo par fichier ; le défaut de Spring
+    # (1 Mo) les refusait avant même la règle.
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 100MB
   datasource:
     url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5432/qualisira_referentiel}
     username: ${DB_USERNAME:postgres}
@@ -86,6 +92,15 @@ spring:
   pj:
     directory: ${DOCS_PJ_DIRECTORY:${user.home}/PIECES_JOINTES}
 
+
+# Serveur de fichiers des pièces jointes de la FAQ. Le bloc manquait : sans lui, lib-storage ne
+# câblait aucun dépôt et toute pièce jointe répondait 503. Facultatif ici : sans les clés, le
+# service démarre et seul le dépôt d'une pièce est refusé.
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}
 
 eureka:
   client:

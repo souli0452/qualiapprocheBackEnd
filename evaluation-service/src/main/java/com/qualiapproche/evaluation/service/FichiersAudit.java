@@ -38,7 +38,7 @@ public class FichiersAudit {
         chemin[0] = DOSSIER;
         System.arraycopy(sousDossiers, 0, chemin, 1, sousDossiers.length);
         try {
-            return exigerLeStockage().uploadFile(fichier, chemin);
+            return exigerLeStockage(objetDuDepot(sousDossiers)).uploadFile(fichier, chemin);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -69,7 +69,7 @@ public class FichiersAudit {
             throw new BusinessException("Aucun fichier n'a été chargé.", HttpStatus.NOT_FOUND);
         }
         try {
-            return exigerLeStockage().downloadFile(reference);
+            return exigerLeStockage("La relecture d'un fichier").downloadFile(reference);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -102,12 +102,27 @@ public class FichiersAudit {
         return point < 0 ? null : nom.substring(point + 1).toLowerCase();
     }
 
-    private StorageService exigerLeStockage() {
+    /**
+     * Ce que l'utilisateur cherchait à faire, pour le lui dire s'il ne le peut pas : le message
+     * parlait de « rapport ou plan » à qui joignait une preuve. Le sous-dossier qui suit
+     * l'identifiant de l'audit le désigne.
+     */
+    private static String objetDuDepot(String... sousDossiers) {
+        String nature = sousDossiers.length > 1 ? sousDossiers[1] : "";
+        return switch (nature) {
+            case "preuves" -> "Joindre une preuve";
+            case "plan" -> "Charger un plan d'audit reçu";
+            case "rapport" -> "Charger un rapport d'audit reçu";
+            default -> "Charger un fichier";
+        };
+    }
+
+    private StorageService exigerLeStockage(String objet) {
         StorageService service = stockage.getIfAvailable();
         if (service == null) {
-            throw new BusinessException("Le chargement d'un rapport ou d'un plan demande un serveur de"
-                    + " fichiers, que cette installation n'a pas configuré. Les audits restent"
-                    + " utilisables sans.", HttpStatus.SERVICE_UNAVAILABLE);
+            throw new BusinessException(objet + " demande un serveur de fichiers, que cette installation"
+                    + " n'a pas encore configuré : prévenez l'administrateur. Le reste de l'audit reste"
+                    + " utilisable.", HttpStatus.SERVICE_UNAVAILABLE);
         }
         return service;
     }

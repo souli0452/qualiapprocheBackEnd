@@ -81,6 +81,10 @@ public class Audit extends AuditEntity {
     @Column(name = "duree_estimee_jours")
     private Integer dureeEstimeeJours;
 
+    /** Le jour du démarrage effectif, posé par {@link #demarrer()} : il peut précéder la date prévue. */
+    @Column(name = "date_debut_reelle")
+    private LocalDate dateDebutReelle;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "niveau_risque", length = 50)
     private NiveauRisque niveauRisque;
@@ -195,6 +199,7 @@ public class Audit extends AuditEntity {
     public void demarrer() {
         exigerStatut("démarrer", StatutAudit.EN_PREPARATION, StatutAudit.EN_RETARD);
         statut = StatutAudit.EN_COURS;
+        dateDebutReelle = LocalDate.now();
     }
 
     /** Clôt l'audit. Le service a vérifié auparavant constats et circuit de signature. */

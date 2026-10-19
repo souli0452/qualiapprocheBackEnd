@@ -1,6 +1,7 @@
 package com.qualiapproche.evaluation.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.qualiapproche.evaluation.enumeration.RoleVisa;
 import com.qualiapproche.evaluation.enumeration.StatutSignature;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
@@ -27,4 +28,9 @@ public class SignatureDto {
     private StatutSignature statut;
     private LocalDateTime dateSignature;
     private String motifRefus;
+    private RoleVisa role;
+    /** « Approuvé par » : le libellé du rôle, pour l'écran. */
+    private String roleLibelle;
+    private LocalDateTime remplaceLe;
+    private String remplacePar;
 }

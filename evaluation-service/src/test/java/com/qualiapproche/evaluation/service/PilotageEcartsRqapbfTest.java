@@ -48,7 +48,14 @@ class PilotageEcartsRqapbfTest {
     private final PilotageAuditService service = new PilotageAuditService(
             mock(AuditRepository.class), mock(AuditService.class), mock(EvaluationRQAPBFRepository.class),
             mock(ConstatRepository.class), notations, mock(PlanAuditRepository.class),
-            mock(NoeudReferentielRepository.class), mock(RappelEcheanceRepository.class));
+            mock(NoeudReferentielRepository.class), mock(RappelEcheanceRepository.class), regles());
+
+    private static RegleEcartRQAPBFService regles() {
+        RegleEcartRQAPBFService regles = mock(RegleEcartRQAPBFService.class);
+        when(regles.niveauxEnEcart(any())).thenReturn(java.util.EnumSet.of(
+                NiveauNotationRQAPBF.NON_CONFORME, NiveauNotationRQAPBF.A_AMELIORER));
+        return regles;
+    }
 
     @BeforeEach
     void connecter() {

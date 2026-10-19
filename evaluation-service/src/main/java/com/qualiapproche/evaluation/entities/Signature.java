@@ -2,6 +2,7 @@ package com.qualiapproche.evaluation.entities;
 
 import com.qualiapproche.common.base.AuditEntity;
 import com.qualiapproche.common.exception.BusinessException;
+import com.qualiapproche.evaluation.enumeration.RoleVisa;
 import com.qualiapproche.evaluation.enumeration.StatutSignature;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -60,6 +61,18 @@ public class Signature extends AuditEntity {
     @Column(name = "motif_refus", columnDefinition = "TEXT")
     private String motifRefus;
 
+    /** À quel titre il signe : rédigé, vérifié, approuvé. Nul sur les circuits antérieurs. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_visa", length = 16)
+    private RoleVisa role;
+
+    /** Remplacé avant d'avoir signé : quand, et par qui (nom de l'auteur du geste). */
+    @Column(name = "remplace_le")
+    private LocalDateTime remplaceLe;
+
+    @Column(name = "remplace_par")
+    private String remplacePar;
+
     public void signer() {
         exigerEnAttente();
         statut = StatutSignature.SIGNEE;
@@ -75,6 +88,19 @@ public class Signature extends AuditEntity {
         statut = StatutSignature.REFUSEE;
         motifRefus = motif.strip();
         dateSignature = LocalDateTime.now();
+    }
+
+    /** Le signataire cède sa place : il n'a pas signé, son visa reste au circuit pour mémoire. */
+    public void remplacer(String par) {
+        exigerEnAttente();
+        statut = StatutSignature.REMPLACEE;
+        remplaceLe = LocalDateTime.now();
+        remplacePar = par;
+    }
+
+    /** Ce visa compte-t-il encore dans le circuit ? Un visa remplacé, non. */
+    public boolean estActif() {
+        return statut != StatutSignature.REMPLACEE;
     }
 
     private void exigerEnAttente() {

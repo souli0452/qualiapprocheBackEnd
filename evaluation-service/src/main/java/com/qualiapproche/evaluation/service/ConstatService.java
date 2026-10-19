@@ -63,6 +63,7 @@ public class ConstatService {
     private final ApplicationEventPublisher evenements;
     private final PreuveConstatRepository preuves;
     private final FichiersAudit fichiers;
+    private final RepartitionDesPoints repartition;
 
     /** Ce que l'équipe voit d'un audit : le compilé et le publié. */
     @Transactional(readOnly = true)
@@ -142,10 +143,7 @@ public class ConstatService {
     @Transactional
     public ConstatDto retirerVersBrouillon(UUID id, String motif) {
         Constat constat = modifiableParMoi(id);
-        constat.retirerVersBrouillon();
-        if (motif != null && !motif.isBlank()) {
-            constat.setCommentaireEquipe(motif.strip());
-        }
+        constat.retirerVersBrouillon(motif, com.qualiapproche.common.utils.SecurityUtils.getAuteurNom());
         return versDto(depot.save(constat));
     }
 
@@ -235,8 +233,8 @@ public class ConstatService {
     }
 
     /**
-     * Les points de contrôle que l'appelant doit renseigner sur cet audit : ceux des checklists
-     * de l'audit qui lui sont assignés.
+     * Les points de contrôle que l'appelant doit renseigner sur cet audit : ceux que la répartition
+     * de l'audit lui confie, et ceux qui ne sont confiés à personne de l'équipe (RepartitionDesPoints).
      */
     @Transactional(readOnly = true)
     public List<PointControleDto> mesPointsDeControle(UUID auditId) {
@@ -248,9 +246,13 @@ public class ConstatService {
                 .filter(c -> c.getPointControle() != null)
                 .forEach(c -> parPoint.merge(c.getPointControle().getId(), c,
                         (a, b) -> a.getDateSaisie().isAfter(b.getDateSaisie()) ? a : b));
+        java.util.Map<UUID, UUID> surLAudit = repartition.affectationsDe(audit);
         return audit.getChecklists().stream()
                 .flatMap(c -> c.getPoints().stream())
-                .filter(p -> p.getAuditeurAssigne() != null && p.getAuditeurAssigne().getId().equals(moi.getId()))
+                .filter(p -> {
+                    UUID qui = repartition.attribueA(audit, p, surLAudit);
+                    return qui == null || qui.equals(moi.getId());
+                })
                 .map(p -> PointControleDto.builder()
                         .id(p.getId())
                         .checklistId(p.getChecklist().getId())
@@ -424,6 +426,10 @@ public class ConstatService {
                 .datePublication(c.getDatePublication())
                 .dateSaisie(c.getDateSaisie())
                 .commentaireEquipe(c.getCommentaireEquipe())
+                .renvoye(c.estRenvoye())
+                .motifRenvoi(c.getMotifRenvoi())
+                .renvoyeLe(c.getRenvoyeLe())
+                .renvoyePar(c.getRenvoyePar())
                 .natureId(c.getNature() == null ? null : c.getNature().getId())
                 .natureLibelle(c.getNature() == null ? null : c.getNature().getLibelle())
                 .natureCouleur(c.getNature() == null ? null : c.getNature().getCouleur())

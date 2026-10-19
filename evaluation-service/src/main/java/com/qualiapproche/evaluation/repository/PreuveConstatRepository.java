@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface PreuveConstatRepository extends JpaRepository<PreuveConstat, UUID> {
 
     List<PreuveConstat> findAllByConstatIdOrderByCreatedAtAsc(UUID constatId);
+
+    long countByConstatIdIn(java.util.Collection<UUID> constatIds);
 }

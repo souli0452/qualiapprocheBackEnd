@@ -71,6 +71,7 @@ public class PilotageAuditService {
     private final PlanAuditRepository plans;
     private final NoeudReferentielRepository noeuds;
     private final RappelEcheanceRepository rappels;
+    private final RegleEcartRQAPBFService regles;
 
     @Transactional(readOnly = true)
     public TableauDeBordDto tableauDeBord(int annee) {
@@ -86,8 +87,9 @@ public class PilotageAuditService {
         long enRetard = deLAnnee.stream().filter(a -> a.estEnRetard(aujourdHui)).count();
 
         List<EvaluationRQAPBF> evaluees = ids.isEmpty() ? List.of() : evaluations.findAllByAuditIdIn(ids);
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(directionId);
         long ecartsRqapbf = evaluees.stream().flatMap(e -> e.getNotations().stream())
-                .filter(n -> n.estPublie() && n.constatRetenu() == ConstatRQAPBF.NC).count();
+                .filter(n -> n.estPublie() && n.constatRetenu(enEcart) == ConstatRQAPBF.NC).count();
         long ecartsConstats = ids.isEmpty() ? 0 : constats.ecartsPublies(ids);
 
         Map<UUID, Double> scores = auditService.scoresDeMaturite(ids);
@@ -132,6 +134,15 @@ public class PilotageAuditService {
         long notes = derniere == null ? 0 : derniere.getNotations().size();
         long publies = derniere == null ? 0 : derniere.getNotations().stream().filter(NotationCritere::estPublie).count();
 
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(audit.getDirectionId());
+        long ecartsEnAttente = releves.stream()
+                .filter(c -> c.getStatut() == StatutConstat.PUBLIE && c.estNonConformite() && c.getNonConformiteId() == null)
+                .count()
+                + evaluations.findAllByAuditIdOrderByDateEvaluationDesc(audit.getId()).stream()
+                .flatMap(e -> e.getNotations().stream())
+                .filter(n -> n.estPublie() && n.getNonConformiteId() == null && n.constatRetenu(enEcart) == ConstatRQAPBF.NC)
+                .count();
+
         List<String> raisons = auditService.raisonsDeNePasCloturer(audit);
         return AvancementDto.builder()
                 .statut(audit.getStatut())
@@ -147,6 +158,7 @@ public class PilotageAuditService {
                 .criteresNotes(notes)
                 .criteresPublies(publies)
                 .pourcentageRqapbf(aEvaluer == 0 ? null : 100.0 * notes / aEvaluer)
+                .ecartsEnAttente(ecartsEnAttente)
                 .cloturable(raisons.isEmpty())
                 .raisonsDeNePasCloturer(raisons)
                 .build();
@@ -187,11 +199,14 @@ public class PilotageAuditService {
     @Transactional(readOnly = true)
     public Page<NotationCritereDto> ecartsRqapbf(UUID auditId, Pageable pageable) {
         UUID directionId = Perimetre.exigerUneDirection();
+        Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(directionId);
         Specification<NotationCritere> ecarts = (racine, requete, cb) -> {
             List<Predicate> conditions = new ArrayList<>();
             conditions.add(cb.equal(racine.get("evaluation").get("directionId"), directionId));
             conditions.add(cb.equal(racine.get("statut"), StatutNotation.PUBLIE));
-            conditions.add(racine.get("niveau").in(NiveauNotationRQAPBF.nonConformes()));
+            // Les niveaux tenus aujourd'hui pour des écarts, et ce qui a déjà ouvert un dossier.
+            conditions.add(enEcart.isEmpty() ? cb.isNotNull(racine.get("nonConformiteId"))
+                    : cb.or(racine.get("niveau").in(enEcart), cb.isNotNull(racine.get("nonConformiteId"))));
             if (auditId != null) {
                 conditions.add(cb.equal(racine.get("evaluation").get("audit").get("id"), auditId));
             }
@@ -209,7 +224,7 @@ public class PilotageAuditService {
                         .score(n.getScore())
                         .preuve(n.getPreuve())
                         .commentaire(n.getCommentaire())
-                        .constatRetenu(n.constatRetenu())
+                        .constatRetenu(n.constatRetenu(enEcart))
                         .statut(n.getStatut())
                         .nonConformiteId(n.getNonConformiteId())
                         .transmissionEnAttente(n.getNonConformiteId() == null)

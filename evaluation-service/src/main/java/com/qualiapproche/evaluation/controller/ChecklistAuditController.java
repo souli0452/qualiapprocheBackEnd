@@ -40,6 +40,29 @@ import static com.qualiapproche.evaluation.controller.AuditUrls.CHECKLISTS;
 public class ChecklistAuditController {
 
     private final ChecklistAuditService service;
+    private final com.qualiapproche.evaluation.service.ImportDePoints importDePoints;
+
+    /**
+     * Lit les points d'une grille Excel ou CSV, sans rien enregistrer : ils reviennent à l'écran,
+     * qui les ajoute à la checklist en brouillon pour relecture.
+     */
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PostMapping(value = "/import-points", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.evaluation.dto.PointControleDto>>> importerPoints(
+            @org.springframework.web.bind.annotation.RequestPart("fichier") org.springframework.web.multipart.MultipartFile fichier) {
+        return ResponseEntity.ok(ApiResponse.success(importDePoints.lire(fichier)));
+    }
+
+    /** Le modèle Excel à remplir pour importer des points. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/modele-import")
+    public ResponseEntity<byte[]> modeleImport() {
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("Modele_points_de_controle.xlsx"))
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(importDePoints.modele());
+    }
 
     /** L'écran des checklists, page par page, filtré par statut et par nom ou chapitre. */
     @PreAuthorize("@perm.canRead(this)")

@@ -78,6 +78,7 @@ class PlanEtChecklistsDAuditTest {
         @Mock private AuditService audits;
         @Mock private CodificationDocumentService codification;
         @Mock private FichiersAudit fichiers;
+        @Mock private org.springframework.context.ApplicationEventPublisher evenements;
 
         @InjectMocks private PlanAuditService service;
 

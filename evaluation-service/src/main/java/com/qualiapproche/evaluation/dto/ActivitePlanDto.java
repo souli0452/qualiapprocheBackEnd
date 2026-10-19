@@ -17,6 +17,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonInclude(NON_NULL)
 public class ActivitePlanDto {
     private UUID id;
+    private java.time.LocalDate jour;
     private String horaireDebut;
     private String horaireFin;
     @NotBlank

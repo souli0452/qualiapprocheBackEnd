@@ -24,6 +24,8 @@ public final class AuditUrls {
     public static final String TYPES_CONSTAT = RACINE + "/types-constat";
     public static final String REGLES_NOTIFICATION = RACINE + "/regles-notification-audit";
     public static final String CODIFICATIONS = RACINE + "/codifications-document";
+    public static final String REGLES_ECARTS_RQAPBF = RACINE + "/regles-ecarts-rqapbf";
+    public static final String TRANCHES_SCORE_RQAPBF = RACINE + "/tranches-score-rqapbf";
 
     private AuditUrls() {
     }

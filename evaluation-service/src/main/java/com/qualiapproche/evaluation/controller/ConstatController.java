@@ -5,6 +5,7 @@ import com.qualiapproche.common.response.ApiResponse;
 import com.qualiapproche.evaluation.dto.CompilationDto;
 import com.qualiapproche.evaluation.dto.ConstatDto;
 import com.qualiapproche.evaluation.dto.MotifDto;
+import com.qualiapproche.evaluation.dto.RepartitionPointDto;
 import com.qualiapproche.evaluation.dto.PointControleDto;
 import com.qualiapproche.evaluation.dto.PreuveDto;
 import com.qualiapproche.evaluation.entities.PreuveConstat;
@@ -53,6 +54,7 @@ import static com.qualiapproche.evaluation.controller.AuditUrls.CONSTATS;
 public class ConstatController {
 
     private final ConstatService service;
+    private final com.qualiapproche.evaluation.service.RepartitionDesPoints repartition;
 
     /** Ce que l'équipe voit d'un audit : les constats compilés et publiés. */
     @PreAuthorize("@perm.canRead(this)")
@@ -177,5 +179,20 @@ public class ConstatController {
     @GetMapping("/mes-points")
     public ResponseEntity<ApiResponse<List<PointControleDto>>> mesPoints(@RequestParam("auditId") UUID auditId) {
         return ResponseEntity.ok(ApiResponse.success(service.mesPointsDeControle(auditId)));
+    }
+
+    /** Qui renseigne quel point de contrôle sur cet audit (observation 20). */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/repartition")
+    public ResponseEntity<ApiResponse<List<RepartitionPointDto>>> repartition(@RequestParam("auditId") UUID auditId) {
+        return ResponseEntity.ok(ApiResponse.success(repartition.repartition(auditId)));
+    }
+
+    /** Le responsable d'équipe répartit les points entre les membres ; un point sans auditeur revient à toute l'équipe. */
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PutMapping("/repartition")
+    public ResponseEntity<ApiResponse<List<RepartitionPointDto>>> repartir(@RequestParam("auditId") UUID auditId,
+                                                                          @RequestBody List<RepartitionPointDto> saisie) {
+        return ResponseEntity.ok(ApiResponse.success(repartition.repartir(auditId, saisie)));
     }
 }

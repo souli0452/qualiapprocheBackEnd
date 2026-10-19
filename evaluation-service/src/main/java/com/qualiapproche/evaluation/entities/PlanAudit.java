@@ -95,8 +95,20 @@ public class PlanAudit extends AuditEntity {
     @Column(name = "date_partage")
     private LocalDateTime datePartage;
 
+    /** 1 à l'élaboration ; chaque révision d'un plan validé en ouvre une nouvelle. */
     @Builder.Default
-    @OrderBy("horaireDebut ASC")
+    @Column(name = "version", nullable = false)
+    private int version = 1;
+
+    /** La dernière révision : quand, et par qui (nom de l'auteur du geste). */
+    @Column(name = "revise_le")
+    private LocalDateTime reviseLe;
+
+    @Column(name = "revise_par")
+    private String revisePar;
+
+    @Builder.Default
+    @OrderBy("jour ASC, horaireDebut ASC")
     @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ActivitePlan> activites = new ArrayList<>();
 
@@ -118,6 +130,22 @@ public class PlanAudit extends AuditEntity {
         }
         statut = StatutPlanAudit.PARTAGE;
         datePartage = LocalDateTime.now();
+    }
+
+    /**
+     * Rouvre un plan validé ou partagé pour le corriger, dans une nouvelle version : une fois
+     * validé, il ne se corrigeait plus (recette du 17 oct. 2026, observation 18). Il faudra le
+     * valider, puis le partager de nouveau.
+     */
+    public void reviser(String par) {
+        if (statut == StatutPlanAudit.BROUILLON) {
+            throw new BusinessException("Le plan est déjà en brouillon : il se modifie directement.", HttpStatus.CONFLICT);
+        }
+        statut = StatutPlanAudit.BROUILLON;
+        version++;
+        reviseLe = LocalDateTime.now();
+        revisePar = par;
+        datePartage = null;
     }
 
     public void exigerModifiable() {

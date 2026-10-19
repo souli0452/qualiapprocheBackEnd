@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,6 +52,24 @@ public class SignatureController {
     public ResponseEntity<ApiResponse<List<SignatureDto>>> poser(@PathVariable("auditId") UUID auditId,
                                                                  @Valid @RequestBody List<SignatureDto> signataires) {
         return ResponseEntity.ok(ApiResponse.success(service.poserLeCircuit(auditId, signataires)));
+    }
+
+    /** Remplace un signataire qui n'a pas encore signé ; les visas déjà donnés restent. */
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PutMapping("/{signatureId}/remplacer")
+    public ResponseEntity<ApiResponse<List<SignatureDto>>> remplacer(@PathVariable("auditId") UUID auditId,
+                                                                     @PathVariable("signatureId") UUID signatureId,
+                                                                     @RequestBody SignatureDto nouveau) {
+        return ResponseEntity.ok(ApiResponse.success(service.remplacer(auditId, signatureId, nouveau)));
+    }
+
+    /** Relance par courriel un signataire dont le visa est attendu. */
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PostMapping("/{signatureId}/relancer")
+    public ResponseEntity<Void> relancer(@PathVariable("auditId") UUID auditId,
+                                         @PathVariable("signatureId") UUID signatureId) {
+        service.relancer(auditId, signatureId);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("@perm.canRead(this)")

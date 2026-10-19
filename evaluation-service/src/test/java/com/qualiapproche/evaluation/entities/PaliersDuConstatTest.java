@@ -35,12 +35,14 @@ class PaliersDuConstatTest {
     void l_equipe_peut_renvoyer_un_constat_compile_mais_pas_un_publie() {
         Constat constat = brouillon(nc());
         constat.publier();
-        constat.retirerVersBrouillon();
+        constat.retirerVersBrouillon("Preuve manquante", "Aïcha OUEDRAOGO");
         assertThat(constat.getStatut()).isEqualTo(StatutConstat.BROUILLON);
+        assertThat(constat.estRenvoye()).isTrue();
 
         constat.publier();
+        assertThat(constat.estRenvoye()).isFalse();
         constat.valider();
-        assertThatThrownBy(constat::retirerVersBrouillon).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> constat.retirerVersBrouillon(null, null)).isInstanceOf(BusinessException.class);
     }
 
     @Test

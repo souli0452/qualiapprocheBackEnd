@@ -30,8 +30,12 @@ public class RapportAuditDto {
     /** Les constats publiés dont la nature génère une non-conformité, avec leur dossier M05. */
     private List<ConstatRapport> ecarts;
     private Double scoreRqapbf;
+    private MentionRQAPBFDto mentionRqapbf;
     private Map<String, Double> resultatsRqapbfParDomaine;
     private List<SignatureDto> signatures;
+
+    /** Les preuves jointes aux constats publiés : les annexes les comptent, sans en inventer. */
+    private long nombrePreuves;
 
     @Data
     @Builder
@@ -46,5 +50,9 @@ public class RapportAuditDto {
         private String observation;
         private LocalDateTime datePublication;
         private UUID nonConformiteId;
+        /** Le numéro de la fiche NC ouverte, s'il a été retenu à la transmission. */
+        private String numeroNonConformite;
+        /** Le rédacteur du constat, nommé d'après l'annuaire. */
+        private String auditeur;
     }
 }

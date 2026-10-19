@@ -77,6 +77,7 @@ public class AuditService {
     private final CodificationDocumentService codification;
     private final FichiersAudit fichiers;
     private final Annuaire annuaire;
+    private final org.springframework.context.ApplicationEventPublisher evenements;
 
     @Transactional(readOnly = true)
     public Page<AuditDto> rechercher(FiltreProgramme filtre, Pageable pageable) {
@@ -162,7 +163,9 @@ public class AuditService {
         Audit audit = sienOuRien(id);
         verifierLEquipe(audit);
         audit.valider();
-        return versDto(depot.save(audit));
+        AuditDto valide = versDto(depot.save(audit));
+        evenements.publishEvent(new AnnoncesDeLAudit.Annonce(audit.getId(), AnnoncesDeLAudit.Geste.VALIDATION));
+        return valide;
     }
 
     /**
@@ -246,7 +249,7 @@ public class AuditService {
             List<Signature> circuit = signatures.findAllByAuditIdOrderByOrdreAsc(audit.getId());
             if (circuit.isEmpty()) {
                 raisons.add("Aucun circuit de signature n'est posé sur le rapport de " + audit.getReference() + ".");
-            } else if (circuit.stream().anyMatch(s -> s.getStatut() != StatutSignature.SIGNEE)) {
+            } else if (circuit.stream().filter(Signature::estActif).anyMatch(s -> s.getStatut() != StatutSignature.SIGNEE)) {
                 raisons.add("Le rapport de " + audit.getReference() + " n'est pas encore signé par tout le circuit.");
             }
         }
@@ -381,6 +384,15 @@ public class AuditService {
                 && saisie.getDateFinPrevue().isBefore(saisie.getDateDebutPrevue())) {
             throw new BusinessException("La date de fin précède la date de début.", HttpStatus.BAD_REQUEST);
         }
+        // Une durée qui ne tient pas dans la période passait : 3 jours pour un audit du 22 au 23.
+        Integer periode = dureeEntre(saisie.getDateDebutPrevue(), saisie.getDateFinPrevue());
+        if (saisie.getDureeEstimeeJours() != null && periode != null && saisie.getDureeEstimeeJours() > periode) {
+            throw new BusinessException("La durée estimée (" + saisie.getDureeEstimeeJours() + " jours) dépasse la"
+                    + " période de l'audit (" + periode + " jour" + (periode > 1 ? "s" : "") + ").", HttpStatus.BAD_REQUEST);
+        }
+        if (saisie.getDureeEstimeeJours() != null && saisie.getDureeEstimeeJours() < 1) {
+            throw new BusinessException("La durée estimée se compte en jours : au moins un.", HttpStatus.BAD_REQUEST);
+        }
         cible.setObjectifsAudit(saisie.getObjectifsAudit());
         cible.setPorteeAudit(saisie.getPorteeAudit());
         cible.setCriteresAudit(saisie.getCriteresAudit());
@@ -468,6 +480,7 @@ public class AuditService {
                 .dateDebutPrevue(audit.getDateDebutPrevue())
                 .dateFinPrevue(audit.getDateFinPrevue())
                 .dureeEstimeeJours(audit.getDureeEstimeeJours())
+                .dateDebutReelle(audit.getDateDebutReelle())
                 .niveauRisque(audit.getNiveauRisque())
                 .descriptionRisque(audit.getDescriptionRisque())
                 .statut(audit.getStatut())

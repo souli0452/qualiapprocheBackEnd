@@ -4,9 +4,9 @@ import io.minio.MinioClient;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 
 /**
  * Câblage automatique du dépôt de fichiers.
@@ -17,12 +17,13 @@ import org.springframework.context.annotation.Bean;
  * dans {@code AutoConfiguration.imports} suffit : ajouter la dépendance {@code lib-storage}
  * apporte le service, sans une ligne de configuration côté hôte.</p>
  *
- * <p>Le câblage est conditionné à la présence de {@code minio.url} — un service qui ne dépose
- * aucun fichier peut donc porter la dépendance sans avoir à renseigner de coordonnées.</p>
+ * <p>Le câblage est conditionné à {@code minio.url} et aux deux clés ({@link StockageRenseigne}) —
+ * un service qui ne dépose aucun fichier, ou dont le serveur de fichiers n'est pas encore configuré,
+ * porte la dépendance sans tomber au démarrage.</p>
  */
 @AutoConfiguration
 @ConditionalOnClass(MinioClient.class)
-@ConditionalOnProperty(prefix = "minio", name = "url")
+@Conditional(StockageRenseigne.class)
 @EnableConfigurationProperties(StorageProperties.class)
 public class StorageAutoConfiguration {
 

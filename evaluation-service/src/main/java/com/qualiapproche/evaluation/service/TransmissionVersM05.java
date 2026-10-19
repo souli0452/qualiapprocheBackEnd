@@ -8,6 +8,7 @@ import com.qualiapproche.evaluation.entities.Audit;
 import com.qualiapproche.evaluation.entities.Constat;
 import com.qualiapproche.evaluation.entities.NotationCritere;
 import com.qualiapproche.evaluation.enumeration.ConstatRQAPBF;
+import com.qualiapproche.evaluation.enumeration.NiveauNotationRQAPBF;
 import com.qualiapproche.evaluation.enumeration.StatutConstat;
 import com.qualiapproche.evaluation.repository.ConstatRepository;
 import com.qualiapproche.evaluation.repository.NotationCritereRepository;
@@ -20,6 +21,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -37,6 +39,12 @@ import java.util.function.Function;
  *
  * <p>Chaque écart est traité dans sa propre transaction, courte, de part et d'autre de l'appel
  * réseau : on ne garde pas une connexion à la base ouverte pendant qu'un autre service répond.</p>
+ *
+ * <p><b>Par lots.</b> Une auto-évaluation publiée d'un coup ouvrait des centaines de dossiers dans
+ * une seule requête, chacun avec son circuit : l'appel durait plus que le jeton de l'utilisateur,
+ * et la suite échouait sans bruit (recette du 17 oct. 2026 : 147 écarts restés en attente). Un
+ * passage en traite au plus {@link #LOT} ; l'écran relance les suivants, chaque fois sous un jeton
+ * frais, et montre la progression.</p>
  */
 @Slf4j
 @Component
@@ -46,12 +54,18 @@ public class TransmissionVersM05 {
     private final ConstatRepository constats;
     private final NotationCritereRepository notations;
     private final TransactionTemplate nouvelleTransaction;
+    private final RegleEcartRQAPBFService regles;
+
+    /** Les écarts transmis en un passage : de quoi tenir largement dans la vie d'un jeton. */
+    static final int LOT = 25;
 
     public TransmissionVersM05(NonConformitesClient nonConformites, ConstatRepository constats,
-                               NotationCritereRepository notations, PlatformTransactionManager transactions) {
+                               NotationCritereRepository notations, PlatformTransactionManager transactions,
+                               RegleEcartRQAPBFService regles) {
         this.nonConformites = nonConformites;
         this.constats = constats;
         this.notations = notations;
+        this.regles = regles;
         this.nouvelleTransaction = new TransactionTemplate(transactions);
         this.nouvelleTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -60,30 +74,45 @@ public class TransmissionVersM05 {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void apresPublication(EcartsPublies ecarts) {
         TransmissionDto resultat = transmettre(ecarts);
-        if (!resultat.getEchecs().isEmpty()) {
-            log.warn("{} écart(s) d'audit restent à transmettre au module Non-conformités : {}",
-                    resultat.getEchecs().size(), resultat.getEchecs());
+        if (!resultat.getEchecs().isEmpty() || resultat.getRestants() > 0) {
+            log.warn("{} écart(s) d'audit en échec et {} en attente de transmission au module Non-conformités : {}",
+                    resultat.getEchecs().size(), resultat.getRestants(), resultat.getEchecs());
         }
     }
 
-    /** Reprend tout ce qui, sur cet audit, est publié comme écart mais n'a pas encore de dossier. */
+    /**
+     * Reprend un lot de ce qui, sur cet audit, est publié comme écart mais n'a pas encore de
+     * dossier ; {@code restants} dit s'il faut relancer.
+     */
     public TransmissionDto reprendre(UUID auditId) {
         List<UUID> constatIds = lire(() -> constats.findAllByAuditIdAndStatutOrderByDateSaisieAsc(auditId, StatutConstat.PUBLIE)
                 .stream().filter(c -> c.estNonConformite() && c.getNonConformiteId() == null).map(Constat::getId).toList());
-        List<UUID> notationIds = lire(() -> notations.publieesSansDossier(auditId).stream()
-                .filter(n -> n.constatRetenu() == ConstatRQAPBF.NC).map(NotationCritere::getId).toList());
+        List<UUID> notationIds = lire(() -> {
+            List<NotationCritere> sansDossier = notations.publieesSansDossier(auditId);
+            if (sansDossier.isEmpty()) {
+                return List.<UUID>of();
+            }
+            Set<NiveauNotationRQAPBF> enEcart = regles.niveauxEnEcart(sansDossier.get(0).getEvaluation().getDirectionId());
+            return sansDossier.stream().filter(n -> n.constatRetenu(enEcart) == ConstatRQAPBF.NC)
+                    .map(NotationCritere::getId).toList();
+        });
         return transmettre(new EcartsPublies(constatIds, notationIds));
     }
 
+    /** Un lot au plus ; le reste est compté dans {@code restants}, et attend la relance. */
     TransmissionDto transmettre(EcartsPublies ecarts) {
         TransmissionDto resultat = new TransmissionDto();
-        ecarts.constatIds().forEach(id -> envoyer(id, this::ecartDuConstat, this::inscrireSurLeConstat, resultat));
-        ecarts.notationIds().forEach(id -> envoyer(id, this::ecartDeLaNotation, this::inscrireSurLaNotation, resultat));
+        List<UUID> constatIds = ecarts.constatIds().stream().limit(LOT).toList();
+        List<UUID> notationIds = ecarts.notationIds().stream().limit(Math.max(0, LOT - constatIds.size())).toList();
+        resultat.setRestants(ecarts.constatIds().size() + ecarts.notationIds().size()
+                - constatIds.size() - notationIds.size());
+        constatIds.forEach(id -> envoyer(id, this::ecartDuConstat, this::inscrireSurLeConstat, resultat));
+        notationIds.forEach(id -> envoyer(id, this::ecartDeLaNotation, this::inscrireSurLaNotation, resultat));
         return resultat;
     }
 
     private void envoyer(UUID id, Function<UUID, Preparation> preparer,
-                         java.util.function.BiConsumer<UUID, UUID> inscrire, TransmissionDto resultat) {
+                         java.util.function.BiConsumer<UUID, NonConformiteDto> inscrire, TransmissionDto resultat) {
         Preparation preparation = lire(() -> preparer.apply(id));
         if (preparation == null) {
             return;
@@ -94,7 +123,7 @@ public class TransmissionVersM05 {
         }
         try {
             NonConformiteDto dossier = nonConformites.transmettre(preparation.ecart());
-            nouvelleTransaction.executeWithoutResult(s -> inscrire.accept(id, dossier.getId()));
+            nouvelleTransaction.executeWithoutResult(s -> inscrire.accept(id, dossier));
             resultat.setTransmis(resultat.getTransmis() + 1);
             log.info("{} transmis au module Non-conformités : {}.", preparation.libelle(), dossier.getNumeroReference());
         } catch (Exception e) {
@@ -131,7 +160,8 @@ public class TransmissionVersM05 {
 
     private Preparation ecartDeLaNotation(UUID id) {
         NotationCritere n = notations.findById(id).orElse(null);
-        if (n == null || n.getNonConformiteId() != null || !n.estPublie() || n.constatRetenu() != ConstatRQAPBF.NC) {
+        if (n == null || n.getNonConformiteId() != null || !n.estPublie()
+                || n.constatRetenu(regles.niveauxEnEcart(n.getEvaluation().getDirectionId())) != ConstatRQAPBF.NC) {
             return null;
         }
         Audit audit = n.getEvaluation().getAudit();
@@ -139,7 +169,7 @@ public class TransmissionVersM05 {
         StringBuilder justification = new StringBuilder()
                 .append("Évaluation RQAP-BF de l'audit ").append(audit.getReference()).append(" — critère ")
                 .append(n.getNoeud().getCode()).append(" : ").append(n.getNoeud().getLibelle()).append('\n');
-        ligne(justification, "Niveau de conformité", n.getNiveau().name());
+        ligne(justification, "Niveau de conformité", n.getNiveau().getLibelle());
         ligne(justification, "Éléments de preuve", n.getPreuve());
         ligne(justification, "Commentaire", n.getCommentaire());
         return preparation(libelle, audit, "AUDIT-RQAPBF:" + id, justification.toString(),
@@ -163,16 +193,18 @@ public class TransmissionVersM05 {
                 .build(), null);
     }
 
-    private void inscrireSurLeConstat(UUID id, UUID dossier) {
+    private void inscrireSurLeConstat(UUID id, NonConformiteDto dossier) {
         constats.findById(id).ifPresent(c -> {
-            c.setNonConformiteId(dossier);
+            c.setNonConformiteId(dossier.getId());
+            c.setNumeroNonConformite(dossier.getNumeroReference());
             constats.save(c);
         });
     }
 
-    private void inscrireSurLaNotation(UUID id, UUID dossier) {
+    private void inscrireSurLaNotation(UUID id, NonConformiteDto dossier) {
         notations.findById(id).ifPresent(n -> {
-            n.setNonConformiteId(dossier);
+            n.setNonConformiteId(dossier.getId());
+            n.setNumeroNonConformite(dossier.getNumeroReference());
             notations.save(n);
         });
     }

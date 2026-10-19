@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.service.impl;
 
+import com.qualiapproche.common.utils.LotsDuMoteur;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -140,12 +141,20 @@ public class NotificationsDeLUtilisateurService {
             return List.of();
         }
 
-        Map<UUID, WorkflowStateDto> etats;
-        try {
-            etats = workflowClient.getWorkflowStates(aDecider);
-        } catch (Exception e) {
-            log.warn("Étapes des dossiers à décider indisponibles : {}", e.getMessage());
-            etats = Map.of();
+        // Par lots : le moteur refuse plus de LotsDuMoteur.TAILLE_MAX ressources en un appel, et un
+        // seul refus rangeait jusque-là tous les dossiers sous « Sans étape nommée » (recette du
+        // 17 oct. 2026 : 263 non-conformités ouvertes par une auto-évaluation RQAP-BF).
+        Map<UUID, WorkflowStateDto> etats = new java.util.HashMap<>();
+        for (int debut = 0; debut < aDecider.size(); debut += LotsDuMoteur.TAILLE_MAX) {
+            List<UUID> lot = aDecider.subList(debut, Math.min(debut + LotsDuMoteur.TAILLE_MAX, aDecider.size()));
+            try {
+                Map<UUID, WorkflowStateDto> reponse = workflowClient.getWorkflowStates(lot);
+                if (reponse != null) {
+                    etats.putAll(reponse);
+                }
+            } catch (Exception e) {
+                log.warn("Étapes de {} dossier(s) à décider indisponibles : {}", lot.size(), e.getMessage());
+            }
         }
 
         // L'ordre de parcours est conservé : les étapes se présentent comme le moteur les a rendues.

@@ -35,6 +35,9 @@ public class PlanAuditDto {
     private String nomFichierCharge;
     private StatutPlanAudit statut;
     private LocalDateTime datePartage;
+    private int version;
+    private LocalDateTime reviseLe;
+    private String revisePar;
     @Valid
     private List<ActivitePlanDto> activites;
 }
