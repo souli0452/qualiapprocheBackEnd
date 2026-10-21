@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
  * <p>Ce projet ne démarre aucun contexte Spring en test : rien ne l'aurait signalé avant le
  * lancement. Ce test lit donc les sources et refuse toute annotation de stéréotype hors du paquet
  * balayé. Un bean partagé s'y déclare par une méthode {@code @Bean} dans une configuration, comme le
- * fait {@link CourrielConfig}.</p>
+ * faisait l'ancienne configuration des courriels.</p>
  */
 class BeansPartagesVisiblesTest {
 

@@ -1,7 +1,6 @@
 package com.qualiapproche.workflow.event;
 
 import com.qualiapproche.workflow.model.WorkflowFieldValue;
-import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
@@ -9,7 +8,11 @@ import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
+import com.qualiapproche.common.messagerie.AdressesMessagerie;
+import com.qualiapproche.common.messagerie.BoiteDEnvoi;
+import com.qualiapproche.common.messagerie.RappelDuCircuit;
+import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.workflow.messagerie.MessageSortant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -71,13 +74,14 @@ public class WorkflowEventListener {
     private final WorkflowValidationInstanceRepository validationInstanceRepository;
     private final ValidationHistoryRepository historyRepository;
     private final WorkflowFieldValueRepository fieldValueRepository;
-    private final WorkflowNotificationService notificationService;
+    private final BoiteDEnvoi<MessageSortant> boiteDEnvoi;
     private final NotificateurEtapeParEmail notificateurParEmail;
     private final NotificateurEnBase notificateurEnBase;
 
     /**
-     * Enregistre la notification à remettre, dans la transaction de la transition : les deux sont
-     * ainsi committées ensemble, ou pas du tout. Aucun appel réseau ici — seulement une écriture.
+     * Dépose le rappel destiné au service propriétaire du dossier, dans la transaction de la
+     * transition : les deux sont committés ensemble, ou pas du tout. Aucun appel réseau ici —
+     * seulement une écriture dans la boîte d'envoi ; le rappel partira par le courtier.
      *
      * <p>L'identifiant obtenu est déposé sur l'événement lui-même, que la phase suivante recevra
      * à l'identique.</p>
@@ -90,24 +94,41 @@ public class WorkflowEventListener {
         }
 
         Map<String, Object> payload = construireCharge(event, etapeAtteinte(event.getEtatApres()), instance);
-        WorkflowNotification notification =
-                notificationService.enregistrer(instance.getResourceId(), instance.getResourceType(), payload);
-        event.setNotificationId(notification.getId());
+        String destination = AdressesMessagerie.rappelsPour(instance.getResourceType());
+        UUID ressourceId = uuidOuRien(instance.getResourceId());
+        if (destination == null) {
+            // Aucun service ne suit ce type de dossier (un audit, par exemple) : rien à lui dire.
+            log.debug("Transition sur un dossier de type {} : aucun service destinataire, pas de rappel.",
+                    instance.getResourceType());
+        } else if (ressourceId == null) {
+            // Phase BEFORE_COMMIT : une exception ici annulerait la décision de l'utilisateur. Un
+            // identifiant inexploitable prive seulement le service métier de ce rappel.
+            log.error("Dossier {} {} : identifiant inexploitable, rappel non déposé.",
+                    instance.getResourceType(), instance.getResourceId());
+        } else {
+            event.setNotificationId(boiteDEnvoi.deposer(destination, AdressesMessagerie.TYPE_RAPPEL_CIRCUIT,
+                    RappelDuCircuit.builder()
+                            .typeRessource(instance.getResourceType())
+                            .ressourceId(ressourceId)
+                            .contenu(payload)
+                            .auteurId(event.getAuteurId())
+                            .auteurNom(nomDe(event.getAuteurId()))
+                            .build()));
+        }
         // La phase suivante compose le courriel : elle a besoin de la ressource, pas de l'instance.
         event.setResourceId(instance.getResourceId());
         event.setResourceType(instance.getResourceType());
     }
 
     /**
-     * Tente la remise immédiatement après le commit, pour que le service métier soit à jour sans
-     * attendre le prochain passage de l'ordonnanceur. Un échec n'est pas grave : la notification
-     * reste en attente et sera rejouée.
+     * Publie le rappel dès le commit, pour que le service métier soit à jour sans attendre le
+     * relais. Un échec n'est pas grave : le rappel reste dans la boîte d'envoi et sera repris.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void remettreNotification(TransitionFranchieEvent event) {
         UUID notificationId = event.getNotificationId();
         if (notificationId != null) {
-            notificationService.remettre(notificationId);
+            boiteDEnvoi.publier(notificationId);
         }
 
         etapeAtteinte(event.getEtatApres()).ifPresent(step -> {
@@ -116,6 +137,15 @@ public class WorkflowEventListener {
             // agir. Les destinataires sont résolus une seule fois, par DestinatairesDeLEtape.
             notificateurEnBase.notifier(step, event);
         });
+    }
+
+    /**
+     * Le nom de l'auteur de la transition, tel que son jeton le donne : la phase BEFORE_COMMIT
+     * s'exécute encore dans sa requête. Rien si l'auteur n'est pas l'appelant (geste automatique).
+     */
+    private static String nomDe(String auteurId) {
+        return auteurId != null && auteurId.equals(SecurityUtils.getCurrentUserId())
+                ? SecurityUtils.getCurrentUserFullName() : null;
     }
 
     private WorkflowValidationInstance instanceConcernee(TransitionFranchieEvent event) {
@@ -310,4 +340,12 @@ public class WorkflowEventListener {
         return "REJECTED";
     }
 
+
+    private static UUID uuidOuRien(String valeur) {
+        try {
+            return valeur == null ? null : UUID.fromString(valeur);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
 }

@@ -12,6 +12,11 @@
     <description>Referential and Configuration Service</description>
 
     <dependencies>
+        <!-- Messagerie entre services : outbox publiée sur Artemis (voir common/messagerie). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-artemis</artifactId>
+        </dependency>
         <!--
           Pieces jointes facultatives de la FAQ. L'auto-configuration du stockage est conditionnee
           a la propriete minio.url : tant qu'elle n'est pas posee, aucun bean n'est cree et le

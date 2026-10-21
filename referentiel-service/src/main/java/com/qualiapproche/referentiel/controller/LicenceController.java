@@ -56,7 +56,10 @@ public class LicenceController {
     @Operation(summary = "État de la licence de cette installation")
     @GetMapping("/etat")
     public ResponseEntity<ApiResponse<EtatLicenceDto>> etat() {
-        return ResponseEntity.ok(ApiResponse.success(service.etat()));
+        // Lu sans jeton par la passerelle et par user-service : ils reçoivent ce qu'ils lisent, et
+        // non la référence ni le titulaire de la licence. Voir VuesAnonymes.
+        EtatLicenceDto etat = service.etat();
+        return ResponseEntity.ok(ApiResponse.success(VuesAnonymes.appelAnonyme() ? VuesAnonymes.etatLicence(etat) : etat));
     }
 
     @Operation(summary = "Installer une licence remise par l'éditeur",

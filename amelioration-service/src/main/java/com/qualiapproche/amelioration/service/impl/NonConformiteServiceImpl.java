@@ -1,6 +1,7 @@
 package com.qualiapproche.amelioration.service.impl;
 
 import java.io.IOException;
+import com.qualiapproche.amelioration.numerotation.NumerotationDesNonConformites;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -133,6 +134,7 @@ public class NonConformiteServiceImpl
     private final WorkflowClient workflowClient;
     private final PlansActionDeLaNonConformiteService plansActionService;
     private final PermissionChecker permissionChecker;
+    private final NumerotationDesNonConformites numerotation;
 
     @Value("${frontend.url}")
     private String frontendUrl;
@@ -217,7 +219,30 @@ public class NonConformiteServiceImpl
      */
     @Override
     public NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException {
+        return createNonConformite(dto, null);
+    }
+
+    @Override
+    public NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException {
+        return createNonConformite(dto, structureDuDossier, null);
+    }
+
+    /**
+     * Crée le dossier ; {@code cleOrigine} désigne l'écart d'audit qui l'ouvre, s'il y en a un.
+     *
+     * <p>L'ordre des gestes est délibéré. La ligne est écrite tout de suite ({@code flush}) : une
+     * contrainte violée — écart d'audit déjà transmis, numéro déjà pris — se révèle alors avant
+     * tout appel au dehors. Les pièces viennent ensuite, et l'ouverture du circuit en dernier :
+     * elle était faite avant les pièces, si bien qu'un échec de celles-ci annulait le dossier mais
+     * laissait chez le moteur un circuit « en cours » sur un dossier qui n'existait pas.</p>
+     */
+    @Transactional
+    public NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier, String cleOrigine)
+            throws IOException {
         NonConformite nonConformite = nonConformiteMapper.toEntity(dto);
+        // Écrite avec le dossier, et non par une seconde transaction : deux transmissions du même
+        // écart laissaient sinon un second dossier, sans clé, que l'idempotence ne voyait plus.
+        nonConformite.setCleOrigine(cleOrigine);
         nonConformite.setTypeDemande(TypeDemande.NON_CONFORMITE);
         nonConformite.setVersion("1.0");
         nonConformite.setOriginNonConformiteLibelle(dto.getOriginNonConformiteLibelle());
@@ -242,7 +267,9 @@ public class NonConformiteServiceImpl
 
 
         // Sauvegarder la NonConformité avec ses PlanActions automatiquement persistées
-        NonConformite savedNonConformite = nonConformiteRepository.save(nonConformite);
+        NonConformite savedNonConformite = nonConformiteRepository.saveAndFlush(nonConformite);
+
+        ncFichierService.synchroniser(dto.getFichiers(), savedNonConformite.getId());
 
         // Initialiser le workflow : une indisponibilité de workflow-service ne doit pas bloquer
         // la création de la non-conformité (aligné sur la politique déjà utilisée pour PlanAction).
@@ -253,13 +280,12 @@ public class NonConformiteServiceImpl
             UUID workflowId = activeWorkflow.getId();
             savedNonConformite.setWorkflowId(workflowId);
 
-            WorkflowInstanceDto workflowInstance = workflowClient.initiateWorkflow(
-                    savedNonConformite.getId(),
-                    "NON_CONFORMITE",
-                    workflowId,
-                    // La référence lisible : c'est elle que citeront les courriels d'étape.
-                    savedNonConformite.getNumeroReference()
-            );
+            // La référence lisible : c'est elle que citeront les courriels d'étape.
+            WorkflowInstanceDto workflowInstance = structureDuDossier == null
+                    ? workflowClient.initiateWorkflow(savedNonConformite.getId(), "NON_CONFORMITE", workflowId,
+                            savedNonConformite.getNumeroReference())
+                    : workflowClient.initiateWorkflowDansLaStructure(savedNonConformite.getId(), "NON_CONFORMITE",
+                            workflowId, savedNonConformite.getNumeroReference(), structureDuDossier);
 
             if (workflowInstance != null && workflowInstance.getCurrentStateName() != null) {
                 savedNonConformite.setWorkflowStatus(workflowInstance.getCurrentStateName());
@@ -269,8 +295,6 @@ public class NonConformiteServiceImpl
             log.error("Erreur lors de l'initialisation du workflow NON_CONFORMITE pour {} : {}",
                     savedNonConformite.getId(), e.getMessage());
         }
-
-        ncFichierService.synchroniser(dto.getFichiers(), savedNonConformite.getId());
 
         return populateAttachments(nonConformiteMapper.toDto(savedNonConformite));
     }
@@ -300,9 +324,12 @@ public class NonConformiteServiceImpl
     @Override
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public NonConformiteDto soumettre(UUID id) {
-        NonConformite nc = nonConformiteRepository.findById(id)
+        // Bornée comme la fiche : ce point d'entrée rend le dossier entier, pièces comprises, même
+        // quand le moteur refuse la soumission. Sans cette borne, la permission de mise à jour
+        // suffisait à lire le dossier de n'importe quelle structure par son identifiant.
+        NonConformite nc = consultableOuIntrouvable(nonConformiteRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Non conformité introuvable"));
+                        "Non conformité introuvable")));
 
         if (nc.getWorkflowId() == null) {
             log.warn("Non-conformité {} enregistrée sans circuit : elle ne peut pas être soumise "
@@ -332,8 +359,8 @@ public class NonConformiteServiceImpl
     @Override
     public NonConformiteDto updateNonConformite(UUID id, NonConformiteDto dto) throws IOException {
         // Vérifier si la non-conformité existe
-        NonConformite existingNonConformite = nonConformiteRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + id));
+        NonConformite existingNonConformite = consultableOuIntrouvable(nonConformiteRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + id)));
         // Relevé avant la saisie : c'est lui qui dira si l'imputation a changé, et donc s'il faut
         // en avertir le moteur. Voir faireSuivreLImputation.
         String agentAvant = existingNonConformite.getUserImputId();
@@ -415,9 +442,9 @@ public class NonConformiteServiceImpl
     @Override
     public List<NonConformiteDto> updateNonConformites(List<NonConformiteDto> dtos) throws IOException {
         dtos.forEach(dto -> {
-            NonConformite existingNonConformite = nonConformiteRepository.findById(dto.getId())
+            NonConformite existingNonConformite = consultableOuIntrouvable(nonConformiteRepository.findById(dto.getId())
                     .orElseThrow(
-                            () -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + dto.getId()));
+                            () -> new EntityNotFoundException("Non-conformité non trouvée avec l'ID : " + dto.getId())));
             String agentAvant = existingNonConformite.getUserImputId();
             existingNonConformite.setPertinanceRs(dto.getPertinanceRs());
             existingNonConformite.setJustificationPilote(dto.getJustificationPilote());
@@ -471,7 +498,9 @@ public class NonConformiteServiceImpl
 
     @Override
     public NonConformiteDto update(NonConformiteDto nonConformiteDto) {
-        return nonConformiteRepository.findById(nonConformiteDto.getId()).map(nonConformiteExisted -> {
+        return nonConformiteRepository.findById(nonConformiteDto.getId())
+                .map(this::consultableOuIntrouvable)
+                .map(nonConformiteExisted -> {
             String agentAvant = nonConformiteExisted.getUserImputId();
             nonConformiteMapper.updateEntityFromDto(nonConformiteDto, nonConformiteExisted);
             appliquerLImputationSaisie(nonConformiteExisted, nonConformiteDto);
@@ -513,14 +542,19 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> findImupted(String userId, Etat etat, Pageable pageable) {
+        exigerSoiMeme(userId);
         return nonConformiteRepository.findByUserImputIdAndEtatTraitement(userId, etat, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> getNonConformitesByEtatNonConformite(Etat etat, Pageable pageable) {
-        return nonConformiteRepository.findByEtatTraitement(etat, pageable)
-                .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
+        // Même borne que la liste générale : l'état n'est qu'un filtre, il n'ouvre aucun droit.
+        Page<NonConformite> page = permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)
+                ? nonConformiteRepository.findByEtatTraitement(etat, pageable)
+                : nonConformiteRepository.findVisiblesParEtat(etat,
+                        SecurityUtils.getCurrentUserStructureId(), SecurityUtils.getCurrentUserId(), pageable);
+        return page.map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     /**
@@ -553,40 +587,139 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> getNonConformitesByEtatAnStructure(Etat etat, String uuid, Pageable pageable) {
+        exigerSaStructure(uuid);
         return nonConformiteRepository.findAllByEtatTraitementAndStructureSoumissionId(etat, uuid, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> getNonConformitesByStructure(String uuid, Pageable pageable) {
+        exigerSaStructure(uuid);
         return nonConformiteRepository.findAllByOrigineId(uuid, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> getNonConformitesByEtatAndStructureOrigine(Etat etat, String uuid, Pageable pageable) {
+        exigerSaStructure(uuid);
         return nonConformiteRepository.findAllByEtatTraitementAndOrigineId(etat, uuid, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public NonConformiteDto getNonConformiteById(UUID id) {
-        if (nonConformiteRepository.existsById(id)) {
-            return populateAttachments(nonConformiteMapper.toDto(nonConformiteRepository.getReferenceById(id)));
-        } else {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.");
+        NonConformite nc = nonConformiteRepository.findById(id)
+                .filter(this::peutConsulter)
+                // Même réponse qu'un dossier inexistant : « il existe, mais pas pour vous » en dirait trop.
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas."));
+        return populateAttachments(nonConformiteMapper.toDto(nc));
+    }
+
+    /**
+     * Qui peut ouvrir la fiche d'un dossier.
+     *
+     * <p>La fiche se lisait par son seul identifiant, sans aucune borne, alors que la liste l'est :
+     * tout agent connecté lisait le dossier de n'importe quelle structure, pièces jointes comprises.
+     * La règle est désormais celle de la liste — sa structure, déclaré ou imputé, portée
+     * transverse — élargie aux acteurs du dossier qu'une autre structure peut fournir : le
+     * responsable d'un de ses plans d'action, et quiconque doit décider à une étape de son circuit
+     * ou de celui d'un de ses plans. Les appels au service de circuit ne se font qu'en dernier
+     * recours.</p>
+     */
+    @Override
+    public boolean peutConsulter(NonConformite nc) {
+        if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES, PermissionsPortee.DECIDER_PARTOUT)) {
+            return true;
         }
+        String structure = SecurityUtils.getCurrentUserStructureId();
+        String moi = SecurityUtils.getCurrentUserId();
+        if (structure != null && (structure.equals(nc.getStructureSoumissionId()) || structure.equals(nc.getOrigineId()))) {
+            return true;
+        }
+        if (moi == null) {
+            return false;
+        }
+        if (moi.equals(nc.getCreatedById()) || moi.equals(nc.getUserImputId())) {
+            return true;
+        }
+        List<PlanAction> plans = planActionRepository.findPlanActionsByNonConformeId(nc.getId());
+        if (plans.stream().anyMatch(p -> p.getResponsableId() != null && moi.equals(p.getResponsableId().toString()))) {
+            return true;
+        }
+        try {
+            if (workflowClient.ressourcesADecider("NON_CONFORMITE").contains(nc.getId())) {
+                return true;
+            }
+            if (!plans.isEmpty()) {
+                List<UUID> aDecider = workflowClient.ressourcesADecider("PLAN_ACTION");
+                return plans.stream().anyMatch(p -> aDecider.contains(p.getId()));
+            }
+        } catch (Exception e) {
+            log.warn("Circuit injoignable pour juger de l'accès au dossier {} : accès refusé. {}", nc.getId(), e.getMessage());
+        }
+        return false;
     }
 
     @Override
 
     @Transactional
     public void delete(UUID id) {
-        if (nonConformiteRepository.existsById(id)) {
-            nonConformiteRepository.deleteById(id);
+        supprimerLeDossier(consultableOuIntrouvable(nonConformiteRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas."))));
+    }
+
+    /**
+     * Supprime un dossier et tout ce qui n'existe que par lui.
+     *
+     * <p>La suppression n'emportait que la ligne du dossier : ses plans d'action restaient en base
+     * — liés par {@code plan_action.non_conforme_id}, que la collection {@code planActions} ne lit
+     * pas —, leurs circuits restaient « en cours » chez le moteur, et les pièces restaient sur le
+     * serveur de fichiers. Tout part désormais : les plans dans la transaction, le moteur et les
+     * fichiers <b>après</b> son commit — une suppression qui échoue ne doit rien avoir détruit
+     * ailleurs.</p>
+     *
+     * <p>Un dossier ouvert par un audit ne se supprime pas : le constat y renvoie, et ne le
+     * retransmettrait jamais — la trace de l'écart serait perdue des deux côtés.</p>
+     */
+    private void supprimerLeDossier(NonConformite nc) {
+        if (nc.getCleOrigine() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La non-conformité " + nc.getNumeroReference()
+                    + " a été ouverte par un audit, qui y renvoie : elle ne peut pas être supprimée.");
+        }
+        UUID id = nc.getId();
+        List<UUID> plans = planActionRepository.findPlanActionsByNonConformeId(id).stream()
+                .map(PlanAction::getId).toList();
+        planActionRepository.deleteAllById(plans);
+        nonConformiteRepository.delete(nc);
+        nonConformiteRepository.flush();
+        apresLeCommit(() -> {
             oublierChezLeMoteur(id);
+            plans.forEach(this::oublierChezLeMoteur);
+            purgerLesPieces(id);
+            plans.forEach(this::purgerLesPieces);
+        });
+    }
+
+    private static void apresLeCommit(Runnable geste) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            geste.run();
+                        }
+                    });
         } else {
-            throw new ResponseStatusException(HttpStatus.OK, "Cette NonConformité n'existe pas.");
+            geste.run();
+        }
+    }
+
+    /** Les pièces du dossier (ou d'un de ses plans), contenu compris ; un échec se journalise. */
+    private void purgerLesPieces(UUID dossierId) {
+        try {
+            fichierService.supprimerTout(dossierId);
+        } catch (Exception e) {
+            log.warn("Pièces du dossier {} non purgées du serveur de fichiers : {}", dossierId, e.getMessage());
         }
     }
 
@@ -605,10 +738,8 @@ public class NonConformiteServiceImpl
                         "Actualité invalide, impossible de supprimer.");
             }
         });
-        nonConformiteDtos.forEach(dto -> {
-            nonConformiteRepository.deleteById(dto.getId());
-            oublierChezLeMoteur(dto.getId());
-        });
+        nonConformiteDtos.forEach(dto -> supprimerLeDossier(
+                consultableOuIntrouvable(nonConformiteRepository.findById(dto.getId()).orElseThrow())));
     }
 
     /**
@@ -634,6 +765,7 @@ public class NonConformiteServiceImpl
 
     @Transactional(readOnly = true)
     public List<NcStats> getNcStats(String structureSoumissionId) {
+        exigerSaStructure(structureSoumissionId);
         return nonConformiteRepository.countByStatusForStructure(structureSoumissionId);
     }
 
@@ -646,6 +778,8 @@ public class NonConformiteServiceImpl
         if (Objects.nonNull(status)) {
             // Note: complex logic combining multiple status queries should ideally be one repository query.
             // For now, we will just use the exact status or fallback to findAll if not possible cleanly with Pageable.
+            // La structure vient de la requête : elle doit être celle de l'appelant.
+            exigerSaStructure(structureSoumissionId);
             nonConformites = nonConformiteRepository.findAllByStatusAndStructureSoumissionId(status,
                     structureSoumissionId, pageable);
         } else {
@@ -660,6 +794,7 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> findAllByStructure(String structureSoumissionId, Pageable pageable) {
+        exigerSaStructure(structureSoumissionId);
         // Ideally this should be a single query like: findAllByStructureSoumissionIdOrOrigineIdAndStatusIsNot(..., pageable)
         // We will just use findAllByStructureSoumissionIdOrOrigineId for now
         Page<NonConformite> nonConformites = nonConformiteRepository
@@ -668,13 +803,11 @@ public class NonConformiteServiceImpl
         return nonConformites.map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
+    /**
+     * Le numéro de la non-conformité, tiré de la série de sa structure pour l'année (voir
+     * {@code NumerotationDesNonConformites}). Le sigle vient du référentiel ; à défaut, du libellé reçu.
+     */
     public String genererNumeroReference(String structureSoumissionId, String structureSoumissionLibelle) {
-        final String prefix = "NFQT";
-        final int annee = LocalDate.now().getYear();
-
-        Integer dernierNumero = nonConformiteRepository.findDernierNumero(structureSoumissionId, annee);
-        int nouveauNumero = (dernierNumero != null) ? dernierNumero + 1 : 1;
-
         String sigle = structureSoumissionLibelle;
         if (structureSoumissionId != null) {
             try {
@@ -686,9 +819,7 @@ public class NonConformiteServiceImpl
                 log.error("Error fetching structure sigle for reference generation: {}", e.getMessage());
             }
         }
-
-        String numeroFormate = String.format("%05d", nouveauNumero);
-        return String.format("%s-%s-%d-%s", prefix, sigle.toUpperCase().replaceAll("\\s+", "_"), annee, numeroFormate);
+        return numerotation.attribuer(structureSoumissionId, sigle, LocalDate.now().getYear());
     }
 
     @Override
@@ -785,8 +916,13 @@ public class NonConformiteServiceImpl
 
     @Override
     public NonConformiteDto getByNumeroRef(String numeroRef) {
-        return populateAttachments(
-                nonConformiteMapper.toDto(nonConformiteRepository.getNonConformiteByNumeroReference(numeroRef)));
+        // Même règle que la fiche par identifiant : le numéro se lit sur les courriels et les
+        // documents imprimés, il n'est pas un secret — il ne doit pas ouvrir davantage que l'identifiant.
+        NonConformite nc = nonConformiteRepository.getNonConformiteByNumeroReference(numeroRef);
+        if (nc == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.");
+        }
+        return populateAttachments(nonConformiteMapper.toDto(consultableOuIntrouvable(nc)));
     }
 
     private static final List<String> STATUTS = Arrays.asList(
@@ -943,6 +1079,7 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> findAllByInitiator(String userId, Pageable pageable) {
+        exigerSoiMeme(userId);
         return nonConformiteRepository.findAllByCreatedById(userId, pageable)
                 .map(nonConformiteMapper::toDto)
                 .map(this::populateAttachments);
@@ -950,24 +1087,28 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> findByUser(String userId, Pageable pageable) {
+        exigerSoiMeme(userId);
         return nonConformiteRepository.findAllByCreatedById(userId, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> findImputedByUser(String userId, Pageable pageable) {
+        exigerSoiMeme(userId);
         return nonConformiteRepository.findAllByUserImputId(userId, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> findArchivedByUser(String userId, Pageable pageable) {
+        exigerSoiMeme(userId);
         return nonConformiteRepository.findAllByCreatedByIdAndStatus(userId, Status.ARCHIVED, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public NcCountsDto getCountsByUser(String userId) {
+        exigerSoiMeme(userId);
         return NcCountsDto.builder()
                 .brouillons(nonConformiteRepository.countByCreatedByIdAndStatus(userId, Status.DRAFT))
                 .imputees(nonConformiteRepository.countByUserImputId(userId))
@@ -977,12 +1118,14 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> findByStructure(String structureId, Pageable pageable) {
+        exigerSaStructure(structureId);
         return nonConformiteRepository.findAllByStructureSoumissionIdOrOrigineId(structureId, structureId, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     @Override
     public Page<NonConformiteDto> findByStructureAllUsers(String structureId, Pageable pageable) {
+        exigerSaStructure(structureId);
         return nonConformiteRepository.findAllByCurrentUserStructure(structureId, pageable)
                 .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
@@ -1086,6 +1229,47 @@ public class NonConformiteServiceImpl
         if (demande == null || sien == null || !demande.equals(sien)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, refus);
         }
+    }
+
+    /**
+     * Les listes « par structure » ne se lisent que sur la sienne.
+     *
+     * <p>Même défaut que les tableaux de bord, et même règle : la structure venait de l'URL et
+     * personne ne la confrontait à l'appelant, de sorte qu'un agent lisait les dossiers de toute
+     * structure dont il connaissait l'identifiant — pièces jointes comprises. Les listes générales
+     * bornent par la structure du jeton ; celles-ci, qui la reçoivent en paramètre, exigent
+     * désormais qu'elle soit la même. La portée transverse ({@code portee-toutes-structures} : la
+     * responsabilité qualité, l'administration) passe outre, comme partout.</p>
+     */
+    private void exigerSaStructure(String structureId) {
+        exigerSonProprePerimetre(structureId, SecurityUtils.getCurrentUserStructureId(),
+                "Ces non-conformités sont celles d'une autre structure.");
+    }
+
+    /**
+     * Les listes « par utilisateur » ne se lisent que pour soi.
+     *
+     * <p>Ce qu'une personne a déclaré, ce qui lui est imputé, ce qu'elle a archivé : rien de cela
+     * n'est public dans l'organisation, et l'identifiant pris dans l'URL suffisait à le lire.</p>
+     */
+    private void exigerSoiMeme(String userId) {
+        exigerSonProprePerimetre(userId, SecurityUtils.getCurrentUserId(),
+                "Ces non-conformités sont celles d'une autre personne.");
+    }
+
+    /**
+     * Le dossier, s'il est consultable par l'appelant ; sinon la même réponse qu'un dossier absent.
+     *
+     * <p>{@link #peutConsulter} ne gardait que la fiche : la lecture par numéro, la mise à jour et
+     * la suppression par identifiant ne regardaient rien d'autre que la permission générale, et
+     * suffisaient donc à lire, réécrire ou effacer le dossier d'une autre structure. 404 et non
+     * 403 : « il existe, mais pas pour vous » en dirait trop.</p>
+     */
+    private NonConformite consultableOuIntrouvable(NonConformite nc) {
+        if (!peutConsulter(nc)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.");
+        }
+        return nc;
     }
 
     /**
@@ -1403,8 +1587,12 @@ public class NonConformiteServiceImpl
 
     @Override
     public Page<NonConformiteDto> getNonConformitesByNiveau(UUID niveauId, Pageable pageable) {
-        return nonConformiteRepository.findAllByNiveauNonConformiteId(niveauId, pageable)
-                .map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
+        // Même borne que la liste générale : le niveau n'est qu'un filtre, il n'ouvre aucun droit.
+        Page<NonConformite> page = permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)
+                ? nonConformiteRepository.findAllByNiveauNonConformiteId(niveauId, pageable)
+                : nonConformiteRepository.findVisiblesParNiveau(niveauId,
+                        SecurityUtils.getCurrentUserStructureId(), SecurityUtils.getCurrentUserId(), pageable);
+        return page.map(nc -> populateAttachments(nonConformiteMapper.toDto(nc)));
     }
 
     // ------------------------------------------------------------------ recherche générique
@@ -1452,7 +1640,7 @@ public class NonConformiteServiceImpl
 
     /**
      * Met à jour l'état de la non-conformité suite à un webhook du service de workflow.
-     * Cette méthode est appelée par le contrôleur interne (AmeliorationInternalCallbackController).
+     * Cette méthode est appelée par le contrôleur interne (RappelsDuCircuit).
      *
      * @param nonConformiteId Identifiant de la non conformité
      * @param newStateName    Le nom du nouvel état (ex: "Validation RS", "Clôture")

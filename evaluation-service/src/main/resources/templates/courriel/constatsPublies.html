@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Constats d'audit publiés</title>
+</head>
+<body style="margin:0;padding:24px;background:#F4F6FA;font-family:Arial,Helvetica,sans-serif;color:#1F2937;">
+<div style="max-width:640px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:24px;">
+    <p style="margin:0 0 16px;" th:text="'Bonjour ' + ${nomComplet} + ','">Bonjour,</p>
+    <p style="margin:0 0 16px;">
+        L'équipe d'audit a validé
+        <strong th:text="${#lists.size(constats)} + (${#lists.size(constats)} > 1 ? ' constats' : ' constat')">2 constats</strong>
+        de l'audit <strong th:text="${reference}">AUD-2026-001</strong>
+        portant sur votre processus <strong th:text="${processus}">Processus</strong>.
+    </p>
+    <p style="margin:0 0 16px;" th:if="${ecarts > 0}">
+        Écarts parmi eux : <strong th:text="${ecarts}">1</strong>. Ils sont transmis au module
+        Non-conformités, où leur traitement vous sera soumis.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+        <tr>
+            <th style="text-align:left;padding:8px;border-bottom:2px solid #E2E8F0;color:#6B7280;">Nature</th>
+            <th style="text-align:left;padding:8px;border-bottom:2px solid #E2E8F0;color:#6B7280;">Point de contrôle / critère</th>
+            <th style="text-align:left;padding:8px;border-bottom:2px solid #E2E8F0;color:#6B7280;">Observation</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${constats}">
+            <td style="padding:8px;border-bottom:1px solid #E2E8F0;vertical-align:top;"
+                th:style="${c['ecart']} ? 'padding:8px;border-bottom:1px solid #E2E8F0;vertical-align:top;color:#B91C1C;font-weight:bold;' : 'padding:8px;border-bottom:1px solid #E2E8F0;vertical-align:top;'"
+                th:text="${c['nature']}">Nature</td>
+            <td style="padding:8px;border-bottom:1px solid #E2E8F0;vertical-align:top;" th:text="${c['point']} ?: '—'">Point</td>
+            <td style="padding:8px;border-bottom:1px solid #E2E8F0;vertical-align:top;" th:text="${c['observation']}">Observation</td>
+        </tr>
+        </tbody>
+    </table>
+    <p style="margin:20px 0 0;" th:if="${lien}">
+        <a th:href="${lien}" style="color:#2E5EAA;">Consulter l'audit dans QUALI-SIRA</a>
+    </p>
+    <p style="margin:24px 0 0;font-size:12px;color:#6B7280;">Message automatique du module Audit — merci de ne pas y répondre.</p>
+</div>
+</body>
+</html>

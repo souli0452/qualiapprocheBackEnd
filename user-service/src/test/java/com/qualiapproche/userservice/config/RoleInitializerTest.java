@@ -53,6 +53,9 @@ class RoleInitializerTest {
     /** La foire aux questions, entrée au dictionnaire avec son droit de publication. */
     private static final String[] FAQ = {"faq-read", "faq-write", "faq-publish"};
 
+    /** Le module d'audit, entré au dictionnaire avec ses cinq droits. */
+    private static final String[] AUDIT = {"audit-read", "audit-write", "audit-conduct", "audit-validate", "audit-config"};
+
     /**
      * Ce que tout rôle déjà à jour porte : le rattrapage n'a alors rien à faire.
      *
@@ -65,6 +68,7 @@ class RoleInitializerTest {
         tout.addAll(List.of(PORTEE));
         tout.addAll(List.of(ASSISTANT_IA));
         tout.addAll(List.of(FAQ));
+        tout.addAll(List.of(AUDIT));
         return tout;
     }
 

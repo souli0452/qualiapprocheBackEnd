@@ -6,30 +6,38 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.context.Context;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Les gabarits livrés, passés au moteur qui les rendra en production.
  *
  * <p>Un gabarit de courriel n'est pas compilé : une balise mal fermée ou une expression fautive ne
  * se découvre qu'au moment de l'envoi, chez le destinataire, et le rendu échoue alors en silence —
- * {@link SmtpEmailService} envoie le corps brut plutôt que de perdre la notification. Ces
- * vérifications portent donc sur les fichiers <b>réels</b> du projet.</p>
+ * {@link RenduDesCourriels} rend le corps brut plutôt que de perdre la notification. Ces
+ * vérifications portent donc sur les fichiers <b>réels</b> du projet, rendus par ce même service :
+ * un gabarit illisible y revient brut, et ses {@code th:} et {@code ${…}} résiduels le trahissent.</p>
  *
  * <p>Trois exigences : le gabarit s'analyse, ses variables sont substituées, et rien de son
  * balisage {@code th:} ne subsiste dans le message remis.</p>
  */
 class GabaritsLivresTest {
 
-    private final TemplateEngine moteur = new EmailTemplateEngineConfig().moteurGabaritEmail();
+    private final RenduDesCourriels rendu = new RenduDesCourriels(
+            new EmailTemplateEngineConfig().moteurGabaritEmail(), new PiedDeCourriel(reglagesVides()));
+
+    /** Aucun réglage : le pied s'abstient, et le rendu vérifié est celui du seul gabarit. */
+    private static ReglagesOrganisation reglagesVides() {
+        ReglagesOrganisation reglages = mock(ReglagesOrganisation.class);
+        when(reglages.valeurs()).thenReturn(Map.of());
+        return reglages;
+    }
 
     /** Toutes les variables que les gabarits du projet emploient, tous émetteurs confondus. */
     private static final Map<String, String> VALEURS = Map.ofEntries(
@@ -76,13 +84,11 @@ class GabaritsLivresTest {
     void gabaritRenduSansResidu(String code) throws IOException {
         String source = lire(code);
 
-        Context contexte = new Context(Locale.FRENCH);
-        contexte.setVariables(new java.util.HashMap<>(VALEURS));
-        String rendu = moteur.process(source, contexte);
+        String corps = rendu.corps(source, VALEURS);
 
         // Un attribut, donc précédé d'une espace : chercher « th: » nu désignerait aussi le
         // « max-width:600px » du squelette, et ce test échouerait sur un gabarit irréprochable.
-        assertThat(rendu)
+        assertThat(corps)
                 .as("aucun attribut Thymeleaf ne doit atteindre le destinataire")
                 .doesNotContainPattern("\\sth:[a-zA-Z]")
                 .as("aucune expression non évaluée")
@@ -90,7 +96,7 @@ class GabaritsLivresTest {
 
         // Les valeurs, elles, doivent bien être arrivées : un gabarit qui s'analyse sans rien
         // substituer passerait les vérifications ci-dessus tout en partant impersonnel.
-        assertThat(rendu).containsAnyOf("Awa", "DOC-2026-007", "NC-2026-0148", "exemple.test");
+        assertThat(corps).containsAnyOf("Awa", "DOC-2026-007", "NC-2026-0148", "exemple.test");
     }
 
     @DisplayName("Le squelette commun est présent partout : un courriel sans en-tête ni pied n'est pas identifiable")

@@ -1,21 +1,22 @@
 package com.qualiapproche.workflow.event;
 
+import com.qualiapproche.common.messagerie.AdressesMessagerie;
+import com.qualiapproche.common.messagerie.BoiteDEnvoi;
+import com.qualiapproche.common.messagerie.RappelDuCircuit;
+import com.qualiapproche.workflow.messagerie.MessageSortant;
 import com.qualiapproche.workflow.model.ValidationStatus;
-import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.model.ValidationHistory;
 import com.qualiapproche.workflow.model.WorkflowFieldValue;
-import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.repository.ValidationHistoryRepository;
 import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.SmtpEmailService;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +42,11 @@ import static org.mockito.Mockito.when;
  * faisait défaut : une transaction annulée n'atteignant jamais la phase d'après commit, la valeur
  * restait accrochée au fil de pool et la requête suivante remettait une notification qui n'était
  * pas la sienne.</p>
+ *
+ * <p>La notification est désormais un <b>rappel</b> déposé dans la boîte d'envoi du service, puis
+ * publié sur le courtier, en lieu et place du registre et de ses webhooks HTTP. Ce que ces tests
+ * vérifient ne change pas : l'identifiant obtenu avant commit est celui qui est publié après, et la
+ * charge utile transmise au service métier est intacte.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -47,12 +54,12 @@ class WorkflowEventListenerTest {
 
     @Mock private WorkflowStepRepository stepRepository;
     @Mock private WorkflowTransitionRepository transitionRepository;
-    @Mock private EmailTemplateRepository emailTemplateRepository;
-    @Mock private SmtpEmailService emailService;
     @Mock private WorkflowValidationInstanceRepository validationInstanceRepository;
     @Mock private ValidationHistoryRepository historyRepository;
     @Mock private WorkflowFieldValueRepository fieldValueRepository;
-    @Mock private WorkflowNotificationService notificationService;
+    @Mock private BoiteDEnvoi<MessageSortant> boiteDEnvoi;
+    @Mock private NotificateurEtapeParEmail notificateurParEmail;
+    @Mock private NotificateurEnBase notificateurEnBase;
 
     @InjectMocks private WorkflowEventListener listener;
 
@@ -75,8 +82,21 @@ class WorkflowEventListenerTest {
                 .build();
         when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(aInstance));
         when(stepRepository.findById(2L)).thenReturn(Optional.empty());
-        when(notificationService.enregistrer(anyString(), anyString(), any()))
-                .thenReturn(WorkflowNotification.builder().id(notificationId).build());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any())).thenReturn(notificationId);
+    }
+
+    /** Le rappel déposé dans la boîte d'envoi, et la file à laquelle il est adressé. */
+    private RappelDuCircuit rappelDepose(String destinationAttendue) {
+        ArgumentCaptor<Object> aRappel = ArgumentCaptor.forClass(Object.class);
+        verify(boiteDEnvoi).deposer(eq(destinationAttendue), eq(AdressesMessagerie.TYPE_RAPPEL_CIRCUIT),
+                aRappel.capture());
+        assertThat(aRappel.getValue()).isInstanceOf(RappelDuCircuit.class);
+        return (RappelDuCircuit) aRappel.getValue();
+    }
+
+    /** La charge transmise au service métier — celle que portait jadis la notification. */
+    private Map<String, Object> chargeDeposee() {
+        return rappelDepose(AdressesMessagerie.RAPPELS_SUPPORT).getContenu();
     }
 
     @Test
@@ -89,7 +109,7 @@ class WorkflowEventListenerTest {
         assertThat(aEvenement.getNotificationId()).isEqualTo(notificationId);
 
         listener.remettreNotification(aEvenement);
-        verify(notificationService).remettre(notificationId);
+        verify(boiteDEnvoi).publier(notificationId);
     }
 
     @Test
@@ -107,7 +127,7 @@ class WorkflowEventListenerTest {
         TransitionFranchieEvent aSeconde = evenement();
         listener.remettreNotification(aSeconde);
 
-        verify(notificationService, never()).remettre(any());
+        verify(boiteDEnvoi, never()).publier(any());
     }
 
     @Test
@@ -121,9 +141,9 @@ class WorkflowEventListenerTest {
 
         UUID aPremiereNotif = UUID.randomUUID();
         UUID aSecondeNotif = UUID.randomUUID();
-        when(notificationService.enregistrer(anyString(), anyString(), any()))
-                .thenReturn(WorkflowNotification.builder().id(aPremiereNotif).build())
-                .thenReturn(WorkflowNotification.builder().id(aSecondeNotif).build());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any()))
+                .thenReturn(aPremiereNotif)
+                .thenReturn(aSecondeNotif);
 
         TransitionFranchieEvent aPremiere = evenement();
         TransitionFranchieEvent aSeconde = evenement();
@@ -134,8 +154,8 @@ class WorkflowEventListenerTest {
 
         // Un support unique par fil aurait écrasé la première : seule la dernière était remise
         // sans attendre le prochain passage de l'ordonnanceur.
-        verify(notificationService).remettre(aPremiereNotif);
-        verify(notificationService).remettre(aSecondeNotif);
+        verify(boiteDEnvoi).publier(aPremiereNotif);
+        verify(boiteDEnvoi).publier(aSecondeNotif);
     }
 
     @Test
@@ -148,10 +168,7 @@ class WorkflowEventListenerTest {
         // de l'utilisateur. Le retrait du préfixe « TERMINATED_ » s'appliquait ici à l'état « 2 ».
         listener.enregistrerNotification(aEvenement);
 
-        @SuppressWarnings("unchecked")
-        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
-        assertThat(aCharge.getValue())
+        assertThat(chargeDeposee())
                 .as("le circuit n'est pas terminé : il ne doit pas être annoncé comme tel")
                 .containsEntry("status", "EN_COURS");
     }
@@ -172,10 +189,7 @@ class WorkflowEventListenerTest {
         TransitionFranchieEvent aEvenement = evenement();
         listener.enregistrerNotification(aEvenement);
 
-        @SuppressWarnings("unchecked")
-        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
-        assertThat((Map<?, ?>) aCharge.getValue().get("fields"))
+        assertThat((Map<?, ?>) chargeDeposee().get("fields"))
                 .isEqualTo(Map.of("docRejet", "NON_CONFORMITE/DSI/abc.pdf"));
     }
 
@@ -188,10 +202,7 @@ class WorkflowEventListenerTest {
 
         listener.enregistrerNotification(evenement());
 
-        @SuppressWarnings("unchecked")
-        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
-        assertThat((Map<?, ?>) aCharge.getValue().get("fields")).isEmpty();
+        assertThat((Map<?, ?>) chargeDeposee().get("fields")).isEmpty();
     }
 
     @Test
@@ -204,7 +215,7 @@ class WorkflowEventListenerTest {
         listener.enregistrerNotification(aEvenement);
 
         assertThat(aEvenement.getNotificationId()).isNull();
-        verify(notificationService, never()).enregistrer(anyString(), anyString(), any());
+        verify(boiteDEnvoi, never()).deposer(anyString(), anyString(), any());
     }
 
     @Test
@@ -214,8 +225,7 @@ class WorkflowEventListenerTest {
                 .id(instanceId).resourceId(UUID.randomUUID().toString()).resourceType("DOCUMENT")
                 .etatCode("TERMINATED_APPROUVE").status(ValidationStatus.TERMINE).build();
         when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(aInstance));
-        when(notificationService.enregistrer(anyString(), anyString(), any()))
-                .thenReturn(WorkflowNotification.builder().id(notificationId).build());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any())).thenReturn(notificationId);
 
         TransitionFranchieEvent aEvenement = new TransitionFranchieEvent(
                 WorkflowValidationInstance.class.getName(), instanceId.toString(), "circuit", "42",
@@ -223,11 +233,9 @@ class WorkflowEventListenerTest {
 
         listener.enregistrerNotification(aEvenement);
 
-        @SuppressWarnings("unchecked")
-        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
-        assertThat(aCharge.getValue()).containsEntry("status", "APPROVED");
-        assertThat(aCharge.getValue()).containsEntry("statusName", "APPROUVE");
+        Map<String, Object> aCharge = chargeDeposee();
+        assertThat(aCharge).containsEntry("status", "APPROVED");
+        assertThat(aCharge).containsEntry("statusName", "APPROUVE");
         // Aucune étape ne correspond à un état terminal synthétique.
         verify(stepRepository, never()).findById(any());
     }
@@ -239,8 +247,7 @@ class WorkflowEventListenerTest {
                 .id(instanceId).resourceId(UUID.randomUUID().toString()).resourceType("DOCUMENT")
                 .etatCode("TERMINATED_CLOTURE").status(ValidationStatus.TERMINE).build();
         when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(aInstance));
-        when(notificationService.enregistrer(anyString(), anyString(), any()))
-                .thenReturn(WorkflowNotification.builder().id(notificationId).build());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any())).thenReturn(notificationId);
 
         TransitionFranchieEvent aEvenement = new TransitionFranchieEvent(
                 WorkflowValidationInstance.class.getName(), instanceId.toString(), "circuit", "42",
@@ -248,12 +255,90 @@ class WorkflowEventListenerTest {
 
         listener.enregistrerNotification(aEvenement);
 
-        @SuppressWarnings("unchecked")
-        var aCharge = org.mockito.ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), aCharge.capture());
+        Map<String, Object> aCharge = chargeDeposee();
         // Le rejet servait d'issue par défaut à tout terminal non approuvé : la clôture ne doit
         // pas en hériter.
-        assertThat(aCharge.getValue()).containsEntry("status", "CLOSED");
-        assertThat(aCharge.getValue()).containsEntry("statusName", "CLOTURE");
+        assertThat(aCharge).containsEntry("status", "CLOSED");
+        assertThat(aCharge).containsEntry("statusName", "CLOTURE");
+    }
+
+    // ------------------------------------------------------------------ rappel déposé
+
+    @Test
+    @DisplayName("Le rappel déposé nomme le dossier et porte la charge, adressé à la file de son service")
+    void rappelDepose_versLeServiceDuDossier() {
+        String aRessource = UUID.randomUUID().toString();
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(
+                WorkflowValidationInstance.builder().id(instanceId).resourceId(aRessource)
+                        .resourceType("NON_CONFORMITE").etatCode("2").status(ValidationStatus.EN_COURS).build()));
+        when(stepRepository.findById(2L)).thenReturn(Optional.empty());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any())).thenReturn(notificationId);
+
+        TransitionFranchieEvent aEvenement = evenement();
+        listener.enregistrerNotification(aEvenement);
+
+        // Une non-conformité appartient à amelioration-service : le rappel part sur sa file, et
+        // non sur celle des documents. Le webhook HTTP qu'il remplace visait la même adresse.
+        RappelDuCircuit aRappel = rappelDepose(AdressesMessagerie.RAPPELS_AMELIORATION);
+        assertThat(aRappel.getTypeRessource()).isEqualTo("NON_CONFORMITE");
+        assertThat(aRappel.getRessourceId()).isEqualTo(UUID.fromString(aRessource));
+        assertThat(aRappel.getContenu())
+                .containsEntry("status", "EN_COURS")
+                .containsEntry("comments", "avis favorable")
+                .containsKeys("statusName", "decision", "fields", "timestamp");
+        assertThat(aEvenement.getNotificationId()).isEqualTo(notificationId);
+        // Rien n'est publié avant le commit : une transition annulée n'annoncerait rien.
+        verify(boiteDEnvoi, never()).publier(any());
+    }
+
+    @Test
+    @DisplayName("Type de dossier qu'aucun service ne suit : aucun rappel déposé, la transition passe")
+    void typeSansServiceDestinataire_aucunDepot() {
+        when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(
+                WorkflowValidationInstance.builder().id(instanceId).resourceId(UUID.randomUUID().toString())
+                        .resourceType("AUDIT").etatCode("2").status(ValidationStatus.EN_COURS).build()));
+        when(stepRepository.findById(2L)).thenReturn(Optional.empty());
+
+        TransitionFranchieEvent aEvenement = evenement();
+        listener.enregistrerNotification(aEvenement);
+        listener.remettreNotification(aEvenement);
+
+        // Une file sans consommateur garderait ces messages indéfiniment : mieux vaut ne rien dire.
+        verify(boiteDEnvoi, never()).deposer(anyString(), anyString(), any());
+        verify(boiteDEnvoi, never()).publier(any());
+        assertThat(aEvenement.getNotificationId()).isNull();
+        // La phase suivante a tout de même de quoi composer le courriel d'étape.
+        assertThat(aEvenement.getResourceType()).isEqualTo("AUDIT");
+    }
+
+    @Test
+    @DisplayName("Le rappel porte l'auteur de la transition, pour que le service destinataire lui attribue sa mise à jour")
+    void rappelPorteLAuteur() {
+        instanceExistante();
+        org.springframework.security.oauth2.jwt.Jwt jeton = org.springframework.security.oauth2.jwt.Jwt
+                .withTokenValue("t").header("alg", "none").subject("agent-qualite").claim("name", "Awa Ouédraogo").build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.TestingAuthenticationToken(jeton, null));
+        try {
+            listener.enregistrerNotification(evenement());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        RappelDuCircuit aRappel = rappelDepose(AdressesMessagerie.RAPPELS_SUPPORT);
+        assertThat(aRappel.getAuteurId()).isEqualTo("agent-qualite");
+        assertThat(aRappel.getAuteurNom()).isEqualTo("Awa Ouédraogo");
+    }
+
+    @Test
+    @DisplayName("Un geste sans appelant (automatique) transmet l'identifiant seul, sans nom emprunté")
+    void rappelSansAppelant() {
+        instanceExistante();
+
+        listener.enregistrerNotification(evenement());
+
+        RappelDuCircuit aRappel = rappelDepose(AdressesMessagerie.RAPPELS_SUPPORT);
+        assertThat(aRappel.getAuteurId()).isEqualTo("agent-qualite");
+        assertThat(aRappel.getAuteurNom()).isNull();
     }
 }

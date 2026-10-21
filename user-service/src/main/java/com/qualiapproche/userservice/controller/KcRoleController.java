@@ -1,10 +1,12 @@
 package com.qualiapproche.userservice.controller;
 
+import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.auth.KcRoleDto;
 import com.qualiapproche.userservice.service.KcRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,8 +25,23 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
 
+/**
+ * Rôles Keycloak et leur attribution. La lecture reste ouverte (les écrans des circuits, des
+ * non-conformités et de la confidentialité listent les rôles) ; toute écriture exige
+ * {@code ROLE_MANAGE}, et celles qui touchent un rôle du realm Keycloak (création, modification,
+ * suppression par le nom, attribution) sont en outre réservées au SUPER_ADMIN par
+ * {@link KcRoleService} : ces rôles passent dans le jeton et ouvrent des droits sans contrôle. La
+ * suppression d'un rôle applicatif ({@code /role/{id}}), qu'utilise l'écran des rôles, reste
+ * sous {@code ROLE_MANAGE}.
+ */
 @RestController
 @RequestMapping("/api/v1/roles")
+@RequirePermissions(
+        create = {"ROLE_MANAGE"},
+        update = {"ROLE_MANAGE"},
+        read = {},
+        delete = {"ROLE_MANAGE"}
+)
 @RequiredArgsConstructor
 @Tag(name = "Rôles", description = "Gestion des rôles et des habilitations Keycloak")
 public class KcRoleController {
@@ -42,18 +59,21 @@ public class KcRoleController {
         return ResponseEntity.ok(kcRoleService.getRoleByName(roleName));
     }
 
+    @PreAuthorize("@perm.canCreate(this)")
     @PostMapping
     public ResponseEntity<KcRoleDto> createRole(@RequestBody KcRoleDto kcRoleDto) {
         KcRoleDto createdRole = kcRoleService.createRole(kcRoleDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdRole);
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping("/update")
     public ResponseEntity<Void> updateRole(@RequestBody KcRoleDto kcRoleDto) {
         kcRoleService.updateRole(kcRoleDto);
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping("/{roleName}")
     public ResponseEntity<Void> deleteRole(@PathVariable String roleName) {
         kcRoleService.deleteRole(roleName);
@@ -71,12 +91,14 @@ public class KcRoleController {
      */
     @Operation(summary = "Supprimer un rôle applicatif",
             description = "Refuse en 409 tant que des utilisateurs le portent.")
+    @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping("/role/{id}")
     public ResponseEntity<Void> deleteRoleById(@PathVariable UUID id) {
         kcRoleService.deleteRoleById(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("@perm.canUpdate(this)")
     @PostMapping("/assign-roles")
     public ResponseEntity<Void> assignRoles(@RequestParam String userId, @RequestBody List<String> roleNames) {
         kcRoleService.assignRoles(userId, roleNames);

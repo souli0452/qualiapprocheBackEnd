@@ -1,8 +1,11 @@
 package com.qualiapproche.workflow.event;
 
+import com.qualiapproche.common.messagerie.AdressesMessagerie;
+import com.qualiapproche.common.messagerie.BoiteDEnvoi;
+import com.qualiapproche.common.messagerie.RappelDuCircuit;
+import com.qualiapproche.workflow.messagerie.MessageSortant;
 import com.qualiapproche.workflow.model.StepDecision;
 import com.qualiapproche.workflow.model.ValidationStatus;
-import com.qualiapproche.workflow.model.WorkflowNotification;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
@@ -11,7 +14,6 @@ import com.qualiapproche.workflow.repository.WorkflowFieldValueRepository;
 import com.qualiapproche.workflow.repository.WorkflowStepRepository;
 import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,7 +53,7 @@ class FinDeCircuitParEtapeSansSuiteTest {
     private WorkflowStepRepository stepRepository;
     private WorkflowTransitionRepository transitionRepository;
     private WorkflowValidationInstanceRepository validationInstanceRepository;
-    private WorkflowNotificationService notificationService;
+    private BoiteDEnvoi<MessageSortant> boiteDEnvoi;
     private WorkflowEventListener listener;
 
     private final UUID instanceId = UUID.randomUUID();
@@ -62,17 +65,18 @@ class FinDeCircuitParEtapeSansSuiteTest {
         validationInstanceRepository = mock(WorkflowValidationInstanceRepository.class);
         ValidationHistoryRepository historyRepository = mock(ValidationHistoryRepository.class);
         WorkflowFieldValueRepository fieldValueRepository = mock(WorkflowFieldValueRepository.class);
-        notificationService = mock(WorkflowNotificationService.class);
+        @SuppressWarnings("unchecked")
+        BoiteDEnvoi<MessageSortant> boite = mock(BoiteDEnvoi.class);
+        boiteDEnvoi = boite;
 
         listener = new WorkflowEventListener(stepRepository, transitionRepository,
                 validationInstanceRepository, historyRepository, fieldValueRepository,
-                notificationService, mock(NotificateurEtapeParEmail.class),
+                boiteDEnvoi, mock(NotificateurEtapeParEmail.class),
                 mock(NotificateurEnBase.class));
 
         when(historyRepository.findTopByValidationInstanceOrderByDecisionDateDesc(any()))
                 .thenReturn(Optional.empty());
-        when(notificationService.enregistrer(anyString(), anyString(), any()))
-                .thenReturn(WorkflowNotification.builder().id(UUID.randomUUID()).build());
+        when(boiteDEnvoi.deposer(anyString(), anyString(), any())).thenReturn(UUID.randomUUID());
         when(validationInstanceRepository.findById(instanceId)).thenReturn(Optional.of(
                 WorkflowValidationInstance.builder()
                         .id(instanceId)
@@ -105,10 +109,12 @@ class FinDeCircuitParEtapeSansSuiteTest {
                 UUID.randomUUID().toString(), TRANSITION, "1", String.valueOf(etapeAtteinte),
                 "agent-qualite", "avis favorable"));
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> charge = ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrer(anyString(), anyString(), charge.capture());
-        return charge.getValue();
+        // Le rappel du circuit, adressé au service des documents : sa charge est ce que publiait
+        // jadis le registre des notifications.
+        ArgumentCaptor<Object> rappel = ArgumentCaptor.forClass(Object.class);
+        verify(boiteDEnvoi).deposer(eq(AdressesMessagerie.RAPPELS_SUPPORT),
+                eq(AdressesMessagerie.TYPE_RAPPEL_CIRCUIT), rappel.capture());
+        return ((RappelDuCircuit) rappel.getValue()).getContenu();
     }
 
     @Test

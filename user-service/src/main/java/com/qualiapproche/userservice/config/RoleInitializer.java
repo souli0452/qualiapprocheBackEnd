@@ -145,6 +145,7 @@ public class RoleInitializer implements CommandLineRunner {
         ));
 
         ouvrirLaFaqAuSuperAdmin();
+        ouvrirLAuditAuSuperAdmin();
         ouvrirLesTableauxDeBordAuxRolesExistants();
         donnerLaPorteeAuxRolesExistants();
         ouvrirLAssistantIaAuSuperAdmin();
@@ -259,6 +260,19 @@ public class RoleInitializer implements CommandLineRunner {
         completer("SUPER_ADMIN",
                 "sans elles, la foire aux questions restait fermée au super administrateur",
                 "faq-read", "faq-write", "faq-publish");
+    }
+
+    /**
+     * Ouvre le module d'audit (M13) au super administrateur des installations déjà en service.
+     *
+     * <p>Cinq permissions entrent au dictionnaire : consulter, planifier, conduire, valider et
+     * paramétrer. Un rôle SUPER_ADMIN créé désormais les reçoit ; celui déjà en base ne les aurait
+     * jamais eues, le démarrage ne réappliquant pas les dotations.</p>
+     */
+    private void ouvrirLAuditAuSuperAdmin() {
+        completer("SUPER_ADMIN",
+                "sans elles, le module d'audit restait fermé au super administrateur",
+                "audit-read", "audit-write", "audit-conduct", "audit-validate", "audit-config");
     }
 
     /**

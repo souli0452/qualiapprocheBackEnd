@@ -7,6 +7,7 @@ import com.qualiapproche.amelioration.reporting.dto.PlanActionDto;
 import com.qualiapproche.amelioration.reporting.dto.ReportingInputDto;
 import com.qualiapproche.amelioration.reporting.dto.ReportingResponseDto;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
+import com.qualiapproche.amelioration.service.NonConformiteService;
 import com.qualiapproche.common.utils.CryptoUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class ReportingService {
     private final ReportConfigService reportConfigService;
     private final ReportConfigService configService;
     private  final NonConformiteRepository conformiteRepository;
+    private final NonConformiteService nonConformiteService;
 
 
     /**
@@ -73,8 +75,17 @@ public class ReportingService {
 
     private ReportingResponseDto generateNonConformite(final ReportingInputDto inputDto)
             throws IOException, JRException {
+        if (inputDto.getEntityId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "demande introuvable.");
+        }
         NonConformite nonConformite = conformiteRepository.findById(inputDto.getEntityId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "demande introuvable."));
+        // L'état imprime le dossier : il suit la règle de la fiche. Un dossier que l'appelant ne
+        // peut pas consulter lui est introuvable — 404, et non 403 : « il existe, mais pas pour
+        // vous » en dirait trop.
+        if (!nonConformiteService.peutConsulter(nonConformite)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cette NonConformité n'existe pas.");
+        }
         List<PlanActionDto> planActionList = nonConformite.getPlanActions().stream().map(plan -> new PlanActionDto(plan)).toList();
 
         return this.configService.buildReportNf(inputDto, planActionList, buildNonConformiteParam(nonConformite));

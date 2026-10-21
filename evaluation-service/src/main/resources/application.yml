@@ -4,22 +4,80 @@ server:
 spring:
   application:
     name: evaluation-service
+  servlet:
+    # Preuves des constats, plans et rapports reçus : ReglesDePieceJointe admet 25 Mo par fichier,
+    # et un dépôt de preuves en porte plusieurs. Le défaut de Spring (1 Mo) refusait presque toute
+    # photo ou tout PDF scanné avant même la règle.
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 100MB
   datasource:
     url: ${DB_URL_EVALUATION:jdbc:postgresql://localhost:5432/bd_quali_sira_evaluation}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD}
+    # Sous spring.datasource, où Hikari la lit : écrite sous spring.jpa, elle était ignorée, et chaque
+    # service ouvrait 10 connexions — 70 pour la pile, contre max_connections = 100 sur PostgreSQL.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: 2
+      connection-timeout: 10000
+      max-lifetime: 1800000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Le module d'audit naît avec V1 : aucune base antérieure ne porte ses tables. Si une base
+    # déjà touchée par l'ancien « ddl-auto: update » n'était pas vide, la ligne de référence se
+    # pose en version 0, en deçà de V1 — qui s'applique donc quand même, au lieu d'être sautée
+    # comme elle le serait sous la version 1 retenue par les autres services.
+    baseline-on-migrate: true
+    baseline-version: 0
+    baseline-description: Base anterieure au module audit
+    validate-on-migrate: true
   jpa:
     hibernate:
-      ddl-auto: update
+      # Le schéma vient des migrations Flyway ; « validate » signale au démarrage tout écart
+      # entre les entités et le schéma migré, au lieu de le corriger en silence.
+      ddl-auto: validate
     # Journalisation des requêtes : coupée par défaut. Chaque requête y passait avec ses
     # valeurs — donc des données de dossiers dans les journaux, et un volume qui noie les
     # lignes qui comptent. Pour déboguer en local : SPRING_JPA_SHOW_SQL=true.
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
+  mail:
+    # Le pilote du processus audité est prévenu par courriel de la publication des constats.
+    # Mêmes réglages que les autres services, à un détail près : le mot de passe a un défaut vide.
+    # Tant que MAIL_PASSWORD n'est pas posé sur le serveur, le service démarre, et chaque envoi
+    # échoue à l'authentification en le disant dans le journal — la publication, elle, aboutit.
+    host: ${MAIL_HOST:mail.qualisira.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:noreply@qualisira.com}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: ${MAIL_SSL:true}
+          starttls:
+            enable: ${MAIL_STARTTLS:false}
+          connectiontimeout: ${MAIL_TIMEOUT_MS:10000}
+          timeout: ${MAIL_TIMEOUT_MS:10000}
+          writetimeout: ${MAIL_TIMEOUT_MS:10000}
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: ${KC_ISSUER_URI:http://localhost:8080/realms/quali}
+
+# Serveur de fichiers (preuves des constats, plans et rapports reçus tout faits). Le bloc manquait :
+# sans minio.url, lib-storage ne câble aucun dépôt et tout chargement répondait 503. Les clés, sans
+# défaut ailleurs, en ont un vide ici : le serveur de fichiers reste facultatif pour ce service,
+# qui démarre sans elles et refuse alors le seul chargement, en disant ce qui manque.
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}
 
 eureka:
   client:
@@ -27,3 +85,61 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
+
+qualisira:
+  audit:
+    # Lien « Consulter l'audit » des courriels ; {id} y devient l'identifiant de l'audit. Vide,
+    # le courriel part sans lien.
+    lien-audit: ${FRONTEND_URL:http://localhost:4200}/audit/{id}
+
+---
+# Appels entre services (Feign) : des délais bornés. Il n'y en avait aucun — un service lent ou
+# figé retenait sans fin les fils de tous ceux qui l'appelaient, jusqu'à les bloquer à leur tour.
+# 2 s pour joindre, 10 s pour répondre : assez pour un rendu PDF ou une page de référentiel, pas
+# pour immobiliser un écran.
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT:10000}
+
+---
+# Messagerie entre services (ActiveMQ Artemis) : tout ce que le service émet est inscrit dans sa
+# boîte d'envoi (message_sortant) puis publié sur le courtier ; le relais, sous verrou ShedLock,
+# reprend ce qui n'a pas pu partir. En développement : docker-compose.artemis.yml.
+spring:
+  artemis:
+    mode: native
+    broker-url: ${ARTEMIS_URL:tcp://localhost:61617}
+    user: ${ARTEMIS_USER:qualisira}
+    password: ${ARTEMIS_PASSWORD}
+qualisira:
+  messagerie:
+    relais-ms: ${MESSAGERIE_RELAIS_MS:10000}          # délai entre deux passages du relais
+    premier-relais-ms: 15000                           # après le démarrage
+    lot: ${MESSAGERIE_LOT:100}                         # messages publiés par passage
+    conservation-jours: ${MESSAGERIE_CONSERVATION_JOURS:30}   # puis effacés une fois publiés
+    purge-cron: "0 15 3 * * *"
+    concurrence: ${MESSAGERIE_CONCURRENCE:1-4}         # consommateurs par file
+
+---
+# Surface d'exposition : la sonde de santé, et elle seule, sans détail. Les détails nommaient la
+# base, le courtier et l'espace disque — de quoi cartographier l'installation sans s'authentifier.
+# La documentation OpenAPI décrit chaque point d'entrée et ses paramètres : coupée par défaut, elle
+# se rallume en développement par QUALISIRA_SWAGGER=true (la passerelle l'agrège alors).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  api-docs:
+    enabled: ${QUALISIRA_SWAGGER:false}
+  swagger-ui:
+    enabled: ${QUALISIRA_SWAGGER:false}

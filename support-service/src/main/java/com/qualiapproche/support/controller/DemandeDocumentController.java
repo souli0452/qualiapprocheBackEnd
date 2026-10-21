@@ -127,7 +127,7 @@ public class DemandeDocumentController {
                 // Le nom du dépôt : sans lui, le navigateur enregistre un identifiant technique
                 // sans extension exploitable.
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + piece.nom() + "\"")
+                        EnTeteFichier.attachement(piece.nom()))
                 .contentType(piece.type())
                 .body(new InputStreamResource(piece.contenu()));
     }

@@ -1899,6 +1899,27 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     @Transactional
     public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId,
                                                 String titulaireId, String reference) {
+        return initiateWorkflow(resourceId, resourceType, workflowId, titulaireId, reference, null);
+    }
+
+    /**
+     * Ouvre un circuit sur un dossier qui concerne une autre structure que celle du déclarant.
+     *
+     * <p>C'est le cas d'une non-conformité relevée par un audit : l'auditeur la déclare, mais elle
+     * vise le processus audité, et c'est son pilote qui doit l'analyser. Ouverte dans la structure
+     * de l'auditeur, elle partait chez le pilote de celle-ci — qui n'avait rien à en faire — et le
+     * pilote concerné n'en apprenait rien.</p>
+     *
+     * <p>Seule la structure <b>où se trouve</b> le dossier est désignée. La structure émettrice
+     * reste celle du déclarant : c'est à elle qu'on rend compte de la clôture. Désigner ici n'ouvre
+     * rien de plus qu'une étape d'orientation, qui déplace déjà un dossier vers la structure
+     * choisie.</p>
+     *
+     * @param structureId la structure concernée ; absente, celle du déclarant, comme avant
+     */
+    @Transactional
+    public WorkflowInstanceDto initiateWorkflow(UUID resourceId, String resourceType, UUID workflowId,
+                                                String titulaireId, String reference, String structureId) {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new BusinessException(
                         "Circuit de validation introuvable.", HttpStatus.NOT_FOUND));
@@ -1936,7 +1957,7 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 // réécrira, à la différence du titulaire.
                 .createurId(SecurityUtils.getCurrentUserId())
                 // Où le dossier se trouve : une étape d'orientation le déplacera.
-                .structureId(structureDuDeclarant)
+                .structureId(structureId == null || structureId.isBlank() ? structureDuDeclarant : structureId.trim())
                 // D'où il part : rien ne déplace celle-ci, et c'est à elle qu'on rendra compte de
                 // la clôture, longtemps après que le dossier aura changé de mains.
                 .structureEmettriceId(structureDuDeclarant)

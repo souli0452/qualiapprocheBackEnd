@@ -39,6 +39,45 @@
             <artifactId>jakarta.validation-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!--
+            Le moteur de validation. Sans lui, @Valid ne faisait rien dans user, referentiel,
+            workflow, amelioration et support : les contraintes écrites sur les DTO (FAQ,
+            transmission d'un écart d'audit…) n'étaient jamais appliquées.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!--
+            /actuator/health pour chaque service : Eureka et la supervision avaient des
+            permitAll("/actuator/**") devant un point d'entrée qui n'existait pas. Seul « health »
+            est exposé par défaut, sans détail.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!--
+            ShedLock : une tâche planifiée ne s'exécute qu'une fois même quand plusieurs instances
+            d'un service tournent. Le verrou vit dans la base du service (table shedlock).
+        -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+        </dependency>
+        <!--
+            Messagerie entre services (ActiveMQ Artemis, JMS). Optionnelle ici : seuls les services
+            qui publient ou consomment la redéclarent ; les autres n'ouvrent aucune connexion.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-artemis</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>

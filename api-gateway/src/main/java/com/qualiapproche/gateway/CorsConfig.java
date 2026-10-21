@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -37,12 +38,20 @@ import java.util.List;
  * ce que la norme accepte. C'est la seule façon d'ouvrir à toutes les origines sans casser
  * l'authentification.</p>
  *
- * <p><b>Ce que l'ouverture totale coûte</b>, puisque cela ne se voit pas à l'usage : n'importe quel
- * site visité par un utilisateur connecté peut appeler cette API avec ses cookies de session, et
- * donc agir en son nom. Rien d'autre ne s'y oppose ici — la protection CSRF est désactivée et le
- * cookie est {@code SameSite=None}, qui ne filtre rien. C'est une configuration d'environnement de
- * test ; le journal la signale à chaque démarrage pour qu'elle ne passe pas en production sans
- * qu'on l'ait décidé.</p>
+ * <p><b>Le défaut n'est plus le joker.</b> Le motif {@code *} était livré par défaut : n'importe
+ * quel site visité par un utilisateur connecté pouvait appeler cette API avec ses cookies de
+ * session, et donc agir en son nom — la protection CSRF est désactivée dans les services et le
+ * cookie est {@code SameSite=None}, qui ne filtre rien. Une évaluation de sécurité le relève au
+ * premier passage. Le défaut nomme désormais les domaines où le produit est réellement servi
+ * ({@link #MOTIFS_PAR_DEFAUT}). La variable d'environnement {@code QUALISIRA_CORS_MOTIFS_ORIGINES}
+ * <b>remplace</b> cette liste, elle ne s'y ajoute pas : pour déclarer un frontal de plus, on la
+ * renseigne avec la liste par défaut recopiée <i>et</i> le nouvel hôte — sans quoi les frontaux
+ * existants et le poste de développement perdraient l'accès. Le joker reste possible pour un
+ * environnement de test — signalé à chaque démarrage.</p>
+ *
+ * <p>La configuration n'est lue qu'une fois et partagée : le filtre anti-CSRF
+ * ({@link FiltreAntiCsrf}) juge les origines avec <b>la même</b> liste. Deux listes finiraient par
+ * diverger, et l'écart se paierait soit d'un frontal refusé, soit d'une porte restée ouverte.</p>
  */
 @Configuration
 @Slf4j
@@ -52,20 +61,79 @@ public class CorsConfig {
     private static final String TOUTES_ORIGINES = "*";
 
     /**
+     * Les frontaux où le produit est servi, quand rien d'autre n'est configuré.
+     *
+     * <p>Des <b>hôtes nommés</b>, et non des domaines entiers : {@code app.test.qualisira.com}, le
+     * frontal de l'environnement de test, qui appelle {@code api-gateway.test.qualisira.com}. C'est
+     * l'hôte qui sert réellement l'application Angular : on l'a vérifié sur le déploiement, et non
+     * déduit des noms. Ni {@code qualisira.test.qualisira.com} ni l'ancien
+     * {@code qualisira.horeb.tech} — cités par des tests et des exemples — n'ont d'enregistrement DNS,
+     * et le domaine nu {@code qualisira.com} sert le site vitrine, pas l'application : aucun des
+     * trois n'a à écrire dans l'API. Le poste de développement appelle depuis {@code localhost}, sur
+     * le port que choisit {@code ng serve} : là seulement le motif est large, et il ne couvre que la
+     * machine elle-même.</p>
+     *
+     * <p>Un motif comme {@code https://*.horeb.tech} a d'abord été retenu, puis écarté : il rend
+     * fiable <b>tout hôte</b> du domaine, et pas seulement le frontal. Or {@code horeb.tech} sert
+     * aussi le stockage objet ({@code s3.horeb.tech}, la console MinIO, les liens présignés) et
+     * d'autres applications de la société. Une page HTML déposée dans un compartiment, ou une
+     * faille XSS sur un site voisin, suffirait alors : les cookies {@code SameSite=None} partent, CORS
+     * renvoie l'origine, l'anti-CSRF la laisse passer — et cette page lit les données de
+     * l'utilisateur connecté et écrit en son nom. Le même raisonnement écarte
+     * {@code *.qualisira.com}, qui couvrirait aussi la messagerie ou tout autre service du domaine.
+     * Un nouveau frontal se déclare donc par la variable d'environnement, en le nommant — et en
+     * recopiant ces motifs, qu'elle remplace.</p>
+     */
+    static final String MOTIFS_PAR_DEFAUT = "https://app.test.qualisira.com,"
+            + "http://localhost:[*],http://127.0.0.1:[*]";
+
+    /**
      * Origines exactes, séparées par des virgules. Vide par défaut : c'est le motif qui ouvre.
      */
     @Value("${qualisira.cors.origines:}")
     private String origines;
 
-    /** Motifs d'origines, séparés par des virgules. {@code *} ouvre à toutes. */
-    @Value("${qualisira.cors.motifs-origines:*}")
+    /**
+     * Motifs d'origines, séparés par des virgules. {@code *} ouvre à toutes. Une valeur configurée
+     * remplace {@link #MOTIFS_PAR_DEFAUT} en entier.
+     */
+    @Value("${qualisira.cors.motifs-origines:" + MOTIFS_PAR_DEFAUT + "}")
     private String motifsOrigines;
 
+    /**
+     * La configuration, lue une seule fois : le filtre CORS et le filtre anti-CSRF la partagent.
+     */
     @Bean
-    public CorsWebFilter corsWebFilter() {
+    public CorsConfiguration configurationCors() {
+        return configuration();
+    }
+
+    /**
+     * Le filtre CORS, placé juste après le filtre anti-CSRF.
+     *
+     * <p>Son rang est fixé, et non laissé au dernier par défaut : la limitation de débit
+     * ({@link FiltreLimiteDeDebit}) vient après lui, pour que son 429 porte les en-têtes CORS. Sans
+     * eux, le navigateur masque la réponse et le frontal croirait à une panne réseau au lieu
+     * d'afficher « réessayez dans une minute ».</p>
+     */
+    @Bean
+    public CorsWebFilter corsWebFilter(CorsConfiguration configurationCors) {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration());
-        return new CorsWebFilter(source);
+        source.registerCorsConfiguration("/**", configurationCors);
+        return new FiltreCorsOrdonne(source);
+    }
+
+    /** Le {@link CorsWebFilter} de Spring, avec un rang. */
+    static class FiltreCorsOrdonne extends CorsWebFilter implements Ordered {
+
+        FiltreCorsOrdonne(UrlBasedCorsConfigurationSource source) {
+            super(source);
+        }
+
+        @Override
+        public int getOrder() {
+            return RangsDesFiltres.CORS;
+        }
     }
 
     /** Visible pour les tests : c'est la lecture des deux réglages qui mérite d'être figée. */
@@ -96,8 +164,8 @@ public class CorsConfig {
             // endroit où cela puisse se remarquer avant qu'un incident ne l'apprenne.
             log.warn("CORS — toutes les origines sont autorisées, cookies de session compris : "
                     + "n'importe quel site peut appeler cette API au nom d'un utilisateur connecté. "
-                    + "Acceptable en test ; avant la production, nommez le frontal dans "
-                    + "qualisira.cors.origines et videz qualisira.cors.motifs-origines.");
+                    + "Acceptable en test ; avant la production, retirez « * » de "
+                    + "qualisira.cors.motifs-origines (QUALISIRA_CORS_MOTIFS_ORIGINES).");
         } else {
             log.info("CORS — origines autorisées : {} ; motifs : {}",
                     exactes.isEmpty() ? "aucune" : exactes,

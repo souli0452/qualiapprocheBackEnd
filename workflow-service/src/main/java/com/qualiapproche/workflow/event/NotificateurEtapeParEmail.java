@@ -6,7 +6,9 @@ import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.config.LienVersLeDossier;
-import com.qualiapproche.workflow.service.SmtpEmailService;
+import com.qualiapproche.common.messagerie.Courriels;
+import com.qualiapproche.workflow.service.CopieAuResponsableQualite;
+import com.qualiapproche.workflow.service.RenduDesCourriels;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -16,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
 
 /**
  * Prévient par courriel les responsables de l'étape qu'un dossier vient d'atteindre.
@@ -24,7 +25,7 @@ import com.qualiapproche.workflow.service.WorkflowNotificationService;
  * <p>Bean à part entière, et non méthode de {@link WorkflowEventListener} : {@code @Async} ne
  * s'applique qu'aux appels passant par le proxy Spring, dont un appel d'une méthode à l'autre au
  * sein d'une même classe s'affranchit. L'envoi serait resté synchrone. La séparation vaut par
- * ailleurs pour elle-même — l'écouteur enregistre et remet des notifications, composer un
+ * ailleurs pour elle-même — l'écouteur dépose les rappels du circuit, composer un
  * courriel est un autre métier.</p>
  */
 @Component
@@ -33,7 +34,9 @@ import com.qualiapproche.workflow.service.WorkflowNotificationService;
 public class NotificateurEtapeParEmail {
 
     private final EmailTemplateRepository emailTemplateRepository;
-    private final WorkflowNotificationService notificationService;
+    private final Courriels courriels;
+    private final RenduDesCourriels rendu;
+    private final CopieAuResponsableQualite copieAuResponsableQualite;
     private final DestinatairesDeLEtape destinatairesDeLEtape;
     private final com.qualiapproche.workflow.service.DestinatairesEtapeService destinatairesEtapeService;
     /** Adresse du dossier dans le frontal, par type de ressource : le bouton des courriels. */
@@ -81,22 +84,17 @@ public class NotificateurEtapeParEmail {
             // Un envoi par destinataire plutôt qu'un envoi groupé : le corps du message reprend
             // le nom de la personne, et l'échec de l'un ne prive pas les autres.
             try {
-                // Enregistré puis remis, plutôt qu'envoyé directement : un serveur SMTP
-                // indisponible ou un mot de passe expiré ne perd plus la notification, elle est
-                // rejouée par l'ordonnanceur jusqu'à aboutir ou être explicitement abandonnée.
-                // L'objet est rendu ici, à l'enregistrement : la notification stockée porte le
-                // texte final, et une reprise le remet tel quel.
+                // Rendu ici, puis déposé dans la boîte d'envoi : un serveur SMTP indisponible ou un
+                // mot de passe expiré ne perd plus le courriel, le courtier le relivre jusqu'à sa
+                // remise. Le responsable qualité est mis en copie de ce qui sort d'une
+                // non-conformité : décidé ici, à l'unique point d'émission des courriels d'étape.
                 Map<String, String> variables = variables(template, step, event, destinataire);
-                var notification = notificationService.enregistrerCourriel(
-                        event.getResourceId(), event.getResourceType(),
-                        destinataire.getEmail(),
-                        SmtpEmailService.sujet(template.getSubject(), variables),
-                        template.getBody(), variables);
-                notificationService.remettre(notification.getId());
+                courriels.envoyer(destinataire.getEmail(), copieAuResponsableQualite.pour(event.getResourceType()),
+                        RenduDesCourriels.sujet(template.getSubject(), variables),
+                        rendu.corps(template.getBody(), variables), "etape-" + templateCode);
             } catch (Exception e) {
-                // Seul l'enregistrement peut encore échouer ici : la remise, elle, est rattrapée
-                // par le registre. Le courriel serait alors perdu, d'où la trace.
-                log.error("Notification par e-mail '{}' non enregistrée pour {} à l'étape '{}' : {}",
+                // Seul le rendu ou le dépôt peut échouer ici ; le courriel serait alors perdu, d'où la trace.
+                log.error("Courriel d'étape '{}' non déposé pour {} à l'étape '{}' : {}",
                         templateCode, destinataire.getEmail(), step.getNomEtape(), e.getMessage());
             }
         }

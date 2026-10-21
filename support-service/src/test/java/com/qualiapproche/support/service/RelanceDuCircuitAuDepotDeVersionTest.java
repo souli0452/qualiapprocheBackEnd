@@ -82,7 +82,8 @@ class RelanceDuCircuitAuDepotDeVersionTest {
                 typeService,
                 mock(MailService.class),
                 workflowClient,
-                mock(EtatsDuCircuitService.class));
+                mock(EtatsDuCircuitService.class),
+                mock(com.qualiapproche.support.numerotation.NumerotationDesDocuments.class));
 
         lenient().when(profilService.profilCourant())
                 .thenReturn(new ProfilUtilisateurService.Profil(STRUCTURE, java.util.Set.of(), java.util.Set.of()));

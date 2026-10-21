@@ -1,0 +1,126 @@
+package com.qualiapproche.evaluation.controller;
+
+import com.qualiapproche.common.annotation.RequirePermissions;
+import com.qualiapproche.common.response.ApiResponse;
+import com.qualiapproche.evaluation.dto.ChecklistAuditDto;
+import com.qualiapproche.evaluation.enumeration.StatutChecklist;
+import com.qualiapproche.evaluation.service.ChecklistAuditService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+import static com.qualiapproche.evaluation.controller.AuditUrls.CHECKLISTS;
+
+/** Les checklists d'audit : rédigées en brouillon, publiées pour servir, archivées, dupliquées. */
+@RestController
+@RequiredArgsConstructor
+@RequestMapping(CHECKLISTS)
+@RequirePermissions(
+        create = {"audit-write", "audit-config"},
+        update = {"audit-write", "audit-config"},
+        read = {"audit-read", "audit-write", "audit-conduct", "audit-validate", "audit-config"},
+        delete = {"audit-write", "audit-config"}
+)
+public class ChecklistAuditController {
+
+    private final ChecklistAuditService service;
+    private final com.qualiapproche.evaluation.service.ImportDePoints importDePoints;
+
+    /**
+     * Lit les points d'une grille Excel ou CSV, sans rien enregistrer : ils reviennent à l'écran,
+     * qui les ajoute à la checklist en brouillon pour relecture.
+     */
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PostMapping(value = "/import-points", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<List<com.qualiapproche.evaluation.dto.PointControleDto>>> importerPoints(
+            @org.springframework.web.bind.annotation.RequestPart("fichier") org.springframework.web.multipart.MultipartFile fichier) {
+        return ResponseEntity.ok(ApiResponse.success(importDePoints.lire(fichier)));
+    }
+
+    /** Le modèle Excel à remplir pour importer des points. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/modele-import")
+    public ResponseEntity<byte[]> modeleImport() {
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement("Modele_points_de_controle.xlsx"))
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(importDePoints.modele());
+    }
+
+    /** L'écran des checklists, page par page, filtré par statut et par nom ou chapitre. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping
+    public ResponseEntity<Page<ChecklistAuditDto>> page(
+            @RequestParam(value = "statut", required = false) StatutChecklist statut,
+            @RequestParam(value = "search", required = false) String search,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(service.page(statut, search, pageable));
+    }
+
+    /** Toutes les checklists, pour les listes de choix. */
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/all")
+    public ResponseEntity<ApiResponse<List<ChecklistAuditDto>>> all() {
+        return ResponseEntity.ok(ApiResponse.success(service.lister()));
+    }
+
+    @PreAuthorize("@perm.canRead(this)")
+    @GetMapping("/get/{id}")
+    public ResponseEntity<ChecklistAuditDto> getById(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(service.lire(id));
+    }
+
+    @PreAuthorize("@perm.canCreate(this)")
+    @PostMapping("/create")
+    public ResponseEntity<ChecklistAuditDto> create(@Valid @RequestBody ChecklistAuditDto dto) {
+        return ResponseEntity.ok(service.creer(dto));
+    }
+
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PutMapping("/update/{id}")
+    public ResponseEntity<ChecklistAuditDto> update(@PathVariable("id") UUID id, @Valid @RequestBody ChecklistAuditDto dto) {
+        return ResponseEntity.ok(service.modifier(id, dto));
+    }
+
+    @PreAuthorize("@perm.canDelete(this)")
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id) {
+        service.supprimer(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PutMapping("/{id}/publier")
+    public ResponseEntity<ChecklistAuditDto> publier(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(service.publier(id));
+    }
+
+    @PreAuthorize("@perm.canUpdate(this)")
+    @PutMapping("/{id}/archiver")
+    public ResponseEntity<ChecklistAuditDto> archiver(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(service.archiver(id));
+    }
+
+    @PreAuthorize("@perm.canCreate(this)")
+    @PostMapping("/{id}/dupliquer")
+    public ResponseEntity<ChecklistAuditDto> dupliquer(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(service.dupliquer(id));
+    }
+}

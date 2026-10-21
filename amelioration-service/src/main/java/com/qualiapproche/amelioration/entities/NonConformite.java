@@ -43,6 +43,15 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 @Table(name = "quali_nc")
 public class NonConformite extends AuditEntity {
+  /**
+   * Verrou optimiste : deux écritures concurrentes sur le même dossier — un webhook du circuit et la
+   * saisie d'un utilisateur, deux décideurs — ne s'écrasent plus en silence ; la seconde reçoit un
+   * conflit (409) et relit le dossier. Distinct de {@code version}, qui est une donnée métier.
+   */
+  @jakarta.persistence.Version
+  @jakarta.persistence.Column(name = "verrou_version", nullable = false)
+  private long verrouVersion;
+
   private String numeroReference;
   private String version;
   private String origineId;
@@ -115,6 +124,12 @@ public class NonConformite extends AuditEntity {
   private String userImputFullName;
   private String originNonConformiteId;
   private String originNonConformiteLibelle;
+  /**
+   * L'écart d'origine quand la non-conformité vient d'un autre module : « AUDIT-CONSTAT:&lt;uuid&gt; ».
+   * Unique — une transmission rejouée retrouve le dossier au lieu d'en ouvrir un second.
+   */
+  @Column(name = "cle_origine", length = 120, unique = true)
+  private String cleOrigine;
   private String numeroFdac;
   private String pertinanceRsSuivi;
   @Lob

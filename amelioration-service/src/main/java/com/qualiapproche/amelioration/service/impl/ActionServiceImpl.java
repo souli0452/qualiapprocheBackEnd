@@ -59,6 +59,14 @@ public class ActionServiceImpl implements ActionService {
     @Override
     public void delete(UUID id) {
         Action action = actionRepository.getReferenceById(id);
-        actionRepository.delete(action);
+        // La base refuse désormais de supprimer ce qu'une non-conformité désigne encore (V7) :
+        // on le dit, plutôt que de laisser le refus sortir en erreur interne au commit.
+        try {
+            actionRepository.delete(action);
+            actionRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cette action est encore employé(e) par des non-conformités : il ne peut pas être supprimé.");
+        }
     }
 }

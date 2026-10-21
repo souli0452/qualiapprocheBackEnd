@@ -18,6 +18,9 @@ public interface DocumentQmsRepository extends JpaRepository<DocumentQms, UUID>,
 
     List<DocumentQms> findByEsTraiterTrueAndObsoleteFalseAndArchivedFalse();
 
-    @Query("SELECT MAX(d.documentNumber) FROM DocumentQms d WHERE d.documentNumber LIKE :prefix%")
-    String findMaxDocumentNumberByPrefix(@Param("prefix") String prefix);
+    /** Le plus grand rang émis sous ce préfixe, comparé en nombre (…-1000 après …-999). */
+    @Query(value = "SELECT MAX(CAST(substring(document_number FROM '([0-9]+)$') AS bigint)) FROM qms_documents "
+            + "WHERE document_number LIKE :prefix || '%' "
+            + "AND substring(document_number FROM char_length(:prefix) + 1) ~ '^[0-9]+$'", nativeQuery = true)
+    Long dernierRangSousPrefixe(@Param("prefix") String prefix);
 }

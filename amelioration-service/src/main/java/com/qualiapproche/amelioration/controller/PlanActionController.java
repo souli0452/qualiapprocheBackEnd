@@ -10,6 +10,7 @@ import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ import org.springframework.data.domain.Pageable;
 import org.springdoc.core.annotations.ParameterObject;
 
 import com.qualiapproche.amelioration.service.PlanActionService;
+import com.qualiapproche.amelioration.service.impl.AccesAuxDossiers;
 import static com.qualiapproche.common.utils.ApiUrls.*;
 import com.qualiapproche.amelioration.client.WorkflowClient;
 import com.qualiapproche.common.dto.WorkflowStateDto;
@@ -50,9 +52,33 @@ public class PlanActionController {
     private final PlanActionService planActionService;
     private final WorkflowClient workflowClient;
 
+    /**
+     * La borne du dossier, appliquée au plan pris par son identifiant.
+     *
+     * <p>La fiche d'un plan joint la non-conformité qui le motive : sans cette borne, la
+     * permission générale du module suffisait à lire, corriger ou supprimer le plan — et donc à
+     * lire le dossier — d'une autre structure.</p>
+     */
+    private final AccesAuxDossiers acces;
+
+    /**
+     * Ajoute un plan d'action au dossier désigné.
+     *
+     * <p>Le dossier doit être consultable par l'appelant, comme pour lire ou corriger un plan :
+     * sans cette borne, un agent d'une autre structure pouvait écrire dans l'enregistrement qualité
+     * d'autrui, lire le résumé du dossier en retour, et surtout s'y désigner responsable d'un plan —
+     * ce qui lui ouvrait ensuite tout le dossier, puisque le responsable d'un plan compte parmi
+     * ceux qui le consultent. Le front ne crée de plan que depuis la fiche d'un dossier déjà
+     * ouverte : aucun parcours légitime n'est fermé.</p>
+     */
     @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(CREATE_PLAN_ACTION)
     public ResponseEntity<PlanActionDto> create(@RequestBody PlanActionDto dto) throws IOException {
+        if (dto == null || dto.getNonConformeId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Un plan d'action doit être rattaché à une non-conformité.");
+        }
+        acces.exigerLaNonConformite(dto.getNonConformeId());
         PlanActionDto planActionDto = planActionService.createPlanActionDto(dto);
         return new ResponseEntity<>(planActionDto, HttpStatus.OK);
     }
@@ -67,6 +93,9 @@ public class PlanActionController {
     @PreAuthorize("@perm.canUpdate(this)")
     @PutMapping(UPDATE_PLAN_ACTION)
     public ResponseEntity<PlanActionDto> corriger(@RequestBody PlanActionDto dto) {
+        if (dto != null && dto.getId() != null) {
+            acces.exigerLePlan(dto.getId());
+        }
         return ResponseEntity.ok(planActionService.corriger(dto));
     }
 
@@ -126,6 +155,7 @@ public class PlanActionController {
     @PreAuthorize("@perm.canRead(this)")
     @GetMapping(GET_PLAN_ACTION_BY_ID)
     public ResponseEntity<PlanActionDto> getById(@PathVariable UUID id) {
+        acces.exigerLePlan(id);
         PlanActionDto planActionDto = planActionService.getPlanActionDtoById(id);
         planActionDto.setWorkflowState(etatWorkflow(id));
         return new ResponseEntity<>(planActionDto, HttpStatus.OK);
@@ -146,6 +176,7 @@ public class PlanActionController {
     @PreAuthorize("@perm.canDelete(this)")
     @DeleteMapping(DELETE_PLAN_ACTION)
     public void deleteyId(@PathVariable UUID id) {
+        acces.exigerLePlan(id);
         planActionService.delete(id);
     }
 

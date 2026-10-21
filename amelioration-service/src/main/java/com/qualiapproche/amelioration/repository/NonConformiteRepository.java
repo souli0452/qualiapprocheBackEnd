@@ -43,10 +43,16 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findAllByStatusAndStructureSoumissionId(Status status, String structureSoumissionId, Pageable pageable);
 
+        /** Le plus grand rang déjà émis : point de départ d'une série créée après coup. */
         @Query("SELECT MAX(CAST(SUBSTRING(n.numeroReference, LENGTH(n.numeroReference) - 4) AS integer)) " +
                         "FROM NonConformite n WHERE n.structureSoumissionId = :structureSoumissionId " +
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
         Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
+
+        boolean existsByStructureSoumissionIdAndNumeroReference(String structureSoumissionId, String numeroReference);
+
+        /** Le dossier déjà ouvert pour cet écart d'origine, s'il l'a été : voir NonConformite.cleOrigine. */
+        java.util.Optional<NonConformite> findByCleOrigine(String cleOrigine);
 
         @Query(value = "SELECT a.origine_service_libelle_court, COUNT(*) as count " +
                         "FROM quali_nc a " +
@@ -167,6 +173,32 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         + "OR n.origineId = :structureId "
                         + "OR n.createdById = :userId OR n.userImputId = :userId")
         Page<NonConformite> findVisiblesPar(@Param("structureId") String structureId,
+                        @Param("userId") String userId, Pageable pageable);
+
+        /**
+         * Les non-conformités d'un état, bornées comme {@link #findVisiblesPar}.
+         *
+         * <p>La liste par état rendait tous les dossiers de toutes les structures : l'état étant
+         * une énumération, il suffisait de la parcourir pour vider le module.</p>
+         */
+        @Query("SELECT n FROM NonConformite n WHERE n.etatTraitement = :etat AND ("
+                        + "n.structureSoumissionId = :structureId OR n.origineId = :structureId "
+                        + "OR n.createdById = :userId OR n.userImputId = :userId)")
+        Page<NonConformite> findVisiblesParEtat(@Param("etat") Etat etat,
+                        @Param("structureId") String structureId,
+                        @Param("userId") String userId, Pageable pageable);
+
+        /**
+         * Les non-conformités d'un niveau de gravité, bornées comme {@link #findVisiblesPar}.
+         *
+         * <p>Les identifiants de niveau se lisent dans le paramétrage : sans cette borne, la
+         * liste par niveau rendait elle aussi les dossiers de toutes les structures.</p>
+         */
+        @Query("SELECT n FROM NonConformite n WHERE n.niveauNonConformiteId = :niveauId AND ("
+                        + "n.structureSoumissionId = :structureId OR n.origineId = :structureId "
+                        + "OR n.createdById = :userId OR n.userImputId = :userId)")
+        Page<NonConformite> findVisiblesParNiveau(@Param("niveauId") UUID niveauId,
+                        @Param("structureId") String structureId,
                         @Param("userId") String userId, Pageable pageable);
 
         Page<NonConformite> findAllByCurrentUserStructure(String structureId, Pageable pageable);

@@ -55,6 +55,18 @@ public interface WorkflowClient {
                                          @RequestParam("titulaireId") String titulaireId,
                                          @RequestParam(value = "reference", required = false) String reference);
 
+    /**
+     * Ouvre le circuit dans la structure que le dossier concerne, quand ce n'est pas celle du
+     * déclarant : une non-conformité relevée par un audit vise le processus audité, et c'est son
+     * pilote qui doit la recevoir.
+     */
+    @PostMapping("/api/v1/workflows/initiate")
+    WorkflowInstanceDto initiateWorkflowDansLaStructure(@RequestParam("resourceId") UUID resourceId,
+                                                        @RequestParam("resourceType") String resourceType,
+                                                        @RequestParam("workflowId") UUID workflowId,
+                                                        @RequestParam(value = "reference", required = false) String reference,
+                                                        @RequestParam("structureId") String structureId);
+
     @GetMapping("/api/v1/workflows/instances/{resourceId}")
     WorkflowInstanceDto getLastValidationInstance(@PathVariable("resourceId") UUID resourceId);
 

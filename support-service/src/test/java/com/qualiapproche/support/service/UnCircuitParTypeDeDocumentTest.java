@@ -68,7 +68,8 @@ class UnCircuitParTypeDeDocumentTest {
                 mock(QmsDocumentTypeService.class),
                 mock(MailService.class),
                 workflowClient,
-                mock(EtatsDuCircuitService.class));
+                mock(EtatsDuCircuitService.class),
+                mock(com.qualiapproche.support.numerotation.NumerotationDesDocuments.class));
     }
 
     private QmsDocumentType type(String code, String libelle, UUID id) {

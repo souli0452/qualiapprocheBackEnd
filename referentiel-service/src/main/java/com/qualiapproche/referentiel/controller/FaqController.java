@@ -169,7 +169,7 @@ public class FaqController {
         FichierFaqDto description = fichiers.decrire(fichierId);
         String nom = description.getNom() == null ? "piece-jointe" : description.getNom();
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, EnTeteFichier.attachement(nom))
                 .contentType(description.getType() == null ? MediaType.APPLICATION_OCTET_STREAM
                         : MediaType.parseMediaType(description.getType()))
                 .body(new InputStreamResource(fichiers.contenu(fichierId)));

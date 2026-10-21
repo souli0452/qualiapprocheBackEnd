@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
  * « Le circuit « X » s'applique aux ressources de type PRO, pas DOCUMENT », au moment le plus
  * coûteux : après le dépôt du fichier, alors que la configuration fautive datait de plusieurs
  * jours. Et l'aurait-elle franchie que la remise des notifications, qui ne sait router que ces
- * trois familles ({@code WorkflowNotificationService}), n'aurait eu aucun destinataire.</p>
+ * trois familles ({@code AdressesMessagerie.rappelsPour}), n'aurait eu aucun destinataire.</p>
  *
  * <p>Le refus est donc rendu à la configuration du circuit, là où l'erreur est commise et où
  * elle se corrige. Pour réserver un circuit aux documents d'un type donné, le circuit reste de

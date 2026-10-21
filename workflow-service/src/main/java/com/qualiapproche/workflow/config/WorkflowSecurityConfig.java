@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.config;
 
+import com.qualiapproche.common.config.MessagerieConfig;
+import com.qualiapproche.common.config.VerrouDesTachesConfig;
 import com.qualiapproche.common.config.GlobalExceptionHandler;
 import com.qualiapproche.common.config.KeycloakRoleConverter;
 import com.qualiapproche.common.config.PermissionConfig;
@@ -38,7 +40,8 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class, PermissionConfig.class})
+@Import({KeycloakRoleConverter.class, GlobalExceptionHandler.class, PermissionConfig.class, VerrouDesTachesConfig.class,
+        MessagerieConfig.class})
 public class WorkflowSecurityConfig {
 
     private final KeycloakRoleConverter keycloakRoleConverter;
@@ -52,7 +55,14 @@ public class WorkflowSecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // De l'actuator, seule la santé est publique : Eureka et la supervision
+                        // l'interrogent sans jeton. « /actuator/** » ouvrait aussi tout ce qu'une
+                        // exposition élargie par mégarde aurait publié (env, heapdump…).
+                        // La documentation OpenAPI reste ouverte, comme sur les autres services :
+                        // la passerelle l'agrège sans jeton, et c'est QUALISIRA_SWAGGER (coupé par
+                        // défaut) qui décide de son existence — coupée, ces chemins répondent 404.
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakRoleConverter)))

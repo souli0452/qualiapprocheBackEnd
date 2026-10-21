@@ -143,6 +143,34 @@ class NotificationsDeLUtilisateurTest {
                 .satisfies(l -> assertThat(l.getNombre()).isEqualTo(1));
     }
 
+    @Test
+    @DisplayName("Au-delà d'un lot du moteur, les étapes se demandent par lots et restent nommées")
+    void auDelaDUnLot_etapesDemandeesParLots() {
+        List<UUID> dossiers = new java.util.ArrayList<>();
+        for (int i = 0; i < 263; i++) {
+            dossiers.add(UUID.randomUUID());
+        }
+        when(workflowClient.ressourcesADecider("NON_CONFORMITE")).thenReturn(dossiers);
+        // Le moteur refuse plus de 200 ressources : chaque lot lui est soumis à part.
+        when(workflowClient.getWorkflowStates(org.mockito.ArgumentMatchers.anyList())).thenAnswer(appel -> {
+            List<UUID> lot = appel.getArgument(0);
+            if (lot.size() > com.qualiapproche.common.utils.LotsDuMoteur.TAILLE_MAX) {
+                throw new IllegalStateException("400 : trop de ressources");
+            }
+            Map<UUID, WorkflowStateDto> etats = new java.util.HashMap<>();
+            lot.forEach(id -> etats.put(id, etape("Analyse des causes")));
+            return etats;
+        });
+
+        List<NotificationDto> lignes = service.pourLAppelant();
+
+        // 263 non-conformités tombaient toutes sous « Sans étape nommée » : l'appel unique échouait.
+        assertThat(lignes).singleElement().satisfies(l -> {
+            assertThat(l.getTitre()).isEqualTo("Analyse des causes");
+            assertThat(l.getNombre()).isEqualTo(263);
+        });
+    }
+
     /** Les dossiers que l'appelant a ouverts, tels que le moteur les rend. */
     private void mesDossiers(AvancementCircuit... avancements) {
         Map<UUID, AvancementCircuit> miens = new java.util.LinkedHashMap<>();

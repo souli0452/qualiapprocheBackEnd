@@ -58,7 +58,15 @@ public class NiveauNonConformiteServiceImpl implements NiveauNonConformiteServic
     @Override
     public void delete(UUID id) {
         NiveauNonConformite niveauNonConformite = niveauNonConformiteRepository.getReferenceById(id);
-        niveauNonConformiteRepository.delete(niveauNonConformite);
+        // La base refuse désormais de supprimer ce qu'une non-conformité désigne encore (V7) :
+        // on le dit, plutôt que de laisser le refus sortir en erreur interne au commit.
+        try {
+            niveauNonConformiteRepository.delete(niveauNonConformite);
+            niveauNonConformiteRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce niveau de non-conformité est encore employé(e) par des non-conformités : il ne peut pas être supprimé.");
+        }
     }
 
     @Override

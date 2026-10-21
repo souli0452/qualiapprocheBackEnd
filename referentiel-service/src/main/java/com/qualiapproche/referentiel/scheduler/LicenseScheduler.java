@@ -1,9 +1,10 @@
 package com.qualiapproche.referentiel.scheduler;
 
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.enumeration.TypeStructure;
-import com.qualiapproche.common.service.SendMailService;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.referentiel.client.UserClient;
 import com.qualiapproche.referentiel.entities.Structure;
 import com.qualiapproche.referentiel.repository.StructureRepository;
@@ -48,7 +49,7 @@ public class LicenseScheduler {
     private final LicenceInstalleeService licenceInstalleeService;
     private final StructureRepository structureRepository;
     private final UserClient userClient;
-    private final SendMailService sendMailService;
+    private final Courriels courriels;
 
     /** Derniers jours, où le rappel devient quotidien. */
     @Value("${qualisira.licence.preavis-jours:3}")
@@ -59,6 +60,7 @@ public class LicenseScheduler {
     private String jalons;
 
     @Scheduled(cron = "0 0 8 * * *") // Chaque matin, pour être lu dans la journée
+    @SchedulerLock(name = "referentiel-echeance-de-licence", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void checkLicenseExpirations() {
         EtatLicenceDto licence = licenceInstalleeService.etat();
 
@@ -129,13 +131,10 @@ public class LicenseScheduler {
                 + "l'installation ».");
 
         for (String adresse : destinataires()) {
-            try {
-                sendMailService.sendMail(adresse, objet, message.toString(), false);
-                log.info("Échéance de licence ({} jour(s), fin le {}) signalée à {}.",
-                        restants, fin, adresse);
-            } catch (Exception e) {
-                log.error("Échec de l'envoi de l'alerte d'échéance de licence à {}", adresse, e);
-            }
+            // Déposée dans la boîte d'envoi : un serveur de messagerie en panne ce matin-là ne fait plus
+            // disparaître l'alerte, elle partira à son retour.
+            courriels.envoyerTexte(adresse, objet, message.toString(), "echeance-licence");
+            log.info("Échéance de licence ({} jour(s), fin le {}) signalée à {}.", restants, fin, adresse);
         }
     }
 

@@ -57,6 +57,14 @@ public class EfficaciteServiceImpl implements EfficaciteService {
     @Override
     public void delete(UUID id) {
         Efficacite efficacite = efficaciteRepository.getReferenceById(id);
-        efficaciteRepository.delete(efficacite);
+        // La base refuse désormais de supprimer ce qu'une non-conformité désigne encore (V7) :
+        // on le dit, plutôt que de laisser le refus sortir en erreur interne au commit.
+        try {
+            efficaciteRepository.delete(efficacite);
+            efficaciteRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce niveau d'efficacité est encore employé(e) par des non-conformités : il ne peut pas être supprimé.");
+        }
     }
 }

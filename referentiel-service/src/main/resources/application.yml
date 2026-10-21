@@ -3,10 +3,23 @@ server:
 spring:
   application:
     name: referentiel-service
+  servlet:
+    # Pièces jointes de la FAQ : ReglesDePieceJointe admet 25 Mo par fichier ; le défaut de Spring
+    # (1 Mo) les refusait avant même la règle.
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 100MB
   datasource:
     url: ${DB_URL_REFERENTIEL:jdbc:postgresql://localhost:5432/bd_quali_sira_referentiel}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD}
+    # Sous spring.datasource, où Hikari la lit : écrite sous spring.jpa, elle était ignorée, et chaque
+    # service ouvrait 10 connexions — 70 pour la pile, contre max_connections = 100 sur PostgreSQL.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: 2
+      connection-timeout: 10000
+      max-lifetime: 1800000
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -32,9 +45,6 @@ spring:
     # valeurs — donc des données de dossiers dans les journaux, et un volume qui noie les
     # lignes qui comptent. Pour déboguer en local : SPRING_JPA_SHOW_SQL=true.
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
-    hikari:
-      maximum-pool-size: 5
-      minimum-idle: 2
   security:
     oauth2:
       resourceserver:
@@ -82,6 +92,15 @@ spring:
   pj:
     directory: ${DOCS_PJ_DIRECTORY:${user.home}/PIECES_JOINTES}
 
+
+# Serveur de fichiers des pièces jointes de la FAQ. Le bloc manquait : sans lui, lib-storage ne
+# câblait aucun dépôt et toute pièce jointe répondait 503. Facultatif ici : sans les clés, le
+# service démarre et seul le dépôt d'une pièce est refusé.
+minio:
+  url: ${MINIO_URL:https://s3.horeb.tech}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET_NAME:quali-sira}
 
 eureka:
   client:
@@ -137,3 +156,55 @@ qualisira:
     # permet de le corriger sans reconstruire le produit ni toucher à la base. Si ni l'un ni
     # l'autre n'est renseigné, aucun contrôle du destinataire n'est exercé, et le journal le dit.
     partenaire-code: ${QUALISIRA_PARTENAIRE_CODE:}
+
+---
+# Appels entre services (Feign) : des délais bornés. Il n'y en avait aucun — un service lent ou
+# figé retenait sans fin les fils de tous ceux qui l'appelaient, jusqu'à les bloquer à leur tour.
+# 2 s pour joindre, 10 s pour répondre : assez pour un rendu PDF ou une page de référentiel, pas
+# pour immobiliser un écran.
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
+            read-timeout: ${FEIGN_READ_TIMEOUT:10000}
+
+---
+# Messagerie entre services (ActiveMQ Artemis) : tout ce que le service émet est inscrit dans sa
+# boîte d'envoi (message_sortant) puis publié sur le courtier ; le relais, sous verrou ShedLock,
+# reprend ce qui n'a pas pu partir. En développement : docker-compose.artemis.yml.
+spring:
+  artemis:
+    mode: native
+    broker-url: ${ARTEMIS_URL:tcp://localhost:61617}
+    user: ${ARTEMIS_USER:qualisira}
+    password: ${ARTEMIS_PASSWORD}
+qualisira:
+  messagerie:
+    relais-ms: ${MESSAGERIE_RELAIS_MS:10000}          # délai entre deux passages du relais
+    premier-relais-ms: 15000                           # après le démarrage
+    lot: ${MESSAGERIE_LOT:100}                         # messages publiés par passage
+    conservation-jours: ${MESSAGERIE_CONSERVATION_JOURS:30}   # puis effacés une fois publiés
+    purge-cron: "0 15 3 * * *"
+    concurrence: ${MESSAGERIE_CONCURRENCE:1-4}         # consommateurs par file
+
+---
+# Surface d'exposition : la sonde de santé, et elle seule, sans détail. Les détails nommaient la
+# base, le courtier et l'espace disque — de quoi cartographier l'installation sans s'authentifier.
+# La documentation OpenAPI décrit chaque point d'entrée et ses paramètres : coupée par défaut, elle
+# se rallume en développement par QUALISIRA_SWAGGER=true (la passerelle l'agrège alors).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+springdoc:
+  api-docs:
+    enabled: ${QUALISIRA_SWAGGER:false}
+  swagger-ui:
+    enabled: ${QUALISIRA_SWAGGER:false}

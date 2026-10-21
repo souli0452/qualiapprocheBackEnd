@@ -108,6 +108,23 @@ class AuthCookieFilterTest {
     }
 
     @Test
+    @DisplayName("Avec le secret partagé, les permissions partent signées pour ce jeton ; une signature du client est retirée")
+    void permissions_signees_et_signature_du_client_retiree() {
+        AuthCookieFilter signe = new AuthCookieFilter(
+                WebClient.builder().exchangeFunction(requete -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                        .body(REPONSE_PERMISSIONS).build())),
+                new UserPermissionsCache(60), "secret-de-test");
+        filtrer(signe, MockServerHttpRequest.get("/workflow-service/api/v1/workflows")
+                .cookie(new HttpCookie("access_token", JETON))
+                .header("X-User-Permissions-Signature", "forgee")
+                .build());
+
+        assertThat(requeteAval.get().getHeaders().get("X-User-Permissions-Signature"))
+                .containsExactly(SignatureDesPermissions.signer("secret-de-test", JETON, "workflow-write,workflow-read"));
+    }
+
+    @Test
     @DisplayName("Sans cookie, aucune permission n'est posée ni même résolue")
     void sansCookie_aucuneResolution() {
         filtrer(filtre(60), MockServerHttpRequest.get("/workflow-service/api/v1/workflows")

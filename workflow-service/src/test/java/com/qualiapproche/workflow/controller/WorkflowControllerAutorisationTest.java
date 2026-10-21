@@ -233,7 +233,7 @@ class WorkflowControllerAutorisationTest {
         assertNonBloqueParLaSecurite(() -> controller.getAllWorkflows());
         assertNonBloqueParLaSecurite(() -> controller.getWorkflowState(UUID.randomUUID()));
         assertNonBloqueParLaSecurite(() -> controller.getLastValidationInstance(UUID.randomUUID()));
-        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId, null, null));
+        assertNonBloqueParLaSecurite(() -> controller.initiateWorkflow(UUID.randomUUID(), "DOCUMENT", workflowId, null, null, null));
         assertNonBloqueParLaSecurite(() -> controller.validateStep(UUID.randomUUID(), null));
         assertNonBloqueParLaSecurite(() -> controller.rejectStep(UUID.randomUUID(), null));
     }

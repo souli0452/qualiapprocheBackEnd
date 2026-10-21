@@ -24,5 +24,6 @@ public enum SourceNotification {
     DOCUMENTAIRE,
 
     /** Licence de l'installation. */
-    LICENCE
+    LICENCE,
+    EVALUATION
 }

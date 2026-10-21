@@ -1,20 +1,20 @@
 package com.qualiapproche.workflow.event;
 
 import com.qualiapproche.common.dto.DestinataireDto;
+import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.workflow.model.EmailTemplate;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
 import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import com.qualiapproche.workflow.repository.WorkflowValidationInstanceRepository;
+import com.qualiapproche.workflow.service.CopieAuResponsableQualite;
 import com.qualiapproche.workflow.service.DestinatairesEtapeService;
-import com.qualiapproche.workflow.model.WorkflowNotification;
-import com.qualiapproche.workflow.service.WorkflowNotificationService;
+import com.qualiapproche.workflow.service.RenduDesCourriels;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -28,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.eq;
@@ -46,17 +47,20 @@ import org.springframework.scheduling.annotation.Async;
  * n'échouait pas. Aucune notification d'étape n'a jamais atteint quiconque, et rien ne le
  * signalait dans les journaux.</p>
  *
- * <p>Le courriel n'est plus envoyé ici : il est <b>enregistré</b> au registre des notifications,
- * qui le remet et le rejoue en cas d'échec. Ce que ces tests vérifient reste le même — la bonne
- * adresse, le bon contenu, et l'indépendance des destinataires entre eux — mais au point où la
- * remise est confiée, non exécutée.</p>
+ * <p>Le courriel n'est plus envoyé ici : il est rendu, puis <b>déposé</b> dans la boîte d'envoi
+ * ({@link Courriels}), d'où le courtier le porte jusqu'à {@code RemiseDesCourriels}, qui le relivre
+ * tant qu'il n'est pas parti. Ce que ces tests vérifient reste le même — la bonne adresse, le bon
+ * contenu, et l'indépendance des destinataires entre eux — mais au point où la remise est confiée,
+ * non exécutée. Les variables du gabarit se lisent sur l'appel au rendu.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class NotificateurEtapeParEmailTest {
 
     @Mock private EmailTemplateRepository emailTemplateRepository;
-    @Mock private WorkflowNotificationService notificationService;
+    @Mock private Courriels courriels;
+    @Mock private RenduDesCourriels rendu;
+    @Mock private CopieAuResponsableQualite copieAuResponsableQualite;
     @Mock private DestinatairesEtapeService destinatairesEtapeService;
     // Requis depuis que chaque courriel lit la référence du dossier sur l'instance : sans ce mock,
     // l'injection laisse le champ nul et la variable {numeroNc} fait échouer tout enregistrement.
@@ -82,8 +86,8 @@ class NotificateurEtapeParEmailTest {
         // les désignations nominatives.
         DestinatairesDeLEtape destinatairesDeLEtape = new DestinatairesDeLEtape(
                 destinatairesEtapeService, validationInstanceRepository, structureUtilisateurService);
-        notificateur = new NotificateurEtapeParEmail(emailTemplateRepository, notificationService,
-                destinatairesDeLEtape, destinatairesEtapeService, lienVersLeDossier,
+        notificateur = new NotificateurEtapeParEmail(emailTemplateRepository, courriels, rendu,
+                copieAuResponsableQualite, destinatairesDeLEtape, destinatairesEtapeService, lienVersLeDossier,
                 validationInstanceRepository, structureUtilisateurService);
 
         etape = new WorkflowStep();
@@ -98,6 +102,7 @@ class NotificateurEtapeParEmailTest {
                         .subject("Un dossier vous attend")
                         .body("<p>Bonjour {{user}}, le dossier {{entityId}} est à l'étape {{etatApres}}.</p>")
                         .build()));
+        when(rendu.corps(anyString(), anyMap())).thenReturn("<p>corps rendu</p>");
     }
 
     private TransitionFranchieEvent evenement() {
@@ -116,6 +121,19 @@ class NotificateurEtapeParEmailTest {
                 .email(email).nomComplet(nom).build();
     }
 
+    /** Les variables remises au rendu du corps, pour le seul courriel composé. */
+    private Map<String, String> variablesDuGabarit() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
+        verify(rendu).corps(anyString(), aVariables.capture());
+        return aVariables.getValue();
+    }
+
+    private void aucunCourrielDepose() {
+        verify(courriels, never()).envoyer(nullable(String.class), nullable(String.class),
+                nullable(String.class), nullable(String.class), nullable(String.class));
+    }
+
     @Test
     @DisplayName("Chaque responsable de l'étape reçoit le courriel à sa propre adresse")
     void responsables_recoiventLeCourriel() {
@@ -125,9 +143,8 @@ class NotificateurEtapeParEmailTest {
         notificateur.notifier(etape, evenement());
 
         ArgumentCaptor<String> aAdresses = ArgumentCaptor.forClass(String.class);
-        verify(notificationService, times(2)).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                aAdresses.capture(), anyString(), anyString(), anyMap());
+        verify(courriels, times(2)).envoyer(aAdresses.capture(), nullable(String.class),
+                anyString(), anyString(), eq("etape-NOTIF_ETAPE"));
 
         assertThat(aAdresses.getAllValues())
                 .containsExactly("claire@exemple.fr", "sam@exemple.fr")
@@ -142,14 +159,10 @@ class NotificateurEtapeParEmailTest {
 
         notificateur.notifier(etape, evenement());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), aVariables.capture());
-
-        assertThat(aVariables.getValue()).containsEntry("user", "Claire Martin");
-        assertThat(aVariables.getValue()).containsEntry("etatApres", "Vérification");
+        Map<String, String> aVariables = variablesDuGabarit();
+        assertThat(aVariables).containsEntry("user", "Claire Martin");
+        assertThat(aVariables).containsEntry("fullName", "Claire Martin");
+        assertThat(aVariables).containsEntry("etatApres", "Vérification");
     }
 
     @Test
@@ -159,47 +172,70 @@ class NotificateurEtapeParEmailTest {
 
         notificateur.notifier(etape, evenement());
 
-        verify(notificationService, never()).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), anyMap());
+        aucunCourrielDepose();
     }
 
     @Test
-    @DisplayName("L'échec d'un enregistrement ne prive pas les autres destinataires")
+    @DisplayName("L'échec d'un dépôt ne prive pas les autres destinataires")
     void echecDunEnvoi_lesAutresSontServis() {
         destinataires(destinataire("casse@exemple.fr", "Boîte Pleine"),
                 destinataire("sam@exemple.fr", "Sam Diop"));
-        doThrow(new IllegalStateException("registre indisponible"))
-                .when(notificationService).enregistrerCourriel(
-                        nullable(String.class), nullable(String.class),
-                        eq("casse@exemple.fr"), anyString(), anyString(), anyMap());
+        doThrow(new IllegalStateException("boîte d'envoi indisponible"))
+                .when(courriels).envoyer(eq("casse@exemple.fr"), nullable(String.class),
+                        anyString(), anyString(), anyString());
 
         notificateur.notifier(etape, evenement());
 
-        verify(notificationService).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                eq("sam@exemple.fr"), anyString(), anyString(), anyMap());
+        verify(courriels).envoyer(eq("sam@exemple.fr"), nullable(String.class),
+                anyString(), anyString(), anyString());
     }
 
     @Test
-    @DisplayName("La remise est demandée au registre, qui la rejouera si elle échoue")
-    void remiseConfieeAuRegistre() {
+    @DisplayName("Le courriel déposé porte l'objet et le corps rendus, et son origine d'étape")
+    void courrielDepose_renduEtOrigine() {
         destinataires(destinataire("claire@exemple.fr", "Claire Martin"));
-        WorkflowNotification enregistree = WorkflowNotification.builder()
-                .resourceId("42").resourceType("DOCUMENT").payload("{}")
-                .statut(WorkflowNotification.NotificationStatut.A_REMETTRE)
-                .build();
-        enregistree.setId(UUID.randomUUID());
-        when(notificationService.enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), anyMap()))
-                .thenReturn(enregistree);
+        when(emailTemplateRepository.findByCode("NOTIF_ETAPE")).thenReturn(Optional.of(
+                EmailTemplate.builder().code("NOTIF_ETAPE")
+                        .subject("Étape {etape} atteinte")
+                        .body("<p>Bonjour {fullName}</p>")
+                        .build()));
+        when(rendu.corps(eq("<p>Bonjour {fullName}</p>"), anyMap())).thenReturn("<p>Bonjour Claire Martin</p>");
 
         notificateur.notifier(etape, evenement());
 
-        // Remise tentée aussitôt : sans cela, le courriel attendrait le prochain passage de
-        // l'ordonnanceur alors que le destinataire a un dossier à traiter maintenant.
-        verify(notificationService).remettre(enregistree.getId());
+        // Rendu ici, puis déposé : le consommateur n'a plus qu'à l'envoyer. L'origine nomme le
+        // gabarit, ce qui suffit à retrouver d'où vient un courriel resté au rebut.
+        verify(courriels).envoyer("claire@exemple.fr", null, "Étape Vérification atteinte",
+                "<p>Bonjour Claire Martin</p>", "etape-NOTIF_ETAPE");
+    }
+
+    @Test
+    @DisplayName("Sur une non-conformité, la copie au responsable qualité accompagne le courriel déposé")
+    void nonConformite_copieAuResponsableQualite() {
+        destinataires(destinataire("claire@exemple.fr", "Claire Martin"));
+        when(copieAuResponsableQualite.pour("NON_CONFORMITE")).thenReturn("rq@exemple.fr");
+        TransitionFranchieEvent event = evenement();
+        event.setResourceType("NON_CONFORMITE");
+
+        notificateur.notifier(etape, event);
+
+        // La règle de copie est décidée ici, au seul point d'émission des courriels d'étape : le
+        // consommateur ne connaît plus le type du dossier.
+        verify(courriels).envoyer(eq("claire@exemple.fr"), eq("rq@exemple.fr"),
+                anyString(), anyString(), eq("etape-NOTIF_ETAPE"));
+    }
+
+    @Test
+    @DisplayName("Sur un document, le courriel déposé ne porte aucune copie")
+    void document_sansCopie() {
+        destinataires(destinataire("claire@exemple.fr", "Claire Martin"));
+        TransitionFranchieEvent event = evenement();
+        event.setResourceType("DOCUMENT");
+
+        notificateur.notifier(etape, event);
+
+        verify(courriels).envoyer(eq("claire@exemple.fr"), isNull(),
+                anyString(), anyString(), anyString());
     }
 
     @Test
@@ -311,13 +347,7 @@ class NotificateurEtapeParEmailTest {
 
         notificateur.notifier(etape, evenement());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), aVariables.capture());
-
-        assertThat(aVariables.getValue()).containsEntry("auteur", "Moussa Kanté");
+        assertThat(variablesDuGabarit()).containsEntry("auteur", "Moussa Kanté");
     }
 
     @Test
@@ -328,14 +358,8 @@ class NotificateurEtapeParEmailTest {
 
         notificateur.notifier(etape, evenement());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, String>> aVariables = ArgumentCaptor.forClass(Map.class);
-        verify(notificationService).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), aVariables.capture());
-
         // « soumise par 8f3c-… » ne dit rien à personne ; la phrase se lit encore sans le nom.
-        assertThat(aVariables.getValue()).containsEntry("auteur", "");
+        assertThat(variablesDuGabarit()).containsEntry("auteur", "");
     }
 
     @Test
@@ -346,9 +370,7 @@ class NotificateurEtapeParEmailTest {
         notificateur.notifier(etape, evenement());
 
         verify(destinatairesEtapeService, never()).destinatairesDuRole(anyString(), any());
-        verify(notificationService, never()).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), anyMap());
+        aucunCourrielDepose();
     }
 
     @Test
@@ -359,9 +381,7 @@ class NotificateurEtapeParEmailTest {
 
         notificateur.notifier(etape, evenement());
 
-        verify(notificationService, never()).enregistrerCourriel(
-                nullable(String.class), nullable(String.class),
-                anyString(), anyString(), anyString(), anyMap());
+        aucunCourrielDepose();
     }
 
     @Test

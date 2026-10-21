@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.controller;
 
+import com.qualiapproche.amelioration.service.impl.AccesAuxDossiers;
 import com.qualiapproche.amelioration.service.impl.PlanActionFichierService;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.PieceJointeDTO;
@@ -43,6 +44,7 @@ import static com.qualiapproche.common.utils.ApiUrls.PLAN_ACTION_ROOT_URL;
 public class PlanActionFichierController {
 
     private final PlanActionFichierService fichierService;
+    private final AccesAuxDossiers acces;
 
     @PreAuthorize("@perm.canCreate(this)")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -50,6 +52,8 @@ public class PlanActionFichierController {
     public ResponseEntity<PieceJointeDTO> deposer(
             @PathVariable("planId") UUID planId,
             @RequestPart("file") MultipartFile file) {
+        // Le justificatif suit le dossier qui motive le plan : même borne que sa fiche.
+        acces.exigerLePlan(planId);
         return ResponseEntity.ok(fichierService.deposer(planId, file));
     }
 
@@ -64,6 +68,7 @@ public class PlanActionFichierController {
     @GetMapping
     @Operation(summary = "Lister les justificatifs d'un plan d'action")
     public ResponseEntity<ApiResponse<List<PieceJointeDTO>>> pieces(@PathVariable("planId") UUID planId) {
+        acces.exigerLePlan(planId);
         return ResponseEntity.ok(ApiResponse.success(fichierService.pieces(planId)));
     }
 }

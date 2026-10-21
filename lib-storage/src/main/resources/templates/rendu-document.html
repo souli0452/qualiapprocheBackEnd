@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${doc.titre()}">Document d'audit</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 18mm 16mm 18mm 16mm;
+            @bottom-left {
+                content: element(mentions);
+            }
+            @bottom-right {
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: Helvetica, Arial, sans-serif;
+                font-size: 7.5pt;
+                color: #666666;
+            }
+        }
+        .mentions { position: running(mentions); font-size: 7.5pt; color: #666666; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #1f2933; }
+        .entete { text-align: center; border-bottom: 2px solid #1f4e79; padding-bottom: 6pt; margin-bottom: 12pt; }
+        .titre { font-size: 16pt; font-weight: bold; color: #1f4e79; letter-spacing: 1pt; }
+        .sous-titre { font-size: 11pt; margin-top: 3pt; }
+        .reference { font-size: 8pt; color: #666666; margin-top: 2pt; }
+        h2 { font-size: 10.5pt; color: #1f4e79; margin: 12pt 0 4pt 0; border-bottom: 1px solid #c8d3df; padding-bottom: 2pt;
+             page-break-after: avoid; -fs-page-break-min-height: 3cm; }
+        /* Un titre ne reste pas seul en bas de page : il suit son contenu (recette Audit du 17 oct. 2026, obs. 24). */
+        tr { page-break-inside: avoid; }
+        p { margin: 2pt 0 4pt 0; white-space: pre-wrap; }
+        table { width: 100%; border-collapse: collapse; margin-top: 4pt; }
+        th { background-color: #e8eef5; text-align: left; font-size: 8.5pt; padding: 3pt 4pt; border: 1px solid #c8d3df; }
+        td { font-size: 8.5pt; padding: 3pt 4pt; border: 1px solid #c8d3df; vertical-align: top; }
+    </style>
+</head>
+<body>
+<div class="mentions" th:if="${doc.mentions() != null}" th:text="${doc.mentions()}">Version 1 · édité le 01/01/2026 · Confidentiel</div>
+<div class="entete">
+    <div class="titre" th:text="${doc.titre()}">RAPPORT D'AUDIT</div>
+    <div class="sous-titre" th:text="${doc.sousTitre()}">AUD-2026-012 — Gestion documentaire</div>
+    <div class="reference" th:text="'Réf. ' + ${doc.reference()}">Réf. ABMAQ-RAP-2026-010</div>
+</div>
+<div th:each="section, etat : ${doc.sections()}">
+    <h2 th:text="${etat.count} + '. ' + ${section.titre()}">1. Contexte</h2>
+    <p th:each="paragraphe : ${section.paragraphes()}" th:text="${paragraphe}">Texte</p>
+    <table th:if="${section.tableau() != null}">
+        <thead>
+        <tr><th th:each="entete : ${section.tableau().entetes()}" th:text="${entete}">Colonne</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="ligne : ${section.tableau().lignes()}">
+            <td th:each="cellule : ${ligne}" th:text="${cellule}">Valeur</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

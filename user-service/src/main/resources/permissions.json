@@ -593,5 +593,30 @@
     "label": "Publier une réponse de la FAQ, et la retirer de la publication",
     "value": "faq-publish",
     "module": "Configuration"
+  },
+  {
+    "label": "Consulter les audits, leur plan et leurs constats publiés",
+    "value": "audit-read",
+    "module": "Audit"
+  },
+  {
+    "label": "Planifier les audits : programme, équipe, plan, checklists",
+    "value": "audit-write",
+    "module": "Audit"
+  },
+  {
+    "label": "Conduire un audit : saisir les constats, noter le référentiel RQAPBF",
+    "value": "audit-conduct",
+    "module": "Audit"
+  },
+  {
+    "label": "Valider le programme et les constats, évaluer les auditeurs, clôturer un audit",
+    "value": "audit-validate",
+    "module": "Audit"
+  },
+  {
+    "label": "Paramétrer le module d'audit : types, sites, natures de constat, référentiels",
+    "value": "audit-config",
+    "module": "Audit"
   }
 ]

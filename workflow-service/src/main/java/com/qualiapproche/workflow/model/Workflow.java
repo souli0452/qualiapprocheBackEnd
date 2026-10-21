@@ -57,7 +57,7 @@ public class Workflow extends AuditEntity {
      *
      * <p>La famille n'est pas subdivisée pour autant, et c'est délibéré : {@code resourceType} est
      * l'aiguillage de retour vers le module métier — la remise des notifications
-     * ({@code WorkflowNotificationService}) et la liste « à traiter » ne connaissent que DOCUMENT,
+     * ({@code AdressesMessagerie.rappelsPour}) et la liste « à traiter » ne connaissent que DOCUMENT,
      * DEMANDE_DOCUMENT, NON_CONFORMITE et PLAN_ACTION. Une famille {@code TYPE_DOCUMENT} aurait
      * rendu ces dossiers muets et invisibles. La réservation est donc un second axe, orthogonal à
      * la famille.</p>

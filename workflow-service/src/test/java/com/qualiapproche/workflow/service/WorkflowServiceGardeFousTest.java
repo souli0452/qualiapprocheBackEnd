@@ -200,6 +200,25 @@ class WorkflowServiceGardeFousTest {
     // ------------------------------------------------------------------ ouverture
 
     @Test
+    @DisplayName("Une structure désignée à l'ouverture situe le dossier, sans changer d'où il part")
+    void ouverture_dansUneStructureDesignee_situeLeDossierLa() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(circuit(true, "NON_CONFORMITE", 2)));
+        when(validationInstanceRepository
+                .findTopByResourceIdAndStatusOrderByStartedAtDesc(resourceId.toString(), ValidationStatus.EN_COURS))
+                .thenReturn(Optional.empty());
+        when(validationInstanceRepository.save(any())).thenAnswer(appel -> appel.getArgument(0));
+        org.mockito.ArgumentCaptor<WorkflowValidationInstance> enregistree =
+                org.mockito.ArgumentCaptor.forClass(WorkflowValidationInstance.class);
+
+        service.initiateWorkflow(resourceId, "NON_CONFORMITE", workflowId, null, "NFQT-DQ-2026-00001", "structure-auditee");
+
+        verify(validationInstanceRepository, org.mockito.Mockito.atLeastOnce()).save(enregistree.capture());
+        assertThat(enregistree.getValue().getStructureId()).isEqualTo("structure-auditee");
+        assertThat(enregistree.getValue().getStructureEmettriceId())
+                .as("la structure émettrice reste celle du déclarant").isNotEqualTo("structure-auditee");
+    }
+
+    @Test
     @DisplayName("Ouvrir deux fois le même circuit rend l'instance déjà en cours, sans la dupliquer")
     void ouvertureRejouee_memeCircuit_rendLInstanceExistante() {
         when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(circuit(true, "DOCUMENT", 2)));

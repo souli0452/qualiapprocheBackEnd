@@ -44,6 +44,7 @@ class FicheClotureNonConformiteTest {
     private WorkflowClient workflowClient;
     private ReglagesOrganisation reglages;
     private FicheClotureNonConformiteService service;
+    private NonConformiteService nonConformiteService;
 
     @BeforeEach
     void setUp() {
@@ -51,12 +52,16 @@ class FicheClotureNonConformiteTest {
         planActionRepository = mock(PlanActionRepository.class);
         workflowClient = mock(WorkflowClient.class);
         reglages = mock(ReglagesOrganisation.class);
+        // Ces tests portent sur le contenu de la fiche : l'appelant peut consulter le dossier.
+        nonConformiteService = mock(NonConformiteService.class);
+        lenient().when(nonConformiteService.peutConsulter(org.mockito.ArgumentMatchers.any())).thenReturn(true);
         // Le moteur de gabarits réel, celui-là même que le service emploie en production : le test
         // vaut aussi preuve que le gabarit se rend sans erreur.
         service = new FicheClotureNonConformiteService(nonConformiteRepository, planActionRepository,
                 workflowClient, mock(com.qualiapproche.amelioration.client.UtilisateurClient.class),
                 reglages, ThymeleafConfig.getTemplateEngine(),
-                "https://qualisira.exemple.org/non-conformite/suivi?ncId={id}");
+                "https://qualisira.exemple.org/non-conformite/suivi?ncId={id}",
+                nonConformiteService, new com.qualiapproche.amelioration.utils.LogoDeLOrganisation(false));
 
         // Les plans sont rattachés par leur colonne nonConformeId, qui fait foi — la collection de
         // la fiche (table de jointure) reste vide pour les plans créés par le chemin normal. La
@@ -196,6 +201,20 @@ class FicheClotureNonConformiteTest {
 
         assertThat(texte).containsIgnoringCase("Mariam Sankara");
         assertThat(texte).doesNotContain("null");
+    }
+
+    @Test
+    @DisplayName("Le dossier d'une autre structure, non consultable par l'appelant, est introuvable")
+    void dossierNonConsultable_introuvable() {
+        when(nonConformiteRepository.findById(DOSSIER)).thenReturn(Optional.of(dossierCloture()));
+        when(nonConformiteService.peutConsulter(org.mockito.ArgumentMatchers.any())).thenReturn(false);
+
+        // La fiche imprime le dossier entier, visas compris : elle ne s'ouvre pas plus largement
+        // que la fiche à l'écran — et répond comme pour un identifiant inconnu.
+        assertThatThrownBy(() -> service.editer(DOSSIER))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404");
+        org.mockito.Mockito.verifyNoInteractions(workflowClient);
     }
 
     @Test

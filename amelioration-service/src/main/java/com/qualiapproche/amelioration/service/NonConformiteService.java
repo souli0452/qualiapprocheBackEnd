@@ -20,6 +20,15 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
     NonConformiteDto createNonConformite(NonConformiteDto dto) throws IOException;
 
     /**
+     * Crée une non-conformité dont le circuit s'ouvre dans {@code structureDuDossier} plutôt que
+     * dans la structure du déclarant. Nulle, c'est la création ordinaire.
+     */
+    NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier) throws IOException;
+
+    /** Comme {@link #createNonConformite(NonConformiteDto, String)}, pour un dossier ouvert par un écart d'audit. */
+    NonConformiteDto createNonConformite(NonConformiteDto dto, String structureDuDossier, String cleOrigine) throws IOException;
+
+    /**
      * Soumet au pilote du processus une non-conformité enregistrée, sans attendre une seconde visite
      * de son auteur.
      *
@@ -66,6 +75,14 @@ public interface NonConformiteService extends GenericService<NonConformiteDto> {
     Map<String, Map<String, Map<String, Long>>> getStatsDetailleesParAnnee(int annee);
 
     NonConformiteDto getByNumeroRef(String numeroRef);
+
+    /**
+     * L'appelant peut-il lire ce dossier ?
+     *
+     * <p>Une seule règle pour tout ce qui sert un dossier désigné par son identifiant — fiche,
+     * fiche de clôture, état imprimé : deux règles auraient fini par ne plus dire la même chose.</p>
+     */
+    boolean peutConsulter(com.qualiapproche.amelioration.entities.NonConformite nc);
 
     Map<String, Map<String, Long>> getStatsMensuellesParService(int annee, String origineServiceId);
 

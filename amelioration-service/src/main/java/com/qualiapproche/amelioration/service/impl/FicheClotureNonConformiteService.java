@@ -12,6 +12,8 @@ import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.PlanActionRepository;
+import com.qualiapproche.amelioration.service.NonConformiteService;
+import com.qualiapproche.amelioration.utils.LogoDeLOrganisation;
 import com.qualiapproche.amelioration.utils.ReglagesOrganisation;
 import com.qualiapproche.common.dto.ValidationHistoryDto;
 import com.qualiapproche.common.enumeration.Circuit;
@@ -28,9 +30,6 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
@@ -59,9 +58,6 @@ public class FicheClotureNonConformiteService {
     private static final DateTimeFormatter DATE_HEURE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH'h'mm");
     private static final String GABARIT = "ficheClotureNc.html";
 
-    /** Délai au-delà duquel le logo est abandonné : la fiche ne doit pas attendre une image. */
-    private static final int DELAI_LOGO_MS = 5000;
-
     private final NonConformiteRepository nonConformiteRepository;
     private final PlanActionRepository planActionRepository;
     private final WorkflowClient workflowClient;
@@ -69,6 +65,8 @@ public class FicheClotureNonConformiteService {
     private final ReglagesOrganisation reglages;
     private final TemplateEngine templateEngine;
     private final String motifLienDossier;
+    private final NonConformiteService nonConformiteService;
+    private final LogoDeLOrganisation logo;
 
     public FicheClotureNonConformiteService(
             NonConformiteRepository nonConformiteRepository,
@@ -77,7 +75,9 @@ public class FicheClotureNonConformiteService {
             UtilisateurClient utilisateurClient,
             ReglagesOrganisation reglages,
             TemplateEngine templateEngine,
-            @Value("${amelioration.fiche-cloture.lien-dossier:}") String motifLienDossier) {
+            @Value("${amelioration.fiche-cloture.lien-dossier:}") String motifLienDossier,
+            NonConformiteService nonConformiteService,
+            LogoDeLOrganisation logo) {
         this.nonConformiteRepository = nonConformiteRepository;
         this.planActionRepository = planActionRepository;
         this.workflowClient = workflowClient;
@@ -85,6 +85,8 @@ public class FicheClotureNonConformiteService {
         this.reglages = reglages;
         this.templateEngine = templateEngine;
         this.motifLienDossier = motifLienDossier;
+        this.nonConformiteService = nonConformiteService;
+        this.logo = logo;
     }
 
     /**
@@ -144,6 +146,10 @@ public class FicheClotureNonConformiteService {
     @Transactional(readOnly = true)
     public FicheEditee editer(UUID nonConformiteId) {
         NonConformite nc = nonConformiteRepository.findById(nonConformiteId)
+                // La fiche imprime tout le dossier, visas compris : elle obéit à la règle de la
+                // fiche à l'écran, et un dossier que l'appelant ne peut pas consulter lui est
+                // introuvable — la même réponse qu'un identifiant inconnu.
+                .filter(nonConformiteService::peutConsulter)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Non-conformité introuvable : " + nonConformiteId));
 
@@ -324,34 +330,12 @@ public class FicheClotureNonConformiteService {
 
     /**
      * Le logo n'existe que comme adresse de réglage : il est téléchargé et incorporé au document,
-     * qui doit rester lisible hors de toute connexion. Introuvable ou trop lent, la fiche part
-     * sans lui — un en-tête sans image vaut mieux qu'aucune fiche.
+     * qui doit rester lisible hors de toute connexion. Introuvable, trop lent ou refusé — l'adresse
+     * est suivie par le serveur, voir {@link LogoDeLOrganisation} —, la fiche part sans lui : un
+     * en-tête sans image vaut mieux qu'aucune fiche.
      */
     private String logoEnDataUri() {
-        String adresse = reglages.valeur(ClesReglages.LOGO_URL);
-        if (adresse == null) {
-            return null;
-        }
-        try {
-            URLConnection connexion = new URL(adresse).openConnection();
-            connexion.setConnectTimeout(DELAI_LOGO_MS);
-            connexion.setReadTimeout(DELAI_LOGO_MS);
-            byte[] octets;
-            try (InputStream flux = connexion.getInputStream()) {
-                octets = flux.readAllBytes();
-            }
-            if (octets.length == 0) {
-                return null;
-            }
-            String type = connexion.getContentType();
-            if (type == null || !type.startsWith("image/")) {
-                type = "image/png";
-            }
-            return "data:" + type + ";base64," + Base64.getEncoder().encodeToString(octets);
-        } catch (Exception e) {
-            log.warn("Logo de l'organisation illisible ({}) : la fiche est éditée sans lui.", e.getMessage());
-            return null;
-        }
+        return logo.enDataUri(reglages.valeur(ClesReglages.LOGO_URL));
     }
 
     /**

@@ -119,8 +119,8 @@ public class ActionCorrectivePreventiveServiceImpl implements ActionCorrectivePr
 
     public void deleteActionRisque(UUID id) {
         List<ActionRisque> actionRisques = actionRisqueRepossitory.findActionRisqueByAction_Id(id);
-        actionRisques.forEach(actionExisgence -> {
-            actionExigenceRepository.deleteById(actionExisgence.getId());
-        });
+        // Les liens aux risques se suppriment dans leur propre table : passer par celle des
+        // exigences ne supprimait rien, et chaque mise à jour ajoutait un nouveau jeu de risques.
+        actionRisques.forEach(actionRisque -> actionRisqueRepossitory.deleteById(actionRisque.getId()));
     }
 }
