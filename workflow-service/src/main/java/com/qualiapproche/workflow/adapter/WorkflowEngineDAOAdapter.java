@@ -12,6 +12,7 @@ import com.qualiapproche.workflow.persistence.model.TransitionPersistante;
 import com.qualiapproche.workflow.persistence.model.WorkflowPersistant;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import com.qualiapproche.workflow.repository.WorkflowTransitionRepository;
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanFactory;
@@ -47,6 +48,36 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
     @Override
     @Transactional(readOnly = true)
     public List<WorkflowPersistant> getAllWorkflow() throws WorkflowException {
+        WorkflowException[] echec = new WorkflowException[1];
+        List<WorkflowPersistant> catalogue = enRacine(() -> {
+            try {
+                return lireLeCatalogue();
+            } catch (WorkflowException e) {
+                echec[0] = e;
+                return null;
+            }
+        });
+        if (echec[0] != null) {
+            throw echec[0];
+        }
+        return catalogue;
+    }
+
+    /**
+     * Le catalogue du moteur est unique pour tous les clients — indexé par identifiant de circuit,
+     * qui ne se répète pas d'un client à l'autre — et doit donc se lire en entier, quelle que soit
+     * la requête qui en déclenche le rechargement. Lu sous la direction de l'appelant, il ne
+     * contiendrait que ses circuits, et les dossiers des autres clients ne trouveraient plus les
+     * leurs jusqu'au rechargement suivant. Même chose pour la signature : calculée sur les seuls
+     * circuits de l'appelant, elle différerait d'un client à l'autre et ferait recharger sans fin.
+     */
+    private <T> T enRacine(java.util.function.Supplier<T> lecture) {
+        var fournisseur = beanFactory.getBeanProvider(ExecutionCloisonnee.class);
+        ExecutionCloisonnee execution = fournisseur == null ? null : fournisseur.getIfAvailable();
+        return execution == null ? lecture.get() : execution.enInstallation(lecture);
+    }
+
+    private List<WorkflowPersistant> lireLeCatalogue() throws WorkflowException {
         List<Workflow> dbWorkflows = workflowRepository.findAllAvecEtapes();
 
         // Transitions groupées par étape d'origine : le regroupement en mémoire remplace une
@@ -190,6 +221,6 @@ public class WorkflowEngineDAOAdapter implements IWorkflowEngine<IWorkflowData, 
     @Override
     @Transactional(readOnly = true)
     public Object getCatalogueVersion() {
-        return workflowRepository.signatureCatalogue();
+        return enRacine(workflowRepository::signatureCatalogue);
     }
 }

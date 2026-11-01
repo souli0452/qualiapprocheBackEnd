@@ -23,7 +23,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @NoArgsConstructor
 @JsonInclude(NON_NULL)
 @Table(name = "domaines_application",
-        uniqueConstraints = @UniqueConstraint(name = "uk_domaine_libelle", columnNames = "libelle"))
+        uniqueConstraints = @UniqueConstraint(name = "uk_domaine_libelle", columnNames = {"direction_id", "libelle"}))
 public class DomaineApplication extends AuditEntity {
 
     @Column(nullable = false)

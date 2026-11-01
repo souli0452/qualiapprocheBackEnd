@@ -4,6 +4,7 @@ import com.qualiapproche.common.base.AuditEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +12,8 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "qms_document_types")
+@Table(name = "qms_document_types",
+        uniqueConstraints = @UniqueConstraint(name = "uk_document_type_code", columnNames = {"direction_id", "code"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,7 +21,8 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class QmsDocumentType extends AuditEntity {
 
-    @Column(nullable = false, unique = true)
+    /** Unique chez un client : deux clients ont chacun leur « PRO ». */
+    @Column(nullable = false)
     private String code;
 
     @Column(nullable = false)

@@ -63,13 +63,52 @@ class LicenceFilterTest {
     }
 
     private void licence(boolean actionsOuvertes, String... modules) {
-        when(cache.etat()).thenReturn(Mono.just(
+        when(cache.etat(org.mockito.ArgumentMatchers.eq(DIRECTION))).thenReturn(Mono.just(
                 new EtatLicenceCache.Etat(actionsOuvertes, List.of(modules), "abonnement terminé")));
+    }
+
+    /** Le client de l'appelant, tel que le déclare son jeton. */
+    private static final String DIRECTION = "6f1c0f2e-6a1b-4f43-9a55-0c1f7f0b1a11";
+
+    /** Un jeton qui porte {@code direction_id} : la signature n'est pas lue par la passerelle. */
+    static String jetonDe(String direction) {
+        java.util.Base64.Encoder b64 = java.util.Base64.getUrlEncoder().withoutPadding();
+        String charge = direction == null ? "{\"sub\":\"x\"}" : "{\"direction_id\":\"" + direction + "\"}";
+        return "Bearer " + b64.encodeToString("{\"alg\":\"none\"}".getBytes())
+                + "." + b64.encodeToString(charge.getBytes()) + ".signature";
     }
 
     private MockServerWebExchange requete(HttpMethod methode, String chemin) {
         return MockServerWebExchange.from(
-                MockServerHttpRequest.method(methode, chemin).build());
+                MockServerHttpRequest.method(methode, chemin).header("Authorization", jetonDe(DIRECTION)).build());
+    }
+
+    @Test
+    @DisplayName("Chaque client est jugé sur sa propre licence")
+    void licenceDuClientDuJeton() {
+        licence(false);
+        when(cache.etat(org.mockito.ArgumentMatchers.eq("0b0e7c1a-1111-4c4c-8888-222233334444")))
+                .thenReturn(Mono.just(new EtatLicenceCache.Etat(true, List.of("NON_CONFORMITE"), null)));
+        MockServerWebExchange echange = MockServerWebExchange.from(MockServerHttpRequest
+                .method(HttpMethod.POST, "/amelioration-service/api/v1/non-conformite/create")
+                .header("Authorization", jetonDe("0b0e7c1a-1111-4c4c-8888-222233334444")).build());
+
+        filtre.filter(echange, suite).block();
+
+        assertThat(laissePasser).isTrue();
+    }
+
+    @Test
+    @DisplayName("Sans client dans le jeton (administrateur de la plateforme), aucune licence n'est opposée")
+    void sansDirection_passe() {
+        MockServerWebExchange echange = MockServerWebExchange.from(MockServerHttpRequest
+                .method(HttpMethod.POST, "/referentiel-service/api/v1/structures")
+                .header("Authorization", jetonDe(null)).build());
+
+        filtre.filter(echange, suite).block();
+
+        assertThat(laissePasser).isTrue();
+        org.mockito.Mockito.verifyNoInteractions(cache);
     }
 
     private int statut(MockServerWebExchange echange) {

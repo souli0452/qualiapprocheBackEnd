@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow.model;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
+import org.hibernate.annotations.TenantId;
 import com.qualiapproche.workflow.core.model.Etat;
 import com.qualiapproche.workflow.persistence.model.IWorkflowData;
 import jakarta.persistence.Column;
@@ -28,7 +30,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WorkflowValidationInstance implements IWorkflowData {
+public class WorkflowValidationInstance implements IWorkflowData, Cloisonnable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -36,6 +38,16 @@ public class WorkflowValidationInstance implements IWorkflowData {
 
     @Version
     private Long version;
+
+    /**
+     * Le client du dossier : posé par Hibernate à l'ouverture du circuit, d'après la direction de
+     * la session (l'utilisateur, ou le service qui l'annonce), et filtré à chaque lecture. Le
+     * dossier n'héritant pas d'{@code AuditEntity}, il le déclare lui-même ; ses décisions et
+     * saisies, qui ne se lisent que par lui, n'en ont pas besoin.
+     */
+    @TenantId
+    @Column(name = "direction_id")
+    private UUID directionId;
 
     @Column(nullable = false)
     private String resourceId; // UUID or ID as String

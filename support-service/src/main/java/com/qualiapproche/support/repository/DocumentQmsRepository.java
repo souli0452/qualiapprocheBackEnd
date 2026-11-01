@@ -20,7 +20,7 @@ public interface DocumentQmsRepository extends JpaRepository<DocumentQms, UUID>,
 
     /** Le plus grand rang émis sous ce préfixe, comparé en nombre (…-1000 après …-999). */
     @Query(value = "SELECT MAX(CAST(substring(document_number FROM '([0-9]+)$') AS bigint)) FROM qms_documents "
-            + "WHERE document_number LIKE :prefix || '%' "
+            + "WHERE direction_id = :direction AND document_number LIKE :prefix || '%' "
             + "AND substring(document_number FROM char_length(:prefix) + 1) ~ '^[0-9]+$'", nativeQuery = true)
-    Long dernierRangSousPrefixe(@Param("prefix") String prefix);
+    Long dernierRangSousPrefixe(@Param("prefix") String prefix, @Param("direction") java.util.UUID direction);
 }

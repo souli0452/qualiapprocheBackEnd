@@ -28,6 +28,9 @@ public final class AdressesMessagerie {
     /** Propriété JMS qui porte l'identifiant de la ligne d'outbox : clé de dédoublonnage du consommateur. */
     public static final String PROPRIETE_IDENTIFIANT = "qualisiraMessageId";
 
+    /** La direction (le client) pour le compte de laquelle le message a été déposé. */
+    public static final String PROPRIETE_DIRECTION = "qualisiraDirectionId";
+
     public static final String TYPE_COURRIEL = "courriel";
     /**
      * Un courriel qui porte un secret (mot de passe temporaire, lien de vérification ou de

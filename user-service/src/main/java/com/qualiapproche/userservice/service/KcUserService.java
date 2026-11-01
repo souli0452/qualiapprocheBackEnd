@@ -1,5 +1,11 @@
 package com.qualiapproche.userservice.service;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import com.qualiapproche.userservice.config.ClaimStructureInitializer;
+import com.qualiapproche.userservice.config.RolePlateformeInitializer;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.RoleRepresentation;
+
 import com.qualiapproche.common.service.SendMailService;
 import com.qualiapproche.userservice.entities.JetonDeCompte;
 import com.qualiapproche.userservice.config.auth.CookieUtils;
@@ -28,6 +34,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -84,13 +91,19 @@ public class KcUserService {
         Map<String, List<String>> attributes = user.getAttributes();
         String structureId = getAttributeValue(attributes, "structure");
 
+        // Aucune requête authentifiée à ce stade : la direction est lue dans le jeton que Keycloak
+        // vient de rendre, et l'appel à referentiel part sous elle (en-tête X-Direction-Id) — sans
+        // quoi il rendrait la licence de personne.
+        UUID maDirection = DirectionDesComptes.duJetonFraichementEmis(kcTokenDto.getAccessToken());
+
         // RÉCUPÉRATION DE LA LICENCE (Retour à la logique initiale via getDirection)
         boolean licenseActive = false;
         int licenseDaysRemaining = 0;
         List<String> modulesSubscribed = new java.util.ArrayList<>();
 
         try {
-            StructureDto direction = structureClient.getDirection();
+            StructureDto direction = maDirection == null ? null
+                    : Cloisonnement.pour(maDirection, () -> structureClient.getDirection());
             if (direction != null) {
                 licenseActive = direction.getLicenceActive() != null && direction.getLicenceActive();
                 licenseDaysRemaining = direction.getLicenseDaysRemaining() != null
@@ -115,7 +128,7 @@ public class KcUserService {
             appRoles.add("SUPER_ADMIN");
         }
 
-        List<String> permissions = computePermissions(appRoles, isSuperAdmin);
+        List<String> permissions = computePermissions(appRoles, isSuperAdmin, maDirection);
 
         Map<String, Object> userMap = new HashMap<>();
         userMap.put("userId", user.getId());
@@ -170,6 +183,7 @@ public class KcUserService {
 
     public Page<KcUserDto> getAllUsers(Pageable pageable) {
         List<KcUserDto> allUsers = keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
+                .filter(DirectionDesComptes::visible)
                 .map(this::mapUserToDto)
                 .collect(Collectors.toList());
         int start = (int) pageable.getOffset();
@@ -194,9 +208,17 @@ public class KcUserService {
 
     public KcUserDto createUser(KcUserDto kcUserDto) {
         exigerUnNomDUtilisateur(kcUserDto.getUsername());
+        // Un compte naît dans la direction de qui le crée, et nulle part ailleurs : sans direction,
+        // il ne verrait rien, et le plafond de licence ne saurait à qui le compter.
+        UUID direction = Cloisonnement.directionDuClient();
+        if (direction == null) {
+            throw new BusinessException("Un compte se crée depuis la direction d'un client : la vôtre "
+                    + "n'est pas connue.", HttpStatus.FORBIDDEN);
+        }
         // Les rôles demandés sont contrôlés avant que le compte n'existe : refusés après coup, ils
         // laisseraient dans Keycloak un compte sans rôle que personne n'a voulu.
         garde.exigerAttributionPermise(null, rolesNommes(kcUserDto.getRoles()));
+        exigerUneStructureDuClient(kcUserDto.getStructure());
         // Avant tout le reste : la licence borne le nombre de comptes actifs, et le dépassement
         // se dit à l'utilisateur plutôt qu'après coup. Créer le compte puis le refuser laisserait
         // un compte à demi formé dans Keycloak.
@@ -212,6 +234,7 @@ public class KcUserService {
         Map<String, List<String>> attributes = new HashMap<>();
         attributes.put("structure", Collections.singletonList(kcUserDto.getStructure()));
         attributes.put("fonction", Collections.singletonList(kcUserDto.getFonction()));
+        attributes.put(ClaimStructureInitializer.ATTRIBUT_DIRECTION, Collections.singletonList(direction.toString()));
         user.setAttributes(attributes);
         String password = generateRandomPassword(8);
         CredentialRepresentation credential = new CredentialRepresentation();
@@ -254,16 +277,80 @@ public class KcUserService {
     }
 
     /**
+     * Crée un administrateur de la plateforme : il crée les clients, et ne lit les données d'aucun.
+     *
+     * <p>Son compte ne porte <b>aucune</b> direction — ses jetons n'ont donc pas de claim
+     * {@code direction_id}, et chaque service lui répond comme à un compte sans client : rien.
+     * Il ne reçoit aucun rôle applicatif, seulement le rôle de royaume {@code PLATEFORME_ADMIN}.
+     * Un compte déjà existant reçoit le rôle s'il ne l'a pas, et la réponse est 409.</p>
+     */
+    public KcUserDto creerAdministrateurDePlateforme(KcUserDto demande) {
+        exigerUnNomDUtilisateur(demande.getUsername());
+        UserRepresentation user = new UserRepresentation();
+        user.setUsername(demande.getUsername());
+        user.setEmail(demande.getEmail());
+        user.setFirstName(demande.getFirstName());
+        user.setLastName(demande.getLastName());
+        user.setEnabled(true);
+        String password = generateRandomPassword(12);
+        CredentialRepresentation credential = new CredentialRepresentation();
+        credential.setType(CredentialRepresentation.PASSWORD);
+        credential.setValue(password);
+        credential.setTemporary(true);
+        user.setCredentials(Collections.singletonList(credential));
+        UsersResource comptes = keycloak.realm(kcAuthProperties.getRealm()).users();
+        try (Response response = comptes.create(user)) {
+            if (response.getStatus() == HttpStatus.CONFLICT.value()) {
+                comptes.search(demande.getUsername(), true).stream().findFirst()
+                        .ifPresent(existant -> donnerLeRolePlateforme(existant.getId()));
+                throw new BusinessException("Un compte porte déjà ce nom d'utilisateur ou cette adresse.",
+                        HttpStatus.CONFLICT);
+            }
+            if (response.getStatus() != 201) {
+                throw new BusinessException("Keycloak a refusé la création du compte (HTTP "
+                        + response.getStatus() + ").", HttpStatus.BAD_GATEWAY);
+            }
+            String userId = response.getLocation().getPath().replaceAll(".*/([^/]+)$", "$1");
+            demande.setId(userId);
+            donnerLeRolePlateforme(userId);
+            try {
+                String token = jetons.emettre(userId, JetonDeCompte.Usage.VERIFICATION_COURRIEL,
+                        JetonsDeCompte.DUREE_VERIFICATION);
+                sendMailService.sendVerificationEmail(demande.getEmail(), demande.getFirstName(),
+                        demande.getLastName(), password,
+                        frontendUrl + "/verify-email?token=" + token + "&userId=" + userId);
+            } catch (Exception e) {
+                log.error("Courriel de vérification non envoyé à l'administrateur de plateforme {} : {}",
+                        userId, e.getMessage());
+            }
+            demande.setRoles(List.of());
+            return demande;
+        }
+    }
+
+    private void donnerLeRolePlateforme(String userId) {
+        var realm = keycloak.realm(kcAuthProperties.getRealm());
+        RoleRepresentation role = realm.roles().get(RolePlateformeInitializer.ROLE).toRepresentation();
+        var roles = realm.users().get(userId).roles().realmLevel();
+        boolean deja = roles.listAll().stream().anyMatch(r -> RolePlateformeInitializer.ROLE.equals(r.getName()));
+        if (!deja) {
+            roles.add(List.of(role));
+        }
+    }
+
+    /**
      * Modifie un compte depuis l'administration : identité, adresse, activation, structure, rôles.
      *
      * <p>Le demandeur doit détenir au moins tout ce que détient le compte : changer l'adresse d'un
      * administrateur puis demander un lien de réinitialisation suffisait à prendre son compte.</p>
      */
     public void updateUser(KcUserDto kcUserDto) {
+        UserRepresentation user = compteDeMaDirection(kcUserDto.getId());
         garde.exigerAscendantSur(kcUserDto.getId(), "modifier sa fiche");
         garde.exigerAttributionPermise(kcUserDto.getId(), rolesNommes(kcUserDto.getRoles()));
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm()).users().get(kcUserDto.getId())
-                .toRepresentation();
+        if (!java.util.Objects.equals(kcUserDto.getStructure(), getAttributeValue(user.getAttributes(), "structure"))) {
+            exigerUneStructureDuClient(kcUserDto.getStructure());
+        }
         user.setFirstName(kcUserDto.getFirstName());
         user.setLastName(kcUserDto.getLastName());
         user.setEmail(kcUserDto.getEmail());
@@ -328,6 +415,7 @@ public class KcUserService {
      * d'un administrateur suffisait à ouvrir sa session.</p>
      */
     public void fixerMotDePasseParGestionnaire(String userId, String password) {
+        compteDeMaDirection(userId);
         garde.exigerAscendantSur(userId, "réinitialiser son mot de passe");
         updatePassword(userId, password);
     }
@@ -368,6 +456,7 @@ public class KcUserService {
     }
 
     public void changeUserStatus(String userId, boolean enabled) {
+        compteDeMaDirection(userId);
         garde.exigerAscendantSur(userId, enabled ? "réactiver ce compte" : "désactiver ce compte");
         if (enabled) {
             // Réactiver reprend une place. Sans ce contrôle, le plafond se contournait en trois
@@ -459,6 +548,10 @@ public class KcUserService {
             return ancienMotDePasseIncorrect();
         }
         String userId = users.get(0).getId();
+        // Le compte d'un autre client répond comme un compte inconnu.
+        if (!userId.equals(SecurityUtils.getCurrentUserId()) && !DirectionDesComptes.visible(users.get(0))) {
+            return ancienMotDePasseIncorrect();
+        }
         // Le contrôleur laisse un gestionnaire des utilisateurs viser un autre compte que le sien :
         // sans cette règle, il fixait le mot de passe d'un SUPER_ADMIN dont il aurait appris
         // l'ancien, sans jamais en détenir les habilitations. Même règle d'ascendance que pour la
@@ -492,6 +585,56 @@ public class KcUserService {
                         .status("ERROR")
                         .message("Ancien mot de passe incorrect.")
                         .build());
+    }
+
+    /**
+     * Le compte, s'il appartient à la direction de l'appelant ; « introuvable » sinon.
+     *
+     * <p>Introuvable et non refusé : répondre « il existe mais n'est pas à vous » dirait déjà
+     * qu'un autre client a ce compte. Le système (racine) voit tous les comptes.</p>
+     */
+    UserRepresentation compteDeMaDirection(String userId) {
+        UserRepresentation compte = null;
+        if (userId != null && !userId.isBlank()) {
+            try {
+                compte = keycloak.realm(kcAuthProperties.getRealm()).users().get(userId).toRepresentation();
+            } catch (jakarta.ws.rs.NotFoundException e) {
+                compte = null;
+            }
+        }
+        if (compte == null || !DirectionDesComptes.visible(compte)) {
+            throw new BusinessException("Aucun compte ne porte cet identifiant.", HttpStatus.NOT_FOUND);
+        }
+        return compte;
+    }
+
+    /**
+     * Refuse une structure qui n'est pas celle du client.
+     *
+     * <p>L'appel part sous la direction courante : referentiel-service ne rend que les structures
+     * de ce client, et une structure d'un autre répond comme une structure inconnue. Referentiel
+     * injoignable, la création est refusée plutôt que faite à l'aveugle.</p>
+     */
+    private void exigerUneStructureDuClient(String structure) {
+        if (structure == null || structure.isBlank()) {
+            return;
+        }
+        UUID id = Cloisonnement.uuid(structure);
+        StructureDto trouvee;
+        try {
+            trouvee = id == null ? null : structureClient.getStructureById(id);
+        } catch (feign.FeignException.NotFound e) {
+            trouvee = null;
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Structure {} invérifiable (referentiel-service) : {}", structure, e.getMessage());
+            throw new BusinessException("La structure ne peut pas être vérifiée pour l'instant : réessayez "
+                    + "dans un moment.", HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        if (trouvee == null) {
+            throw new BusinessException("Structure inconnue : " + structure, HttpStatus.BAD_REQUEST);
+        }
     }
 
     private String getAttributeValue(Map<String, List<String>> attributes, String key) {
@@ -556,6 +699,7 @@ public class KcUserService {
 
     public Page<KcUserDto> getUsersByStructure(String structureId, Pageable pageable) {
         List<KcUserDto> allFiltered = keycloak.realm(kcAuthProperties.getRealm()).users().list().stream()
+                .filter(DirectionDesComptes::visible)
                 .map(this::mapUserToDto)
                 .filter(u -> structureId.equals(u.getStructure()))
                 .collect(Collectors.toList());
@@ -570,8 +714,11 @@ public class KcUserService {
      * Inclut les rôles applicatifs, les permissions et les informations de licence.
      */
     public Map<String, Object> getUserById(String userId) {
-        UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
-                .users().get(userId).toRepresentation();
+        return profil(compteDeMaDirection(userId));
+    }
+
+    /** La fiche d'un compte déjà admis : celui de l'appelant, ou un compte de sa direction. */
+    private Map<String, Object> profil(UserRepresentation user) {
 
         Map<String, List<String>> attributes = user.getAttributes();
         String structureId = getAttributeValue(attributes, "structure");
@@ -605,7 +752,8 @@ public class KcUserService {
             appRoles.add("SUPER_ADMIN");
         }
 
-        List<String> permissions = computePermissions(appRoles, isSuperAdmin);
+        List<String> permissions = computePermissions(appRoles, isSuperAdmin,
+                Cloisonnement.uuid(DirectionDesComptes.de(user)));
 
         Map<String, Object> result = new HashMap<>();
         result.put("userId", user.getId());
@@ -635,7 +783,15 @@ public class KcUserService {
      * vérifié.
      */
     public Map<String, Object> getMe() {
-        return getUserById(monIdentifiant());
+        // Son propre compte, sans la borne de direction : l'administrateur de la plateforme n'en a
+        // pas, et un compte pas encore rattaché doit pouvoir se lire.
+        Map<String, Object> profil = profil(keycloak.realm(kcAuthProperties.getRealm()).users()
+                .get(monIdentifiant()).toRepresentation());
+        // Le jeton vit en cookie HttpOnly : le frontal ne lit pas ses rôles de royaume. Il apprend
+        // ici que le compte administre la plateforme (gestion des clients), et ne peut le prétendre
+        // ailleurs — referentiel vérifie le rôle sur le jeton.
+        profil.put("plateformeAdmin", SecurityUtils.hasRole(RolePlateformeInitializer.ROLE));
+        return profil;
     }
 
     /**
@@ -649,7 +805,7 @@ public class KcUserService {
     public Map<String, Object> mettreAJourMonProfil(com.qualiapproche.common.dto.auth.ProfilPersonnelDto profil) {
         String userId = monIdentifiant();
         profilPersonnel.mettreAJour(userId, profil);
-        return getUserById(userId);
+        return getMe();
     }
 
     /**
@@ -673,12 +829,18 @@ public class KcUserService {
      * Union (ou intersection filtrée) des permissions des rôles applicatifs de l'utilisateur.
      * SUPER_ADMIN reçoit l'union de toutes les permissions existantes, tous rôles confondus.
      */
-    private List<String> computePermissions(List<String> appRoles, boolean isSuperAdmin) {
+    private List<String> computePermissions(List<String> appRoles, boolean isSuperAdmin, UUID direction) {
+        // Hors requête authentifiée (connexion), la session voit les rôles de tous les clients :
+        // seuls comptent ceux de la direction du compte.
+        java.util.function.Predicate<AppRole> deSaDirection =
+                role -> direction == null || direction.equals(role.getDirectionId());
         if (isSuperAdmin) {
             return appRoleRepository.findAll().stream()
+                    .filter(deSaDirection)
                     .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
         }
         return appRoleRepository.findAll().stream()
+                .filter(deSaDirection)
                 .filter(role -> appRoles.contains(role.getName()))
                 .flatMap(role -> role.getPermissions().stream()).distinct().collect(Collectors.toList());
     }
@@ -800,7 +962,7 @@ public class KcUserService {
             UserRepresentation user = keycloak.realm(kcAuthProperties.getRealm())
                     .users().get(userId).toRepresentation();
 
-            if (user == null || Boolean.FALSE.equals(user.isEnabled())) {
+            if (user == null || Boolean.FALSE.equals(user.isEnabled()) || !DirectionDesComptes.visible(user)) {
                 return null;
             }
             if (structureExigee != null
@@ -848,7 +1010,7 @@ public class KcUserService {
         boolean isSuperAdmin = appRoles.stream()
                 .anyMatch(r -> r.equalsIgnoreCase("SUPER_ADMIN") || r.equalsIgnoreCase("SUPERADMIN"));
 
-        return computePermissions(appRoles, isSuperAdmin);
+        return computePermissions(appRoles, isSuperAdmin, Cloisonnement.directionDuClient());
     }
 
     private String generateRandomPassword(int length) {

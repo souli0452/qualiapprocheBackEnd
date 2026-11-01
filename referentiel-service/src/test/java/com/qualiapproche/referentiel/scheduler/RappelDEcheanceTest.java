@@ -1,5 +1,6 @@
 package com.qualiapproche.referentiel.scheduler;
 
+import com.qualiapproche.referentiel.plateforme.GestionDesClients;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.enumeration.TypeStructure;
@@ -42,6 +43,7 @@ class RappelDEcheanceTest {
     private StructureRepository structures;
     private UserClient utilisateurs;
     private Courriels courriels;
+    private static final java.util.UUID CLIENT = java.util.UUID.randomUUID();
     private LicenseScheduler scheduler;
 
     @BeforeEach
@@ -51,7 +53,9 @@ class RappelDEcheanceTest {
         utilisateurs = mock(UserClient.class);
         courriels = mock(Courriels.class);
 
-        scheduler = new LicenseScheduler(licence, structures, utilisateurs, courriels);
+        GestionDesClients clients = mock(GestionDesClients.class);
+        when(clients.directions()).thenReturn(List.of(Structure.builder().id(CLIENT).build()));
+        scheduler = new LicenseScheduler(licence, structures, utilisateurs, courriels, clients, new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
         ReflectionTestUtils.setField(scheduler, "preavisJours", 3);
         ReflectionTestUtils.setField(scheduler, "jalons", "30,15");
 
@@ -132,7 +136,7 @@ class RappelDEcheanceTest {
 
         verify(courriels).envoyerTexte(eq("un@exemple.fr"), anyString(), anyString(), anyString());
         verify(courriels).envoyerTexte(eq("deux@exemple.fr"), anyString(), anyString(), anyString());
-        verify(structures, never()).findAllByTypeStructure(any());
+        verify(structures, never()).findById(any());
     }
 
     @Test
@@ -141,8 +145,8 @@ class RappelDEcheanceTest {
         // Sans ce repli, l'alerte disparaîtrait en silence et l'échéance surviendrait sans que
         // personne n'ait été prévenu.
         when(utilisateurs.getUsersByRole("SUPER_ADMIN")).thenThrow(new IllegalStateException("injoignable"));
-        when(structures.findAllByTypeStructure(TypeStructure.DIRECTION)).thenReturn(List.of(
-                Structure.builder().email("direction@exemple.fr").build()));
+        when(structures.findById(CLIENT)).thenReturn(java.util.Optional.of(
+                Structure.builder().id(CLIENT).email("direction@exemple.fr").build()));
         licenceExpirantDans(0);
 
         scheduler.checkLicenseExpirations();

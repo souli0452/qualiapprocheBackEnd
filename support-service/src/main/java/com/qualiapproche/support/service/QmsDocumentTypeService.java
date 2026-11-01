@@ -4,8 +4,6 @@ import com.qualiapproche.support.model.QmsDocumentType;
 import com.qualiapproche.support.repository.QmsDocumentTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +21,11 @@ public class QmsDocumentTypeService {
 
     private final QmsDocumentTypeRepository typeRepository;
 
-    @EventListener(ApplicationReadyEvent.class)
+    /**
+     * Les types documentaires livrés, posés pour le client de la session s'il n'en a aucun
+     * ({@link com.qualiapproche.support.config.TypesDeDocumentParDefaut}). Un client qui a déjà
+     * ses types, même réduits à un seul, n'en reçoit pas d'autres.
+     */
     @Transactional
     public void initDefaultTypes() {
         if (typeRepository.count() == 0) {

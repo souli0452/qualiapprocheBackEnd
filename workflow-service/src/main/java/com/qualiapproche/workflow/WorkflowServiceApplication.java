@@ -1,5 +1,7 @@
 package com.qualiapproche.workflow;
 
+import com.qualiapproche.common.config.CloisonnementInterneController;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -13,6 +15,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * le serveur SMTP autant de fois qu'il y a de responsables à prévenir.
  */
 @SpringBootApplication
+// Le contrôleur interne du cloisonnement vit dans common.config, que ce service ne balaie pas :
+// referentiel-service l'appelle pour amorcer un client et rendre les lignes existantes à leur client.
+@Import(CloisonnementInterneController.class)
 @EnableDiscoveryClient
 @EnableFeignClients
 @EnableScheduling

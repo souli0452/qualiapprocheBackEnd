@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.event;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.qualiapproche.workflow.model.WorkflowFieldValue;
 import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.model.WorkflowValidationInstance;
@@ -106,18 +107,22 @@ public class WorkflowEventListener {
             log.error("Dossier {} {} : identifiant inexploitable, rappel non déposé.",
                     instance.getResourceType(), instance.getResourceId());
         } else {
-            event.setNotificationId(boiteDEnvoi.deposer(destination, AdressesMessagerie.TYPE_RAPPEL_CIRCUIT,
-                    RappelDuCircuit.builder()
-                            .typeRessource(instance.getResourceType())
-                            .ressourceId(ressourceId)
-                            .contenu(payload)
-                            .auteurId(event.getAuteurId())
-                            .auteurNom(nomDe(event.getAuteurId()))
-                            .build()));
+            // Le rappel part au nom du client du dossier, même si la transition a été franchie par
+            // un geste du système : le service qui le reçoit le traitera sous cette direction.
+            RappelDuCircuit rappel = RappelDuCircuit.builder()
+                    .typeRessource(instance.getResourceType())
+                    .ressourceId(ressourceId)
+                    .contenu(payload)
+                    .auteurId(event.getAuteurId())
+                    .auteurNom(nomDe(event.getAuteurId()))
+                    .build();
+            event.setNotificationId(sousLaDirection(instance.getDirectionId(),
+                    () -> boiteDEnvoi.deposer(destination, AdressesMessagerie.TYPE_RAPPEL_CIRCUIT, rappel)));
         }
         // La phase suivante compose le courriel : elle a besoin de la ressource, pas de l'instance.
         event.setResourceId(instance.getResourceId());
         event.setResourceType(instance.getResourceType());
+        event.setDirectionId(instance.getDirectionId());
     }
 
     /**
@@ -131,12 +136,15 @@ public class WorkflowEventListener {
             boiteDEnvoi.publier(notificationId);
         }
 
-        etapeAtteinte(event.getEtatApres()).ifPresent(step -> {
+        // Soumises sous la direction du dossier : l'exécuteur asynchrone la reporte dans ses fils
+        // (voir WorkflowAppConfig), où gabarits et destinataires se lisent pour ce seul client.
+        etapeAtteinte(event.getEtatApres()).ifPresent(step -> sousLaDirection(event.getDirectionId(), () -> {
             notificateurParEmail.notifier(step, event);
             // Second canal du même événement : la ligne déposée dans la boîte de ceux qui doivent
             // agir. Les destinataires sont résolus une seule fois, par DestinatairesDeLEtape.
             notificateurEnBase.notifier(step, event);
-        });
+            return null;
+        }));
     }
 
     /**
@@ -146,6 +154,11 @@ public class WorkflowEventListener {
     private static String nomDe(String auteurId) {
         return auteurId != null && auteurId.equals(SecurityUtils.getCurrentUserId())
                 ? SecurityUtils.getCurrentUserFullName() : null;
+    }
+
+    /** Exécute {@code geste} pour le client {@code direction}, s'il en est un ; tel quel sinon. */
+    private static <T> T sousLaDirection(UUID direction, java.util.function.Supplier<T> geste) {
+        return Cloisonnement.estUnClient(direction) ? Cloisonnement.pour(direction, geste) : geste.get();
     }
 
     private WorkflowValidationInstance instanceConcernee(TransitionFranchieEvent event) {

@@ -9,6 +9,7 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import lombok.AllArgsConstructor;
+import org.hibernate.annotations.TenantId;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -16,13 +17,14 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import com.qualiapproche.common.utils.SecurityUtils;
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
 
 @Data
 @SuperBuilder
 @MappedSuperclass
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuditEntity {
+public class AuditEntity implements Cloisonnable {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -50,6 +52,15 @@ public class AuditEntity {
     @Column(name = "current_user_structure")
     private String currentUserStructure;
 
+    /**
+     * Le client à qui la ligne appartient : la direction racine de son auteur.
+     *
+     * <p>Posée par Hibernate à l'insertion, d'après la direction de la session
+     * ({@code Cloisonnement}), et jamais modifiée ensuite ; toute lecture en est filtrée. Une
+     * valeur posée à la main n'est admise que si elle est celle de la session — sauf pour le
+     * système, qui écrit pour le client qu'il nomme.</p>
+     */
+    @TenantId
     @Column(name = "direction_id")
     private UUID directionId;
 
@@ -59,7 +70,6 @@ public class AuditEntity {
         this.createdById = SecurityUtils.getAuteurId();
         this.currentUserfullName = SecurityUtils.getAuteurNom();
         this.currentUserEmail = SecurityUtils.getCurrentUserEmail();
-        this.directionId = SecurityUtils.getCurrentDirectionId();
     }
 
     @PreUpdate

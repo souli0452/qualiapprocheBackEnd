@@ -1,5 +1,8 @@
 package com.qualiapproche.support.model;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
+import org.hibernate.annotations.TenantId;
+import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -21,7 +24,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class QmsAuditLog {
+public class QmsAuditLog implements Cloisonnable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,4 +43,13 @@ public class QmsAuditLog {
 
     @Column(columnDefinition = "TEXT")
     private String details;
+
+    /**
+     * Le client à qui la ligne appartient, posé par Hibernate d'après la session
+     * ({@code Cloisonnement}). Cloisonnée en propre et non par son document : elle est aussi
+     * cherchée sans lui ({@code par numéro de document, qui se répète d’un client à l’autre}).
+     */
+    @TenantId
+    @Column(name = "direction_id")
+    private UUID directionId;
 }

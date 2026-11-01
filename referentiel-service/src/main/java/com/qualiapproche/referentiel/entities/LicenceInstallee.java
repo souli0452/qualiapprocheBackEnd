@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.entities;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
+import org.hibernate.annotations.TenantId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -34,7 +36,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class LicenceInstallee {
+public class LicenceInstallee implements Cloisonnable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -90,4 +92,9 @@ public class LicenceInstallee {
      * rien ne le ferait sur sa propre machine — mais cela arrête le contournement opportuniste.</p>
      */
     private LocalDate dernierJourVu;
+
+    /** Le client à qui la licence est délivrée : chaque direction a la sienne. */
+    @TenantId
+    @Column(name = "direction_id")
+    private UUID directionId;
 }

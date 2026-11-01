@@ -45,7 +45,7 @@ class VuesAnonymesTest {
                 .licenseDaysRemaining(30L)
                 .modulesSubscribed(List.of("NC", "AUDIT"))
                 .build());
-        structures = new StructureController(structureService);
+        structures = new StructureController(structureService, new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
 
         LicenceInstalleeService licenceService = mock(LicenceInstalleeService.class);
         when(licenceService.etat()).thenReturn(EtatLicenceDto.builder()
@@ -54,12 +54,18 @@ class VuesAnonymesTest {
                 .debut(LocalDate.of(2026, 1, 1)).fin(LocalDate.of(2026, 12, 31)).joursRestants(80)
                 .modules(List.of("NC")).utilisateursMax(25).message("Licence active.")
                 .build());
-        licence = new LicenceController(licenceService);
+        licence = new LicenceController(licenceService, new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
+        // L'appelant anonyme (passerelle, ouverture de session) désigne son client par l'en-tête.
+        org.springframework.mock.web.MockHttpServletRequest requete = new org.springframework.mock.web.MockHttpServletRequest();
+        requete.addHeader("X-Direction-Id", "6f1c0f2e-6a1b-4f43-9a55-0c1f7f0b1a11");
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(requete));
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
     }
 
     private void anonyme() {
@@ -102,6 +108,15 @@ class VuesAnonymesTest {
         authentifie();
 
         assertThat(structures.getDirection().getBody().getEmail()).isEqualTo("direction@exemple.bf");
+    }
+
+    @Test
+    @DisplayName("Sans jeton ni client désigné, la direction n'est pas décrite : l'installation en sert plusieurs")
+    void direction_anonyme_sansClient() {
+        anonyme();
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+
+        assertThat(structures.getDirection().getBody()).isNull();
     }
 
     @Test

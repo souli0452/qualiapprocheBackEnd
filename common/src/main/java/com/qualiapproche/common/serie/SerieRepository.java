@@ -17,6 +17,9 @@ public interface SerieRepository<E extends AbstractSerieEntity> extends JpaRepos
     /**
      * Crée la série si elle n'existe pas encore, sans erreur si une autre transaction vient de le
      * faire : deux premières attributions simultanées dans une portée neuve ne se heurtent pas.
+     *
+     * <p>Cloisonnement : sans objet — la clé de série porte le client (voir
+     * {@code SerieController#appartientAuClient}).</p>
      */
     @Modifying
     @Query(value = "INSERT INTO serie_numero (cle_serie, valeur_courante) VALUES (:cle, :valeur) "

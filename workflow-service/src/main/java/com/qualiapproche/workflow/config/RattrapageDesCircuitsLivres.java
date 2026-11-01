@@ -7,7 +7,7 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -68,7 +68,7 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 @Slf4j
 @Order(120) // après ChampDocumentRejetInitializer, qui complète les champs
-public class RattrapageDesCircuitsLivres implements CommandLineRunner {
+public class RattrapageDesCircuitsLivres implements Amorce {
 
     /**
      * Champs qu'une étape du circuit livré a demandés puis abandonnés, par code d'étape.
@@ -132,9 +132,13 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
 
     private final WorkflowRepository workflowRepository;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         completer("NON_CONFORMITE", WorkflowDataInitializer::circuitNonConformiteParDefaut);
         completer("PLAN_ACTION", WorkflowDataInitializer::circuitPlanActionParDefaut);
         // Les deux circuits documentaires ne reçoivent que l'adressage de leurs courriels — voir
@@ -682,5 +686,10 @@ public class RattrapageDesCircuitsLivres implements CommandLineRunner {
                 .filter(step -> Objects.nonNull(step.getCode()))
                 .forEach(step -> parCode.putIfAbsent(step.getCode(), step));
         return parCode;
+    }
+
+    @Override
+    public int ordre() {
+        return 120;
     }
 }

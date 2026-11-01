@@ -1,5 +1,9 @@
 package com.qualiapproche.referentiel.service;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import com.qualiapproche.common.enumeration.TypeStructure;
 import com.qualiapproche.common.utils.CryptoUtils;
 import com.qualiapproche.referentiel.entities.Structure;
@@ -18,20 +22,18 @@ import org.springframework.stereotype.Component;
  * d'un client s'installe chez un autre.</p>
  *
  * <p>Le repère ne peut pas venir de la licence — ce serait demander à la pièce à vérifier de
- * fournir la référence de sa propre vérification. Il vient donc d'ici, dans cet ordre :</p>
+ * fournir la référence de sa propre vérification. Il vient donc d'ici, <b>pour la direction de
+ * l'appelant</b> — une installation sert désormais plusieurs clients, chacun avec son code :</p>
  * <ol>
- *   <li>la propriété {@code qualisira.licence.partenaire-code}, posée au déploiement ;</li>
- *   <li>à défaut, la colonne {@code code_partenaire} de la direction, obfusquée — que le
- *       provisionnement y pose depuis {@code tenant-init.json}, où elle s'écrit en clair : un
- *       fichier de livraison doit se relire.</li>
+ *   <li>la colonne {@code code_partenaire} de la direction, obfusquée — posée à la création du
+ *       client, ou par le provisionnement depuis {@code tenant-init.json} ;</li>
+ *   <li>à défaut, la propriété {@code qualisira.licence.partenaire-code}, posée au déploiement :
+ *       elle ne vaut que pour une installation à un seul client.</li>
  * </ol>
  *
  * <p>Ce code ne sort par aucune API : il est absent des DTO, et {@code Structure} le marque
  * {@code @JsonIgnore}. L'exposer en consultation ou en liste apprendrait à qui sait lire une
  * réponse JSON la valeur exacte qu'il lui faudrait recopier.</p>
- *
- * <p>La propriété l'emporte : elle se change sans reconstruire le produit, ce qu'un changement de
- * raison sociale ou une reprise de dossier finit toujours par exiger.</p>
  *
  * <h2>Ce que l'obfuscation vaut, et ce qu'elle ne vaut pas</h2>
  *
@@ -57,52 +59,47 @@ public class CodeDeLInstallation {
     private String duDeploiement;
 
     /**
-     * Résolu à la première demande, non au démarrage.
-     *
-     * <p>Le provisionnement qui pose le code est un {@code CommandLineRunner} : il s'exécute une
-     * fois tous les objets construits. Résoudre en {@code @PostConstruct} lirait donc une base
-     * encore vide au tout premier démarrage, et l'installation se croirait sans partenaire
-     * jusqu'au redémarrage suivant.</p>
-     *
-     * <p>Retenu <b>dès qu'il vaut quelque chose</b>, et pas avant : il est posé une fois pour
-     * toutes, et le relire à chaque appel ferait une requête par vérification de licence. Mais
-     * retenir une absence l'aurait figée pour la vie du processus — une installation qui pose son
-     * code après coup ne l'aurait vu qu'au redémarrage suivant, et les structures créées entre
-     * les deux n'en auraient jamais hérité. Tant qu'il manque, on redemande : c'est le cas
-     * dégradé, et il se répare de lui-même.</p>
+     * Les codes déjà lus, par direction : retenus <b>dès qu'ils valent quelque chose</b>, et pas
+     * avant. Retenir une absence l'aurait figée pour la vie du processus — un client dont le code
+     * est posé après coup ne l'aurait vu qu'au redémarrage suivant.
      */
-    private String attendu;
+    private final Map<UUID, String> attendus = new ConcurrentHashMap<>();
 
     public CodeDeLInstallation(StructureRepository structures) {
         this.structures = structures;
     }
 
-    /** Le code attendu, ou une chaîne vide si l'installation n'en déclare aucun. */
+    /** Le code attendu pour la direction de l'appelant, ou une chaîne vide si elle n'en déclare aucun. */
     public String attendu() {
-        if (attendu == null || attendu.isBlank()) {
-            attendu = resoudre();
+        UUID direction = Cloisonnement.directionDuClient();
+        if (direction != null) {
+            String connu = attendus.get(direction);
+            if (connu != null) {
+                return connu;
+            }
+            String enBase = depuisLaBase(direction);
+            if (!enBase.isBlank()) {
+                attendus.put(direction, enBase);
+                return enBase;
+            }
         }
-        return attendu;
-    }
-
-    private String resoudre() {
         if (duDeploiement != null && !duDeploiement.isBlank()) {
-            log.info("Installation déclarée pour le partenaire « {} » (propriété de déploiement) : "
-                    + "seules ses licences seront acceptées.", duDeploiement.trim());
             return duDeploiement.trim();
         }
+        log.warn("Aucun code partenaire n'est déclaré pour la direction {} — ni sur la direction en "
+                + "base, ni par qualisira.licence.partenaire-code. Toute licence authentique sera "
+                + "acceptée, y compris celle d'un autre client.", direction);
+        return "";
+    }
 
-        String enBase = depuisLaBase();
-        if (enBase.isBlank()) {
-            log.warn("Aucun code partenaire n'est déclaré — ni par "
-                    + "qualisira.licence.partenaire-code, ni sur la direction en base. Toute "
-                    + "licence authentique sera acceptée, y compris celle d'un autre client. "
-                    + "À renseigner avant toute livraison.");
-        } else {
-            log.info("Installation déclarée pour le partenaire « {} » : seules ses licences seront "
-                    + "acceptées.", enBase);
-        }
-        return enBase;
+    /** Oublie tous les codes retenus. */
+    public void oublierTout() {
+        attendus.clear();
+    }
+
+    /** Oublie le code retenu d'une direction : à appeler quand il est reposé. */
+    public void oublier(UUID direction) {
+        attendus.remove(direction);
     }
 
     /**
@@ -126,8 +123,9 @@ public class CodeDeLInstallation {
         return codeDeLaLicence != null && codeDeLaLicence.trim().equalsIgnoreCase(repere);
     }
 
-    private String depuisLaBase() {
+    private String depuisLaBase(UUID direction) {
         try {
+            // Sous la session du client, Hibernate ne rend que sa direction.
             return structures.findAllByTypeStructure(TypeStructure.DIRECTION).stream()
                     .map(Structure::getCodePartenaire)
                     .filter(code -> code != null && !code.isBlank())
@@ -139,9 +137,8 @@ public class CodeDeLInstallation {
             // Une valeur illisible ne doit pas empêcher le service de servir : elle vaut absence
             // de code, et le contrôle ne s'applique pas — ce que le journal dit assez fort pour
             // qu'on ne le découvre pas le jour où une licence étrangère est acceptée.
-            log.error("Le code partenaire en base est illisible ({}) : aucun contrôle du "
-                    + "destinataire ne sera exercé. Reposez-le, ou renseignez "
-                    + "qualisira.licence.partenaire-code.", e.getMessage());
+            log.error("Le code partenaire de la direction {} est illisible ({}) : aucun contrôle du "
+                    + "destinataire ne sera exercé. Reposez-le.", direction, e.getMessage());
             return "";
         }
     }

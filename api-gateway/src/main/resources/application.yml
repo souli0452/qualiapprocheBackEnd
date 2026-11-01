@@ -226,6 +226,8 @@ gateway:
       - /user-service/api/v1/reinitialize-pwd
       - /user-service/api/v1/update-pwd
       - /referentiel-service/api/v1/licence
+      # La gestion des clients par l'administrateur de la plateforme, qui n'appartient à aucun.
+      - /referentiel-service/api/v1/plateforme
 
     # Module exigé selon le début du chemin ; le préfixe le plus long l'emporte. Les réclamations
     # et les risques vivent dans le même service que les non-conformités, et relèvent pourtant de

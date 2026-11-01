@@ -82,7 +82,7 @@ class ChampDocumentRejetTest {
                 .removeIf(champ -> WorkflowDataInitializer.CHAMP_DOCUMENT_REJET.equals(champ.getFieldName())));
         when(workflowRepository.findByResourceType("NON_CONFORMITE")).thenReturn(List.of(existant));
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         verify(workflowRepository).save(existant);
         assertThat(existant.getSteps()).allSatisfy(step ->
@@ -94,7 +94,7 @@ class ChampDocumentRejetTest {
     void rattrapage_idempotent() {
         when(workflowRepository.findByResourceType("NON_CONFORMITE")).thenReturn(List.of(circuit));
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Le circuit livré porte déjà le champ : rien à compléter, donc aucune écriture — et
         // surtout pas un second champ homonyme, que l'écran afficherait deux fois.

@@ -50,7 +50,7 @@ class ParametresLivresTest {
     @Test
     @DisplayName("Les clés que le code lit sont toutes semées")
     void toutesLesClesSemees() {
-        livres.semer();
+        livres.amorcer();
 
         assertThat(semes()).extracting(Parametre::getCle).contains(
                 "ORGANISATION_NOM", "CONTACT_EMAIL", "CONTACT_TELEPHONE", "ADRESSE_POSTALE",
@@ -61,7 +61,7 @@ class ParametresLivresTest {
     @Test
     @DisplayName("Aucune valeur n'est inventée : les réglages sont semés vides")
     void reglages_semesVides() {
-        livres.semer();
+        livres.amorcer();
 
         assertThat(semes()).allSatisfy(parametre -> assertThat(parametre.getValeur()).isNull());
     }
@@ -69,7 +69,7 @@ class ParametresLivresTest {
     @Test
     @DisplayName("Tout réglage porte un intitulé : la clé est technique, c'est l'intitulé qui se lit")
     void reglages_tousIntitules() {
-        livres.semer();
+        livres.amorcer();
 
         assertThat(semes()).allSatisfy(parametre ->
                 assertThat(parametre.getLibelle()).isNotBlank());
@@ -80,7 +80,7 @@ class ParametresLivresTest {
     void reglageExistant_intact() {
         when(repository.existsByCle(anyString())).thenReturn(true);
 
-        livres.semer();
+        livres.amorcer();
 
         verify(repository, never()).save(any());
     }

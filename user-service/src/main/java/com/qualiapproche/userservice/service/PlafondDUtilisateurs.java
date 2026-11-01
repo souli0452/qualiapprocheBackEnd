@@ -123,7 +123,10 @@ public class PlafondDUtilisateurs {
             log.warn("Plus de {} comptes lus : le total peut être sous-estimé.", LECTURE_MAX);
         }
 
+        // Le plafond est celui de la licence du client : seuls ses comptes le consomment. Le système
+        // (racine) compte toute l'installation.
         return comptes.stream()
+                .filter(DirectionDesComptes::visible)
                 .filter(UserRepresentation::isEnabled)
                 .filter(compte -> compte.getUsername() == null
                         || !compte.getUsername().startsWith(COMPTE_DE_SERVICE))

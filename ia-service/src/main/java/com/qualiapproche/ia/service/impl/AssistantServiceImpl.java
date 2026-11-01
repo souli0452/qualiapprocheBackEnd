@@ -114,10 +114,12 @@ public class AssistantServiceImpl implements AssistantService {
      * compris — soit la matière même des dossiers d'autrui, brouillons inclus, alors que les
      * listes de dossiers, elles, sont bornées depuis longtemps.</p>
      *
-     * <p>Le périmètre est celui que le budget décompte déjà : la direction du jeton — sa structure
-     * de rattachement quand il ne porte pas de {@code direction_id} — et, à défaut de l'une comme
-     * de l'autre, ses propres suggestions. Deux règles pour une seule clé : ce qu'on lit est ce
-     * qu'on consomme.</p>
+     * <p>Toute lecture est d'abord bornée au client de l'appelant (sa direction, {@code @TenantId}) ;
+     * au sein de son organisation, il ne lit que ses propres suggestions. Le périmètre « sa
+     * structure » qui prévalait jusqu'ici reposait sur une {@code direction_id} qui contenait en
+     * fait la structure de l'auteur ; elle porte désormais la direction racine, et la suggestion
+     * n'enregistre pas de structure : s'y fier aurait ouvert à chacun les suggestions de toute
+     * l'organisation.</p>
      *
      * <p>{@link PermissionsPortee#TOUTES_STRUCTURES} passe outre, comme pour les tableaux de bord
      * et les listes de dossiers : c'est la même habilitation transverse, et lui en opposer une
@@ -130,10 +132,6 @@ public class AssistantServiceImpl implements AssistantService {
     private Page<SuggestionIa> pageDuPerimetre(Pageable range) {
         if (permissionChecker.detient(PermissionsPortee.TOUTES_STRUCTURES)) {
             return repository.findAll(range);
-        }
-        UUID directionId = SecurityUtils.getCurrentDirectionId();
-        if (directionId != null) {
-            return repository.findAllByDirectionId(directionId, range);
         }
         String utilisateurId = SecurityUtils.getCurrentUserId();
         return utilisateurId != null

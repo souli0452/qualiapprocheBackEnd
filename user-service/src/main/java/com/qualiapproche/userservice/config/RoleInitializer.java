@@ -8,7 +8,7 @@ import com.qualiapproche.userservice.entities.AppRole;
 import com.qualiapproche.userservice.repository.AppRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -18,10 +18,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Les rôles standards d'un client, et les permissions que chaque version leur ajoute.
+ *
+ * <p>Chaque client a ses rôles : ils sont posés sous sa direction ({@link Amorce}), à sa création
+ * puis à chaque démarrage. Ils l'étaient au démarrage pour toute l'installation, ce qui n'a plus de
+ * sens — hors d'un client, la session voit les rôles de tous et {@code findByName} en trouverait
+ * plusieurs.</p>
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class RoleInitializer implements CommandLineRunner {
+public class RoleInitializer implements Amorce {
 
     /** Permission qui commande l'installation d'une licence (cf. {@code LicenceController}). */
     private static final String PERMISSION_LICENCE = "licence-write";
@@ -29,7 +37,7 @@ public class RoleInitializer implements CommandLineRunner {
     private final AppRoleRepository appRoleRepository;
 
     @Override
-    public void run(String... args) {
+    public void amorcer() {
         log.info("Rôles standards : création des absents, les rôles existants sont laissés tels quels.");
 
         // 1. SUPER_ADMIN : à sa création, littéralement toutes les permissions du dictionnaire.

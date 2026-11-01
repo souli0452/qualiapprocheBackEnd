@@ -67,7 +67,8 @@ public class LicenceFilter implements GlobalFilter, Ordered {
             "/user-service/api/v1/initiate-reset-pwd",
             "/user-service/api/v1/reinitialize-pwd",
             "/user-service/api/v1/update-pwd",
-            "/referentiel-service/api/v1/licence");
+            "/referentiel-service/api/v1/licence",
+            "/referentiel-service/api/v1/plateforme");
 
     /**
      * Module exigé selon le début du chemin, du plus précis au plus général.
@@ -93,7 +94,14 @@ public class LicenceFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        return licence.etat().flatMap(etat -> {
+        String direction = DirectionDuJeton.lire(exchange.getRequest().getHeaders().getFirst("Authorization"));
+        if (direction == null) {
+            // Sans client — l'administrateur de la plateforme, un compte non rattaché : il n'y a
+            // pas de licence à opposer. Les services, eux, refusent d'écrire hors d'un client.
+            return chain.filter(exchange);
+        }
+
+        return licence.etat(direction).flatMap(etat -> {
             if (!etat.actionsOuvertes()) {
                 return refuser(exchange, etat.message() != null ? etat.message()
                         : "La licence de cette installation n'est plus valide : les actions sont "

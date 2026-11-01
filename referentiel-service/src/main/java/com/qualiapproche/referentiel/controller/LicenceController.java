@@ -1,5 +1,7 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
+import java.util.UUID;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.response.ApiResponse;
@@ -52,14 +54,20 @@ import static com.qualiapproche.common.utils.ApiUrls.QUALI_APPROCHE_ROOT_URL;
 public class LicenceController {
 
     private final LicenceInstalleeService service;
+    private final ExecutionCloisonnee execution;
 
     @Operation(summary = "État de la licence de cette installation")
     @GetMapping("/etat")
     public ResponseEntity<ApiResponse<EtatLicenceDto>> etat() {
         // Lu sans jeton par la passerelle et par user-service : ils reçoivent ce qu'ils lisent, et
         // non la référence ni le titulaire de la licence. Voir VuesAnonymes.
-        EtatLicenceDto etat = service.etat();
-        return ResponseEntity.ok(ApiResponse.success(VuesAnonymes.appelAnonyme() ? VuesAnonymes.etatLicence(etat) : etat));
+        if (VuesAnonymes.appelAnonyme()) {
+            // Chaque client a sa licence : l'appelant anonyme dit laquelle (X-Direction-Id).
+            UUID annoncee = VuesAnonymes.directionAnnoncee();
+            EtatLicenceDto etat = annoncee == null ? service.etat() : execution.pour(annoncee, service::etat);
+            return ResponseEntity.ok(ApiResponse.success(VuesAnonymes.etatLicence(etat)));
+        }
+        return ResponseEntity.ok(ApiResponse.success(service.etat()));
     }
 
     @Operation(summary = "Installer une licence remise par l'éditeur",

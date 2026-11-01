@@ -6,7 +6,7 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,15 +31,19 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Order(110) // après WorkflowStepCodeInitializer (100), qui fiabilise les codes d'étape
-public class RoleResponsableNormalizer implements CommandLineRunner {
+public class RoleResponsableNormalizer implements Amorce {
 
     private static final String PREFIXE = "ROLE_";
 
     private final WorkflowRepository workflowRepository;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         List<Workflow> circuits = workflowRepository.findAll();
         int etapesCorrigees = 0;
         int transitionsCorrigees = 0;
@@ -90,5 +94,10 @@ public class RoleResponsableNormalizer implements CommandLineRunner {
         }
         String normalise = role.substring(PREFIXE.length());
         return normalise.isBlank() ? null : normalise;
+    }
+
+    @Override
+    public int ordre() {
+        return 115;
     }
 }

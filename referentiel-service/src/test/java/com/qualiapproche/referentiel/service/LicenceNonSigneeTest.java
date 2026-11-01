@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
  * ce qui permet de le compter, ce qu'une installation ne pouvait pas faire pour elle-même : il
  * suffisait d'effacer la ligne pour en obtenir un nouveau.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class LicenceNonSigneeTest {
 
     /** Clé publique de l'éditeur, telle que la configure referentiel-service. */
@@ -56,7 +57,7 @@ class LicenceNonSigneeTest {
         service = new LicenceInstalleeService(repository, installation);
         ReflectionTestUtils.setField(service, "clePublique", CLE_PUBLIQUE);
         ReflectionTestUtils.setField(installation, "duDeploiement", "CHU-BF");
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
 
         when(repository.save(any(LicenceInstallee.class))).thenAnswer(appel -> appel.getArgument(0));
     }

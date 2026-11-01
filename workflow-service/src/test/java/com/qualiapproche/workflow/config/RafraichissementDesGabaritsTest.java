@@ -79,7 +79,7 @@ class RafraichissementDesGabaritsTest {
     void baseViergeLesModelesSontPoses() throws Exception {
         drapeau(false);
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         assertThat(base).hasSize(LIVRES);
         assertThat(base.get(CODE).getBody()).contains("max-width:600px");
@@ -91,7 +91,7 @@ class RafraichissementDesGabaritsTest {
         drapeau(false);
         base.put(CODE, retouche());
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         assertThat(base.get(CODE).getBody())
                 .as("le corps rédigé sur place doit survivre au démarrage")
@@ -107,7 +107,7 @@ class RafraichissementDesGabaritsTest {
         drapeau(true);
         base.put(CODE, retouche());
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         assertThat(base.get(CODE).getBody())
                 .as("le corps livré doit avoir remplacé celui de la base")
@@ -120,12 +120,12 @@ class RafraichissementDesGabaritsTest {
     @DisplayName("Drapeau laissé actif : un second démarrage n'écrit plus rien")
     void drapeauLaisseActifNEcritPasDeuxFois() throws Exception {
         drapeau(true);
-        initialiseur.run();
+        initialiseur.amorcer();
         clearInvocations(repository);
 
         // Un drapeau resté levé ne doit pas repousser les quinze lignes à chaque démarrage, ni
         // annoncer au journal une réécriture qui n'a pas eu lieu.
-        initialiseur.run();
+        initialiseur.amorcer();
 
         verify(repository, never()).save(any());
         assertThat(base).hasSize(LIVRES);

@@ -4,6 +4,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+
 import java.util.UUID;
 
 public class SecurityUtils {
@@ -54,21 +56,15 @@ public class SecurityUtils {
         return (jwt != null) ? jwt.getClaimAsString("email") : null;
     }
 
+    /**
+     * La direction (le client) pour laquelle l'appelant agit, ou {@code null} hors de tout client.
+     *
+     * <p>Elle se lisait autrefois dans {@code structure_id} à défaut d'un claim dédié : une
+     * personne rattachée à un service se voyait ainsi attribuer son service pour direction, et deux
+     * collègues du même client étaient cloisonnés l'un de l'autre. Voir {@link Cloisonnement}.</p>
+     */
     public static UUID getCurrentDirectionId() {
-        Jwt jwt = getJwt();
-        if (jwt != null) {
-            String directionId = jwt.getClaimAsString("direction_id");
-            if (directionId == null) {
-                // Fallback to structure_id if direction_id is not present
-                directionId = jwt.getClaimAsString("structure_id");
-            }
-            try {
-                return (directionId != null) ? UUID.fromString(directionId) : null;
-            } catch (IllegalArgumentException e) {
-                return null;
-            }
-        }
-        return null;
+        return Cloisonnement.directionDuClient();
     }
 
     /**

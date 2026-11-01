@@ -40,6 +40,7 @@ import static org.mockito.Mockito.when;
  * <p>Le contrôle vaut à l'installation <b>et</b> à chaque lecture : une licence posée avant que le
  * code ne soit renseigné ne doit pas passer au travers.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class LicenceReserveeAuPartenaireTest {
 
     /** Clé publique de l'éditeur, telle que la configure referentiel-service. */
@@ -72,13 +73,13 @@ class LicenceReserveeAuPartenaireTest {
     /** Le code posé au déploiement, celui qui l'emporte sur la base. */
     private void declare(String codePartenaire) {
         ReflectionTestUtils.setField(installation, "duDeploiement", codePartenaire);
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
     }
 
     /** Le code tel que le provisionnement l'a posé sur la direction : obfusqué. */
     private void declareEnBase(String codePartenaire) {
         ReflectionTestUtils.setField(installation, "duDeploiement", "");
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
         when(structures.findAllByTypeStructure(TypeStructure.DIRECTION)).thenReturn(List.of(
                 Structure.builder().codePartenaire(CryptoUtils.encrypt(codePartenaire)).build()));
     }
@@ -248,7 +249,7 @@ class LicenceReserveeAuPartenaireTest {
     @DisplayName("Un code illisible en base ne met pas le service à l'arrêt")
     void lecture_codeIllisibleEnBase() {
         ReflectionTestUtils.setField(installation, "duDeploiement", "");
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
         when(structures.findAllByTypeStructure(TypeStructure.DIRECTION)).thenReturn(List.of(
                 Structure.builder().codePartenaire("ceci-n-est-pas-du-chiffre").build()));
 
@@ -262,7 +263,7 @@ class LicenceReserveeAuPartenaireTest {
         // C'est la porte de sortie : la propriété se change sans toucher à la base ni
         // reconstruire le produit, précisément quand la colonne est inexploitable.
         ReflectionTestUtils.setField(installation, "duDeploiement", "CHU-BF");
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
         when(structures.findAllByTypeStructure(TypeStructure.DIRECTION)).thenReturn(List.of(
                 Structure.builder().codePartenaire("ceci-n-est-pas-du-chiffre").build()));
 

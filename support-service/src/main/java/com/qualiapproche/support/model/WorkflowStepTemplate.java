@@ -19,7 +19,7 @@ import lombok.experimental.SuperBuilder;
  */
 @Entity
 @Table(name = "qms_workflow_step_templates",
-        uniqueConstraints = @UniqueConstraint(name = "uk_step_template_code", columnNames = "code"))
+        uniqueConstraints = @UniqueConstraint(name = "uk_step_template_code", columnNames = {"direction_id", "code"}))
 @Getter
 @Setter
 @NoArgsConstructor

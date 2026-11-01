@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.numerotation;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.qualiapproche.amelioration.entities.SerieNumero;
 import com.qualiapproche.amelioration.repository.NonConformiteRepository;
 import com.qualiapproche.amelioration.repository.SerieNumeroRepository;
@@ -39,7 +40,10 @@ public class NumerotationDesNonConformites implements StrategieDeSerie<Numerotat
 
     @Override
     public String cle(Contexte c) {
-        return "NC|" + c.structureId() + "|" + c.annee();
+        // Une structure n'appartient qu'à un client : sa série est déjà la sienne. Sans structure,
+        // la série serait commune à tous les clients ; elle prend alors la direction pour repère.
+        String porteur = c.structureId().isEmpty() ? "D:" + Cloisonnement.courante() : c.structureId();
+        return "NC|" + porteur + "|" + c.annee();
     }
 
     /** Une série créée après coup reprend la suite des numéros déjà émis. */

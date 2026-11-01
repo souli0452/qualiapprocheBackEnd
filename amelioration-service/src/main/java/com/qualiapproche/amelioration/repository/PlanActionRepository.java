@@ -49,7 +49,7 @@ public interface PlanActionRepository extends JpaRepository<PlanAction, UUID>, J
             "status, " +
             "COUNT(*) AS total " +
             "FROM plan_action " +
-            "WHERE created_at BETWEEN :debut AND :fin " +
+            "WHERE " + NonConformiteRepository.DE_LA_DIRECTION + "AND created_at BETWEEN :debut AND :fin " +
             "GROUP BY EXTRACT(MONTH FROM created_at), status " +
             "ORDER BY EXTRACT(MONTH FROM created_at)",
             nativeQuery = true)

@@ -4,7 +4,7 @@ import com.qualiapproche.referentiel.entities.DomaineApplication;
 import com.qualiapproche.referentiel.repository.DomaineApplicationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
-public class DomaineApplicationInitializer implements CommandLineRunner {
+public class DomaineApplicationInitializer implements Amorce {
 
     private final DomaineApplicationRepository repository;
 
@@ -45,7 +45,7 @@ public class DomaineApplicationInitializer implements CommandLineRunner {
 
     @Override
     @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         Set<String> existants = repository.findAll().stream()
                 .map(DomaineApplication::getLibelle)
                 .filter(Objects::nonNull)

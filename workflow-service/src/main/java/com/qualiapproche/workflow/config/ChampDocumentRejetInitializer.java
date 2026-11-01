@@ -8,7 +8,7 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -47,7 +47,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 @Order(110) // après WorkflowStepCodeInitializer
-public class ChampDocumentRejetInitializer implements CommandLineRunner {
+public class ChampDocumentRejetInitializer implements Amorce {
 
     /**
      * Étape du circuit livré qui oriente le dossier vers une structure.
@@ -59,9 +59,13 @@ public class ChampDocumentRejetInitializer implements CommandLineRunner {
 
     private final WorkflowRepository workflowRepository;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         List<Workflow> circuits = workflowRepository.findByResourceType("NON_CONFORMITE");
         int ajoutes = 0;
 
@@ -105,5 +109,10 @@ public class ChampDocumentRejetInitializer implements CommandLineRunner {
         return step.getFields().stream()
                 .map(WorkflowStepField::getFieldName)
                 .anyMatch(nomDeChamp::equals);
+    }
+
+    @Override
+    public int ordre() {
+        return 110;
     }
 }

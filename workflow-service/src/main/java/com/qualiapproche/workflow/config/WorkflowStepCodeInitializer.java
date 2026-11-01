@@ -5,7 +5,7 @@ import com.qualiapproche.workflow.model.WorkflowStep;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,13 +30,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Order(100)
-public class WorkflowStepCodeInitializer implements CommandLineRunner {
+public class WorkflowStepCodeInitializer implements Amorce {
 
     private final WorkflowRepository workflowRepository;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         List<Workflow> circuits = workflowRepository.findAll();
         int complets = 0;
 
@@ -94,5 +98,10 @@ public class WorkflowStepCodeInitializer implements CommandLineRunner {
                 return candidat;
             }
         }
+    }
+
+    @Override
+    public int ordre() {
+        return 100;
     }
 }

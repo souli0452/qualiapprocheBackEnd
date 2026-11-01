@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
  * DTO, et une colonne absente du DTO serait écrite à nul — renommer une direction depuis l'écran
  * aurait effacé le code, éteignant le contrôle du destinataire sans que rien ne le dise.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class StructureHeriteDuCodePartenaireTest {
 
     private StructureRepository structureRepository;
@@ -59,7 +60,7 @@ class StructureHeriteDuCodePartenaireTest {
         when(mapper.toDto(any(Structure.class))).thenReturn(new StructureDto());
 
         service = new StructureServiceImpl(structureRepository, mapper,
-                mock(LicenceInstalleeService.class), installation);
+                mock(LicenceInstalleeService.class), installation, new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
 
         when(structureRepository.save(any(Structure.class)))
                 .thenAnswer(appel -> appel.getArgument(0));
@@ -108,7 +109,7 @@ class StructureHeriteDuCodePartenaireTest {
     @DisplayName("Sans code déclaré, rien n'est posé — et rien n'est inventé")
     void creation_sansCodeDeclare() {
         ReflectionTestUtils.setField(installation, "duDeploiement", "");
-        ReflectionTestUtils.setField(installation, "attendu", null);
+        installation.oublierTout();
         when(structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION))
                 .thenReturn(List.of());
 

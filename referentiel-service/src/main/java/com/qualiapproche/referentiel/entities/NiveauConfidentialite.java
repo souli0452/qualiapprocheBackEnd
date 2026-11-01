@@ -37,7 +37,7 @@ import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
 @NoArgsConstructor
 @JsonInclude(NON_NULL)
 @Table(name = "niveaux_confidentialite",
-        uniqueConstraints = @UniqueConstraint(name = "uk_niveau_confidentialite_libelle", columnNames = "libelle"))
+        uniqueConstraints = @UniqueConstraint(name = "uk_niveau_confidentialite_libelle", columnNames = {"direction_id", "libelle"}))
 public class NiveauConfidentialite extends AuditEntity {
 
     @Column(nullable = false)

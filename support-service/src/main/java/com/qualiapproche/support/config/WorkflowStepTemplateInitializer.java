@@ -6,9 +6,8 @@ import com.qualiapproche.support.model.WorkflowStepTemplate;
 import com.qualiapproche.support.repository.WorkflowStepTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.annotation.Transactional;
+import com.qualiapproche.common.cloisonnement.Amorce;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
@@ -22,17 +21,19 @@ import java.util.List;
  * administrateur a réglé. Une entrée supprimée à dessein réapparaîtra en revanche au démarrage
  * suivant : c'est le prix de la reprise automatique, et la suppression d'une étape standard reste
  * un geste rare.</p>
+ *
+ * <p>Joué pour chaque client ({@link Amorce}) : le catalogue est à lui, il le règle sans toucher à
+ * celui des autres. Le rapprochement par code ne voit que ses étapes.</p>
  */
-@Configuration
+@Component
 @RequiredArgsConstructor
 @Slf4j
-public class WorkflowStepTemplateInitializer implements CommandLineRunner {
+public class WorkflowStepTemplateInitializer implements Amorce {
 
     private final WorkflowStepTemplateRepository stepTemplateRepository;
 
     @Override
-    @Transactional
-    public void run(String... args) {
+    public void amorcer() {
         List<EtapeStandard> catalogue = CatalogueEtapesStandard.charger();
 
         int creees = 0;

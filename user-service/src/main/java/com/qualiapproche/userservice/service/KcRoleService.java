@@ -50,7 +50,8 @@ import jakarta.ws.rs.NotFoundException;
 public class KcRoleService {
 
     /** Noms qu'aucun rôle Keycloak ne peut porter, outre ceux des permissions du dictionnaire. */
-    private static final Set<String> NOMS_RESERVES = Set.of("SUPER_ADMIN", "SUPERADMIN", "SERVICE_TECHNIQUE");
+    private static final Set<String> NOMS_RESERVES = Set.of("SUPER_ADMIN", "SUPERADMIN", "SERVICE_TECHNIQUE",
+            com.qualiapproche.userservice.config.RolePlateformeInitializer.ROLE);
 
     private final Keycloak keycloak;
     private final KcAuthProperties kcAuthProperties;

@@ -5,7 +5,7 @@ import com.qualiapproche.workflow.repository.EmailTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +19,7 @@ import java.util.Optional;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
-public class EmailTemplateDataInitializer implements CommandLineRunner {
+public class EmailTemplateDataInitializer implements Amorce {
 
     private final EmailTemplateRepository emailTemplateRepository;
 
@@ -40,9 +40,13 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
     @Value("${workflow.gabarits-courriel.rafraichir-au-demarrage:false}")
     private boolean rafraichirAuDemarrage;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) throws Exception {
+    public void amorcer() {
         // Rapprochement par code, insertion seule.
         //
         // La condition portait sur le nombre total de modèles : dès qu'un seul existait, aucun
@@ -220,5 +224,10 @@ public class EmailTemplateDataInitializer implements CommandLineRunner {
             this.subject = subject;
             this.description = description;
         }
+    }
+
+    @Override
+    public int ordre() {
+        return 20;
     }
 }

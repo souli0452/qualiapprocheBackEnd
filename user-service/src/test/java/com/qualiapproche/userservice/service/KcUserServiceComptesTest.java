@@ -74,6 +74,15 @@ class KcUserServiceComptesTest {
 
     private static final String MOI = "moi";
     private static final String FRONT = "https://qualisira.test";
+    /** La direction (le client) de l'appelant et des comptes de ces tests. */
+    private static final String DIRECTION = "11111111-1111-1111-1111-111111111111";
+    /** Une structure du client, telle que referentiel la connaît. */
+    private static final String STRUCTURE = "22222222-2222-2222-2222-222222222222";
+    /** Un jeton d'accès tel que Keycloak le rend : il porte la direction du compte. */
+    private static final String ACCES = "eyJhbGciOiJSUzI1NiJ9."
+            + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    ("{\"sub\":\"u1\",\"direction_id\":\"" + DIRECTION + "\"}").getBytes())
+            + ".signature";
 
     private final KcTokenService jetonsKeycloak = mock(KcTokenService.class);
     private final Keycloak keycloak = mock(Keycloak.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
@@ -107,6 +116,7 @@ class KcUserServiceComptesTest {
     private static void connecter(String userId) {
         Jwt jwt = Jwt.withTokenValue("jeton").header("alg", "RS256").subject(userId)
                 .claim("preferred_username", userId)
+                .claim("direction_id", DIRECTION)
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     }
@@ -115,6 +125,7 @@ class KcUserServiceComptesTest {
         AppRole role = new AppRole();
         role.setId(UUID.randomUUID());
         role.setName(nom);
+        role.setDirectionId(UUID.fromString(DIRECTION));
         role.setPermissions(new ArrayList<>(List.of(permissions)));
         return role;
     }
@@ -136,6 +147,7 @@ class KcUserServiceComptesTest {
             attributs.put("structure", List.of(structure));
         }
         attributs.put("fonction", List.of("Pilote"));
+        attributs.put("direction", List.of(DIRECTION));
         u.setAttributes(attributs);
         return u;
     }
@@ -253,6 +265,12 @@ class KcUserServiceComptesTest {
     @DisplayName("Création d'un compte")
     class Creation {
 
+        @BeforeEach
+        void connecterDansLaDirection() {
+            connecter(MOI);
+            when(structures.getStructureById(any())).thenReturn(new StructureDto());
+        }
+
         private Response cree(String id) {
             Response reponse = mock(Response.class);
             when(reponse.getStatus()).thenReturn(201);
@@ -271,7 +289,7 @@ class KcUserServiceComptesTest {
             when(jetons.emettre("nouvel-id", JetonDeCompte.Usage.VERIFICATION_COURRIEL,
                     JetonsDeCompte.DUREE_VERIFICATION)).thenReturn("jeton-v");
             KcUserDto demande = KcUserDto.builder().username("a.traore").email("a@q.bf").firstName("Awa")
-                    .lastName("Traoré").structure("S1").fonction("Pilote")
+                    .lastName("Traoré").structure(STRUCTURE).fonction("Pilote")
                     .roles(List.of("PILOTE", "INCONNU")).build();
 
             KcUserDto rendu = service.createUser(demande);
@@ -281,8 +299,9 @@ class KcUserServiceComptesTest {
             verify(comptes).create(envoye.capture());
             UserRepresentation u = envoye.getValue();
             assertThat(u.isEnabled()).isTrue();
-            assertThat(u.getAttributes()).containsEntry("structure", List.of("S1"))
-                    .containsEntry("fonction", List.of("Pilote"));
+            assertThat(u.getAttributes()).containsEntry("structure", List.of(STRUCTURE))
+                    .containsEntry("fonction", List.of("Pilote"))
+                    .containsEntry("direction", List.of(DIRECTION));
             CredentialRepresentation motDePasse = u.getCredentials().get(0);
             assertThat(motDePasse.isTemporary()).isTrue();
             assertThat(motDePasse.getValue()).hasSize(8);
@@ -387,15 +406,17 @@ class KcUserServiceComptesTest {
             UserRoleAssignment existante = affectation("cible", ancien);
             when(affectations.findByUserId("cible")).thenReturn(List.of(existante));
             when(roles.findByName("PILOTE")).thenReturn(Optional.of(nouveau));
+            when(structures.getStructureById(any())).thenReturn(new StructureDto());
 
             service.updateUser(KcUserDto.builder().id("cible").firstName("Ali").lastName("Ouédraogo")
-                    .email("c@q.bf").enabled(true).structure("S2").fonction("Auditeur")
+                    .email("c@q.bf").enabled(true).structure(STRUCTURE).fonction("Auditeur")
                     .roles(List.of("PILOTE")).build());
 
             verify(ressource).update(u);
             assertThat(u.getFirstName()).isEqualTo("Ali");
-            assertThat(u.getAttributes()).containsEntry("structure", List.of("S2"))
-                    .containsEntry("fonction", List.of("Auditeur"));
+            assertThat(u.getAttributes()).containsEntry("structure", List.of(STRUCTURE))
+                    .containsEntry("fonction", List.of("Auditeur"))
+                    .containsEntry("direction", List.of(DIRECTION));
             verify(affectations).delete(existante);
             verify(affectations).save(any(UserRoleAssignment.class));
         }
@@ -513,7 +534,7 @@ class KcUserServiceComptesTest {
     class Connexion {
 
         private KcTokenDto jetonsEmis() {
-            return KcTokenDto.builder().accessToken("acces-secret").refreshToken("renouv-secret")
+            return KcTokenDto.builder().accessToken(ACCES).refreshToken("renouv-secret")
                     .expiresIn(300).refreshExpiresIn(1800).tokenType("Bearer").build();
         }
 
@@ -527,9 +548,9 @@ class KcUserServiceComptesTest {
             Map<String, Object> corps = service.login(
                     KcLoginRequestDto.builder().username("u1").password("p").build(), reponse);
 
-            assertThat(corps.toString()).doesNotContain("acces-secret", "renouv-secret");
+            assertThat(corps.toString()).doesNotContain(ACCES, "renouv-secret");
             assertThat(reponse.getHeaders("Set-Cookie"))
-                    .anySatisfy(c -> assertThat(c).startsWith("access_token=acces-secret").contains("HttpOnly"))
+                    .anySatisfy(c -> assertThat(c).startsWith("access_token=" + ACCES).contains("HttpOnly"))
                     .anySatisfy(c -> assertThat(c).startsWith("refresh_token=renouv-secret").contains("HttpOnly"));
         }
 

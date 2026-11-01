@@ -68,7 +68,7 @@ class ClaimStructureInitializerTest {
     }
 
     @Test
-    @DisplayName("Le mapper est créé avec l'attribut, le claim et le jeton d'accès attendus")
+    @DisplayName("Les mappers structure et direction sont créés avec l'attribut, le claim et le jeton d'accès attendus")
     void mapperAbsent_cree() {
         when(mappers.getMappers()).thenReturn(List.of());
 
@@ -76,15 +76,20 @@ class ClaimStructureInitializerTest {
 
         ArgumentCaptor<ProtocolMapperRepresentation> capture =
                 ArgumentCaptor.forClass(ProtocolMapperRepresentation.class);
-        verify(mappers).createMapper(capture.capture());
+        verify(mappers, org.mockito.Mockito.times(2)).createMapper(capture.capture());
 
-        Map<String, String> config = capture.getValue().getConfig();
+        Map<String, String> config = capture.getAllValues().get(0).getConfig();
         // C'est l'égalité exacte de ces trois valeurs qui relie l'attribut écrit par
         // KcUserService au claim lu par SecurityUtils — et au jeton que les services décodent.
         assertThat(config.get("user.attribute")).isEqualTo("structure");
         assertThat(config.get("claim.name")).isEqualTo("structure_id");
         assertThat(config.get("access.token.claim")).isEqualTo("true");
-        assertThat(capture.getValue().getProtocolMapper()).isEqualTo("oidc-usermodel-attribute-mapper");
+        assertThat(capture.getAllValues().get(0).getProtocolMapper()).isEqualTo("oidc-usermodel-attribute-mapper");
+
+        Map<String, String> direction = capture.getAllValues().get(1).getConfig();
+        assertThat(direction.get("user.attribute")).isEqualTo("direction");
+        assertThat(direction.get("claim.name")).isEqualTo("direction_id");
+        assertThat(direction.get("access.token.claim")).isEqualTo("true");
     }
 
     @Test
@@ -93,7 +98,9 @@ class ClaimStructureInitializerTest {
         ProtocolMapperRepresentation existant = new ProtocolMapperRepresentation();
         existant.setName("posé à la main depuis la console");
         existant.setConfig(Map.of("claim.name", "structure_id", "user.attribute", "structure"));
-        when(mappers.getMappers()).thenReturn(List.of(existant));
+        ProtocolMapperRepresentation direction = new ProtocolMapperRepresentation();
+        direction.setConfig(Map.of("claim.name", "direction_id", "user.attribute", "direction"));
+        when(mappers.getMappers()).thenReturn(List.of(existant, direction));
 
         initialiseur.run();
 

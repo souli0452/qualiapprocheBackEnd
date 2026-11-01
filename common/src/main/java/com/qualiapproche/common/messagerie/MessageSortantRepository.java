@@ -15,7 +15,12 @@ import java.util.UUID;
 @NoRepositoryBean
 public interface MessageSortantRepository<E extends AbstractMessageSortant> extends JpaRepository<E, UUID> {
 
-    /** Les messages dont l'heure est venue, les plus anciens d'abord. */
+    /**
+     * Les messages dont l'heure est venue, les plus anciens d'abord.
+     *
+     * <p>Cloisonnement : sans objet — le relais publie les messages de tous les clients ; chacun
+     * emporte sa direction ({@code direction_id}).</p>
+     */
     @Query(value = "SELECT id FROM message_sortant WHERE statut IN ('A_PUBLIER', 'EN_COURS') "
             + "AND prochaine_tentative_at <= :maintenant ORDER BY cree_le LIMIT :lot", nativeQuery = true)
     List<UUID> echus(@Param("maintenant") LocalDateTime maintenant, @Param("lot") int lot);

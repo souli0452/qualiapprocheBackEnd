@@ -10,7 +10,8 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * L'état de la licence, relu périodiquement auprès de referentiel-service.
@@ -40,11 +41,18 @@ public class EtatLicenceCache {
     /** Laisse tout passer : employé quand l'état n'a jamais pu être lu. */
     private static final Etat INCONNU = new Etat(true, List.of(), null);
 
+    /** L'en-tête qui désigne le client (Cloisonnement.EN_TETE). */
+    static final String EN_TETE_DIRECTION = "X-Direction-Id";
+
     private final WebClient webClient;
     private final long retentionSecondes;
 
-    private final AtomicReference<Etat> dernierConnu = new AtomicReference<>();
-    private final AtomicReference<Instant> lu = new AtomicReference<>(Instant.EPOCH);
+    /** Ce qui a été lu pour une direction, et quand. */
+    private record Lecture(Etat etat, Instant le) {
+    }
+
+    /** Chaque client a sa licence : l'état est retenu par direction. */
+    private final Map<String, Lecture> parDirection = new ConcurrentHashMap<>();
 
     public EtatLicenceCache(WebClient.Builder loadBalancedWebClientBuilder,
                             @Value("${gateway.licence-cache-ttl-seconds:60}") long retentionSecondes) {
@@ -52,25 +60,29 @@ public class EtatLicenceCache {
         this.retentionSecondes = retentionSecondes;
     }
 
-    public Mono<Etat> etat() {
-        Etat connu = dernierConnu.get();
-        if (connu != null && Instant.now().isBefore(lu.get().plusSeconds(retentionSecondes))) {
-            return Mono.just(connu);
+    /**
+     * L'état de la licence du client {@code direction}.
+     *
+     * <p>referentiel-service la sert sans jeton à qui annonce la direction dans
+     * {@code X-Direction-Id} : la passerelle la tire du jeton de l'appelant.</p>
+     */
+    public Mono<Etat> etat(String direction) {
+        Lecture connue = parDirection.get(direction);
+        if (connue != null && Instant.now().isBefore(connue.le().plusSeconds(retentionSecondes))) {
+            return Mono.just(connue.etat());
         }
 
         return webClient.get()
                 .uri("http://REFERENTIEL-SERVICE/api/v1/licence/etat")
+                .header(EN_TETE_DIRECTION, direction)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .timeout(Duration.ofSeconds(3))
                 .map(this::lire)
-                .doOnNext(etat -> {
-                    dernierConnu.set(etat);
-                    lu.set(Instant.now());
-                })
+                .doOnNext(etat -> parDirection.put(direction, new Lecture(etat, Instant.now())))
                 .onErrorResume(e -> {
-                    Etat precedent = dernierConnu.get();
-                    log.warn("État de la licence indisponible ({}) : {}", e.getMessage(),
+                    Etat precedent = connue != null ? connue.etat() : null;
+                    log.warn("État de la licence de {} indisponible ({}) : {}", direction, e.getMessage(),
                             precedent != null ? "le dernier état connu est réutilisé"
                                     : "les actions restent ouvertes le temps du rétablissement");
                     return Mono.just(precedent != null ? precedent : INCONNU);

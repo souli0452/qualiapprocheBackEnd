@@ -4,6 +4,8 @@ import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.storage.ReglesDePieceJointe;
 import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.support.model.PieceJointeEtape;
+import com.qualiapproche.support.repository.DemandeDocumentRepository;
+import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.PieceJointeEtapeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,11 @@ import java.util.UUID;
  * fichiers tient lieu de preuve : la référence contient le chemin
  * {@code pieces-etape/<famille>/<dossier>/}. Sans l'un ou l'autre, le point d'entrée rendrait
  * n'importe quel objet du serveur de fichiers à qui sait lire un document.</p>
+ *
+ * <p><b>Le dossier doit être celui du client.</b> Le chemin ne dit rien du client : connaître
+ * l'identifiant d'un dossier d'un autre client et la référence d'une de ses pièces suffisait à la
+ * lire, et à en déposer sur son dossier. Le dossier est donc d'abord cherché dans les documents ou
+ * demandes du client de la session — une recherche que le cloisonnement filtre.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -45,6 +52,8 @@ public class FichiersDEtapeService {
 
     private final StorageService storageService;
     private final PieceJointeEtapeRepository pieceRepository;
+    private final DocumentQmsRepository documentRepository;
+    private final DemandeDocumentRepository demandeRepository;
 
     /**
      * Dépose une pièce et rend sa référence.
@@ -56,6 +65,7 @@ public class FichiersDEtapeService {
      */
     @Transactional
     public String deposer(String famille, UUID dossier, MultipartFile fichier) {
+        exigerLeDossierDuClient(famille, dossier);
         if (fichier == null || fichier.isEmpty()) {
             throw new BusinessException("Aucun fichier reçu : la pièce n'a pas été déposée.",
                     HttpStatus.BAD_REQUEST);
@@ -98,6 +108,7 @@ public class FichiersDEtapeService {
      * @throws BusinessException en 403 si la pièce ne relève pas du dossier demandé
      */
     public InputStream contenu(String famille, UUID dossier, String reference) {
+        exigerLeDossierDuClient(famille, dossier);
         exigerQuElleAppartienneAuDossier(famille, dossier, reference);
         try {
             return storageService.downloadFile(reference);
@@ -129,6 +140,19 @@ public class FichiersDEtapeService {
     /** Pièces d'étape d'un dossier, de la plus ancienne à la plus récente. */
     public List<PieceJointeEtape> pieces(String famille, UUID dossier) {
         return pieceRepository.findByFamilleAndDossierIdOrderByCreatedAtAsc(famille, dossier);
+    }
+
+    /** Le dossier existe-t-il chez le client de la session ? Sinon : introuvable, comme partout. */
+    private void exigerLeDossierDuClient(String famille, UUID dossier) {
+        boolean connu = dossier != null && switch (famille) {
+            case "documents" -> documentRepository.existsById(dossier);
+            case "demandes" -> demandeRepository.existsById(dossier);
+            default -> false;
+        };
+        if (!connu) {
+            throw new BusinessException("Aucun dossier ne porte cet identifiant : " + dossier,
+                    HttpStatus.NOT_FOUND);
+        }
     }
 
     /**

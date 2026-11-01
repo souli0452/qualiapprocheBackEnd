@@ -7,6 +7,7 @@ import com.qualiapproche.common.dto.auth.KcUserDto;
 import com.qualiapproche.common.utils.CryptoUtils;
 import com.qualiapproche.referentiel.client.UserClient;
 import com.qualiapproche.referentiel.entities.Structure;
+import com.qualiapproche.referentiel.plateforme.GestionDesClients;
 import com.qualiapproche.referentiel.repository.StructureRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.Queue;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Amorçage d'une nouvelle installation : la direction et son super administrateur.
@@ -27,6 +31,13 @@ import java.util.List;
  * licence est désormais signée par l'éditeur et posée par un administrateur
  * ({@link LicenceInstalleeService}) ; une installation neuve démarre donc sans licence, et
  * propose l'essai gratuit.</p>
+ *
+ * <p>Une installation sert désormais plusieurs clients : chaque entrée de {@code directions} est
+ * un client, dont la direction devient sa propre direction ({@code direction_id = id}). Ses
+ * comptes ne sont créés qu'une fois son paramétrage amorcé dans user-service — sans quoi son
+ * SUPER_ADMIN n'aurait pas de rôle — ce que {@code SynchronisationDesClients} fait dès que les
+ * services répondent ({@link #creerLesComptesEnAttente}). Le nœud {@code plateforme.administrateurs}
+ * désigne les comptes qui créent les clients, sans appartenir à aucun.</p>
  */
 @Slf4j
 @Service
@@ -36,6 +47,12 @@ public class TenantProvisioningService implements CommandLineRunner {
     private final StructureRepository structureRepository;
     private final UserClient userClient;
     private final ObjectMapper objectMapper;
+
+    /** Un compte décrit par le fichier, à créer quand user-service pourra le recevoir. */
+    private record ComptePrevu(UUID direction, KcUserDto compte) {
+    }
+
+    private final Queue<ComptePrevu> enAttente = new ConcurrentLinkedQueue<>();
 
     @Override
     @Transactional
@@ -57,6 +74,10 @@ public class TenantProvisioningService implements CommandLineRunner {
                     provisionDirection(dirNode);
                 }
             }
+            JsonNode administrateurs = root.path("plateforme").path("administrateurs");
+            if (administrateurs.isArray()) {
+                administrateurs.forEach(admin -> enAttente.add(new ComptePrevu(null, compte(admin, null))));
+            }
         }
     }
 
@@ -64,7 +85,10 @@ public class TenantProvisioningService implements CommandLineRunner {
         String libelleLong = node.get("libelleLong").asText();
         String libelleCourt = node.get("libelleCourt").asText();
 
-        Structure direction = structureRepository.findByLibelleLong(libelleLong).orElse(null);
+        // Une direction racine de ce nom : une structure homonyme chez un autre client n'en est pas une.
+        Structure direction = structureRepository.findByLibelleLong(libelleLong)
+                .filter(s -> s.getTypeStructure() == TypeStructure.DIRECTION && s.getDirection() == null)
+                .orElse(null);
 
         if (direction != null) {
             log.info("Direction {} already exists, skipping creation.", libelleLong);
@@ -83,15 +107,14 @@ public class TenantProvisioningService implements CommandLineRunner {
                     .codePartenaire(codeObfusque(node))
                     .build());
         }
+        // Le client est sa propre direction : c'est elle qui cloisonne tout ce qui lui appartient.
+        structureRepository.faireSaPropreDirection(direction.getId());
 
-        // Super Admin Info - ISOLATED to prevent rollback
         JsonNode adminNode = node.get("superAdmin");
         if (adminNode != null) {
-            try {
-                provisionSuperAdmin(direction, adminNode);
-            } catch (Exception e) {
-                log.warn("Non-critical error during Super Admin provisioning: {}.", e.getMessage());
-            }
+            KcUserDto superAdmin = compte(adminNode, direction.getId());
+            superAdmin.setRoles(List.of("SUPER_ADMIN"));
+            enAttente.add(new ComptePrevu(direction.getId(), superAdmin));
         }
     }
 
@@ -130,28 +153,41 @@ public class TenantProvisioningService implements CommandLineRunner {
                 + "confrontées.", direction.getLibelleLong());
     }
 
-    private void provisionSuperAdmin(Structure direction, JsonNode adminNode) {
-        KcUserDto adminDto = KcUserDto.builder()
-                .username(adminNode.get("username").asText())
-                .firstName(adminNode.get("firstName").asText())
-                .lastName(adminNode.get("lastName").asText())
-                .email(adminNode.get("email").asText())
-                .structure(direction.getId().toString())
-                .roles(List.of("SUPER_ADMIN"))
+    private static KcUserDto compte(JsonNode noeud, UUID direction) {
+        return KcUserDto.builder()
+                .username(noeud.get("username").asText())
+                .firstName(noeud.path("firstName").asText(""))
+                .lastName(noeud.path("lastName").asText(""))
+                .email(noeud.get("email").asText())
+                .structure(direction == null ? null : direction.toString())
                 .enabled(true)
                 .emailVerified(true)
                 .build();
+    }
 
-        try {
-            log.info("Creating Super Admin {}...", adminDto.getUsername());
-            userClient.createUser(adminDto);
-            log.info("Super Admin created successfully.");
-        } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("409")) {
-                log.info("Super Admin already exists in Keycloak. Skipping creation.");
+    /**
+     * Crée les comptes décrits par le fichier, une fois les clients amorcés.
+     *
+     * @return vrai s'il n'en reste aucun à créer
+     */
+    public boolean creerLesComptesEnAttente(GestionDesClients gestion) {
+        int aTraiter = enAttente.size();
+        for (int i = 0; i < aTraiter; i++) {
+            ComptePrevu prevu = enAttente.poll();
+            if (prevu == null) {
+                break;
+            }
+            boolean fait;
+            if (prevu.direction() == null) {
+                fait = gestion.creerUnAdministrateurDePlateforme(prevu.compte());
             } else {
-                log.error("Error creating Super Admin: {}", e.getMessage());
+                Object issue = gestion.creerLeSuperAdmin(prevu.direction(), prevu.compte());
+                fait = !(issue instanceof String texte && texte.startsWith("échec"));
+            }
+            if (!fait) {
+                enAttente.add(prevu);
             }
         }
+        return enAttente.isEmpty();
     }
 }

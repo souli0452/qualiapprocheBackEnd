@@ -1,5 +1,6 @@
 package com.qualiapproche.support.messagerie;
 
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
 import com.qualiapproche.common.messagerie.AdressesMessagerie;
 import com.qualiapproche.common.messagerie.Dedoublonnage;
 import com.qualiapproche.common.messagerie.LecteurDeMessages;
@@ -12,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
@@ -33,15 +33,18 @@ public class RappelsDuCircuit {
     private final DemandeDocumentService demandeService;
     private final Dedoublonnage<MessageTraite> dedoublonnage;
     private final LecteurDeMessages lecteur;
+    private final ExecutionCloisonnee execution;
 
     /**
      * Reçoit un rappel du courtier. Un message illisible est écarté sans nouvelle livraison ; une
      * erreur de traitement le rend au courtier.
      */
-    @Transactional
     @JmsListener(destination = AdressesMessagerie.RAPPELS_SUPPORT)
     public void surMessage(Message message) {
-        lecteur.lire(message, RappelDuCircuit.class).ifPresent(rappel -> recevoir(rappel, lecteur.identifiant(message)));
+        // Sous la direction du client pour qui le circuit a avancé, dans une transaction ouverte
+        // pour elle : la trace de dédoublonnage et la mise à jour du dossier restent solidaires.
+        execution.pour(lecteur.direction(message), () ->
+                lecteur.lire(message, RappelDuCircuit.class).ifPresent(rappel -> recevoir(rappel, lecteur.identifiant(message))));
     }
 
     /**

@@ -1,13 +1,12 @@
 package com.qualiapproche.referentiel.config;
 
+import com.qualiapproche.common.cloisonnement.Amorce;
 import com.qualiapproche.common.utils.ClesReglages;
 import com.qualiapproche.referentiel.entities.Parametre;
 import com.qualiapproche.referentiel.entities.TypeParametre;
 import com.qualiapproche.referentiel.repository.ParametreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,13 +28,15 @@ import java.util.List;
  * commande la mise en copie des courriels de non-conformité, aussi son absence ne peut pas passer
  * inaperçue.</p>
  *
+ * <p>Posés pour chaque client ({@link Amorce}) : à sa création, puis à chaque démarrage.</p>
+ *
  * <p>Idempotent : chaque clé absente est créée, celles qui existent ne sont pas touchées — un
  * redémarrage n'écrase jamais ce que l'organisation a saisi.</p>
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class ParametresLivres {
+public class ParametresLivres implements Amorce {
 
     private record Livre(String cle, String libelle, String description, TypeParametre type,
                         boolean lisibleSansHabilitation) { }
@@ -83,9 +84,9 @@ public class ParametresLivres {
 
     private final ParametreRepository repository;
 
-    @EventListener(ApplicationReadyEvent.class)
+    @Override
     @Transactional
-    public void semer() {
+    public void amorcer() {
         int crees = 0;
         for (Livre livre : LIVRES) {
             if (repository.existsByCle(livre.cle())) {

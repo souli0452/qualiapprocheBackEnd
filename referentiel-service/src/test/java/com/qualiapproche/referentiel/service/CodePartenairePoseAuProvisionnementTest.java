@@ -145,7 +145,9 @@ class CodePartenairePoseAuProvisionnementTest {
         StructureRepository apres = mock(StructureRepository.class);
         when(apres.findAllByTypeStructure(TypeStructure.DIRECTION)).thenReturn(List.of(direction));
 
-        assertThat(new CodeDeLInstallation(apres).attendu())
+        // Lu pour le client : chaque direction a son code.
+        assertThat(com.qualiapproche.common.cloisonnement.Cloisonnement.pour(direction.getId(),
+                () -> new CodeDeLInstallation(apres).attendu()))
                 .isEqualTo(direction().get("code").asText());
     }
 }

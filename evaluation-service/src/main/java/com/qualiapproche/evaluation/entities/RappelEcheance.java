@@ -1,5 +1,6 @@
 package com.qualiapproche.evaluation.entities;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -11,6 +12,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.TenantId;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,7 +27,11 @@ import java.util.UUID;
  *
  * <p>Hors d'{@code AuditEntity}, délibérément : celle-ci prend la direction dans le jeton à
  * l'enregistrement, et la ronde de nuit n'en a pas. La direction est posée ici à la main, depuis
- * l'audit.</p>
+ * l'audit — la ronde tourne en racine, qui peut écrire pour la direction qu'elle nomme.</p>
+ *
+ * <p>Cloisonnée comme le reste ({@code @TenantId}) : la lecture du tableau de bord filtre déjà sur
+ * la direction, mais une lecture qui l'oublierait ne verrait toujours que son client, et le
+ * rattrapage des directions passe aussi sur cette table.</p>
  */
 @Getter
 @Setter
@@ -34,12 +40,13 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Table(name = "rappel_echeance")
-public class RappelEcheance {
+public class RappelEcheance implements Cloisonnable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @TenantId
     @Column(name = "direction_id", nullable = false)
     private UUID directionId;
 

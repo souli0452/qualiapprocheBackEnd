@@ -1,5 +1,6 @@
 package com.qualiapproche.referentiel.service;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.enumeration.ModuleAbonnement;
 import com.qualiapproche.common.exception.BusinessException;
@@ -106,6 +107,16 @@ public class LicenceInstalleeService {
      */
     @Transactional
     public EtatLicenceDto etat() {
+        if (Cloisonnement.directionDuClient() == null) {
+            // Hors de tout client (le système, l'administrateur de la plateforme) : il n'y a pas
+            // « la » licence de l'installation, chaque direction a la sienne.
+            return EtatLicenceDto.builder()
+                    .statut("ABSENTE")
+                    .actionsOuvertes(false)
+                    .modules(List.of())
+                    .message("Aucun client désigné : la licence se lit pour une direction.")
+                    .build();
+        }
         LicenceInstallee installee = repository.findTopByOrderByInstalleeLeDesc().orElse(null);
 
         if (installee == null) {

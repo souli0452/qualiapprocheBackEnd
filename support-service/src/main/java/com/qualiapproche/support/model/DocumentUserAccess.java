@@ -1,5 +1,7 @@
 package com.qualiapproche.support.model;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnable;
+import org.hibernate.annotations.TenantId;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,7 +27,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DocumentUserAccess {
+public class DocumentUserAccess implements Cloisonnable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -44,4 +46,13 @@ public class DocumentUserAccess {
 
     @Column(nullable = false)
     private String role; // "READ_ONLY", "WRITE"
+
+    /**
+     * Le client à qui la ligne appartient, posé par Hibernate d'après la session
+     * ({@code Cloisonnement}). Cloisonnée en propre et non par son document : elle est aussi
+     * cherchée sans lui ({@code par utilisateur, pour « partagés avec moi »}).
+     */
+    @TenantId
+    @Column(name = "direction_id")
+    private UUID directionId;
 }

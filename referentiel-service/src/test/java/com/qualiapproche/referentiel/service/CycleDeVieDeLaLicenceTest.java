@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
  * au jour courant : le test vaut quel que soit le jour où il tourne, ce que ne permettrait pas une
  * licence d'exemple émise une fois pour toutes.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class CycleDeVieDeLaLicenceTest {
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -139,6 +140,7 @@ class CycleDeVieDeLaLicenceTest {
         void licenceValide() throws Exception {
             Jwt jwt = Jwt.withTokenValue("jeton").header("alg", "RS256").subject("u1")
                     .claim("name", "Awa Traoré")
+                    .claim("direction_id", com.qualiapproche.referentiel.support.SousUnClient.CLIENT.toString())
                     .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
             SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
             String jeton = commerciale(LocalDate.now().minusDays(1), LocalDate.now().plusYears(1));

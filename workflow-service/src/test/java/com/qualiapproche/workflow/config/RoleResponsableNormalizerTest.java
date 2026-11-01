@@ -63,7 +63,7 @@ class RoleResponsableNormalizerTest {
         Workflow aCircuit = circuit("ROLE_AGENT", "ROLE_PILOTE", "ROLE_RESPONSABLE_QUALITE", "ROLE_AGENT_IMPUTE");
         when(workflowRepository.findAll()).thenReturn(List.of(aCircuit));
 
-        normalizer.run();
+        normalizer.amorcer();
 
         assertThat(aCircuit.getSteps()).extracting(WorkflowStep::getResponsableRole)
                 .containsExactly("AGENT", "PILOTE", "RESPONSABLE_QUALITE", "AGENT_IMPUTE");
@@ -79,7 +79,7 @@ class RoleResponsableNormalizerTest {
                         .decision(StepDecision.APPROUVE).requiredRole("ROLE_RESPONSABLE_QUALITE").build())));
         when(workflowRepository.findAll()).thenReturn(List.of(aCircuit));
 
-        normalizer.run();
+        normalizer.amorcer();
 
         // Elle prime sur le rôle de l'étape : la laisser préfixée rendrait le correctif partiel.
         assertThat(aEtape.getTransitions().getFirst().getRequiredRole()).isEqualTo("RESPONSABLE_QUALITE");
@@ -90,7 +90,7 @@ class RoleResponsableNormalizerTest {
     void dejaNormalise_aucuneEcriture() {
         when(workflowRepository.findAll()).thenReturn(List.of(circuit("AGENT", "PILOTE")));
 
-        normalizer.run();
+        normalizer.amorcer();
 
         verify(workflowRepository, never()).save(any());
     }
@@ -101,8 +101,8 @@ class RoleResponsableNormalizerTest {
         Workflow aCircuit = circuit("ROLE_AGENT");
         when(workflowRepository.findAll()).thenReturn(List.of(aCircuit));
 
-        normalizer.run();
-        normalizer.run();
+        normalizer.amorcer();
+        normalizer.amorcer();
 
         assertThat(aCircuit.getSteps().getFirst().getResponsableRole()).isEqualTo("AGENT");
         verify(workflowRepository, org.mockito.Mockito.times(1)).save(any());
@@ -114,7 +114,7 @@ class RoleResponsableNormalizerTest {
         Workflow aCircuit = circuit("ROLE_AGENT");
         when(workflowRepository.findAll()).thenReturn(List.of(aCircuit));
 
-        normalizer.run();
+        normalizer.amorcer();
 
         // La signature du catalogue repose sur cette date ; la seule mise à jour des étapes
         // n'aurait pas touché la ligne du circuit, et les autres instances auraient continué
@@ -130,7 +130,7 @@ class RoleResponsableNormalizerTest {
         aCircuit.getSteps().getFirst().setResponsableRole(null);
         when(workflowRepository.findAll()).thenReturn(List.of(aCircuit));
 
-        normalizer.run();
+        normalizer.amorcer();
 
         assertThat(aCircuit.getSteps().getFirst().getResponsableRole()).isNull();
         assertThat(aCircuit.getSteps().get(1).getResponsableRole()).isEqualTo("AGENT");

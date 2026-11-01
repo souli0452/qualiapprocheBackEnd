@@ -1,6 +1,7 @@
 
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
 import com.qualiapproche.common.annotation.RequirePermissions;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -44,9 +45,11 @@ import static com.qualiapproche.common.utils.ApiUrls.*;
 public class StructureController {
 
     private final StructureService structureService;
+    private final ExecutionCloisonnee execution;
 
-    public StructureController(StructureService structureService) {
+    public StructureController(StructureService structureService, ExecutionCloisonnee execution) {
         this.structureService = structureService;
+        this.execution = execution;
     }
 
     @Operation(summary = "Créer une structure", description = "Ajoute une nouvelle entité organisationnelle au référentiel")
@@ -116,8 +119,12 @@ public class StructureController {
     // user-service —, seul l'état de la licence est rendu : voir VuesAnonymes.
     @GetMapping("/direction")
     public ResponseEntity<StructureDto> getDirection() {
-        StructureDto direction = structureService.getDirection();
-        return ResponseEntity.ok(VuesAnonymes.appelAnonyme() ? VuesAnonymes.direction(direction) : direction);
+        if (VuesAnonymes.appelAnonyme()) {
+            UUID annoncee = VuesAnonymes.directionAnnoncee();
+            StructureDto direction = annoncee == null ? null : execution.pour(annoncee, structureService::getDirection);
+            return ResponseEntity.ok(VuesAnonymes.direction(direction));
+        }
+        return ResponseEntity.ok(structureService.getDirection());
     }
 
     // Appelé de service à service (Feign) : la gateway n'intervient pas, aucune

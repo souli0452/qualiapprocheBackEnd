@@ -1,5 +1,6 @@
 package com.qualiapproche.common.messagerie;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.jms.TextMessage;
@@ -96,6 +97,7 @@ public class BoiteDEnvoi<E extends AbstractMessageSortant> {
         message.setTentatives(0);
         message.setProchaineTentativeAt(maintenant);
         message.setCreeLe(maintenant);
+        message.setDirectionId(Cloisonnement.directionDuClient());
         depot.save(message);
         UUID id = message.getId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -180,6 +182,9 @@ public class BoiteDEnvoi<E extends AbstractMessageSortant> {
                 TextMessage texte = session.createTextMessage(message.getContenu());
                 texte.setStringProperty(AdressesMessagerie.PROPRIETE_TYPE, message.getType());
                 texte.setStringProperty(AdressesMessagerie.PROPRIETE_IDENTIFIANT, id.toString());
+                if (message.getDirectionId() != null) {
+                    texte.setStringProperty(AdressesMessagerie.PROPRIETE_DIRECTION, message.getDirectionId().toString());
+                }
                 return texte;
             });
             transactionPropre.executeWithoutResult(s -> depot.findById(id).ifPresent(m -> {

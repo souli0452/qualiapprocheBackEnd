@@ -3,6 +3,8 @@ package com.qualiapproche.support.service;
 import com.qualiapproche.common.exception.BusinessException;
 import com.qualiapproche.storage.StorageService;
 import com.qualiapproche.support.model.PieceJointeEtape;
+import com.qualiapproche.support.repository.DemandeDocumentRepository;
+import com.qualiapproche.support.repository.DocumentQmsRepository;
 import com.qualiapproche.support.repository.PieceJointeEtapeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,12 +43,18 @@ class FichiersDEtapeServiceTest {
     private StorageService stockage;
     private PieceJointeEtapeRepository pieces;
     private FichiersDEtapeService service;
+    private DocumentQmsRepository documents;
+    private DemandeDocumentRepository demandes;
 
     @BeforeEach
     void setUp() {
         stockage = mock(StorageService.class);
         pieces = mock(PieceJointeEtapeRepository.class);
-        service = new FichiersDEtapeService(stockage, pieces);
+        documents = mock(DocumentQmsRepository.class);
+        demandes = mock(DemandeDocumentRepository.class);
+        service = new FichiersDEtapeService(stockage, pieces, documents, demandes);
+        when(documents.existsById(any())).thenReturn(true);
+        when(demandes.existsById(any())).thenReturn(true);
         when(pieces.save(any(PieceJointeEtape.class))).thenAnswer(i -> i.getArgument(0));
         when(pieces.findByReference(any())).thenReturn(Optional.empty());
     }
@@ -242,5 +250,20 @@ class FichiersDEtapeServiceTest {
         assertThatThrownBy(() -> service.deposer("documents", DOSSIER, lourde))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("25");
+    }
+
+    @Test
+    @DisplayName("Le dossier d'un autre client est introuvable : ni lecture ni dépôt, même avec le bon chemin")
+    void dossierDUnAutreClient_introuvable() throws Exception {
+        when(documents.existsById(DOSSIER)).thenReturn(false);
+        String reference = "pieces-etape/documents/" + DOSSIER + "/piece.pdf";
+
+        assertThatThrownBy(() -> service.contenu("documents", DOSSIER, reference))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> service.deposer("documents", DOSSIER,
+                new MockMultipartFile("file", "piece.pdf", "application/pdf", new byte[]{1})))
+                .isInstanceOf(BusinessException.class);
+        verify(stockage, never()).downloadFile(any());
     }
 }

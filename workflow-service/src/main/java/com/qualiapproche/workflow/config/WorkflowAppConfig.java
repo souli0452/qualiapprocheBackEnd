@@ -1,5 +1,8 @@
 package com.qualiapproche.workflow.config;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import org.springframework.core.task.TaskDecorator;
+import java.util.UUID;
 import com.qualiapproche.workflow.core.engine.WorkflowEngine;
 import com.qualiapproche.workflow.core.port.input.IWorkflowEnginePort;
 import com.qualiapproche.workflow.core.port.output.IWorkflowEngine;
@@ -35,5 +38,21 @@ public class WorkflowAppConfig {
             throw new RuntimeException("Failed to initialize WorkflowEngine", e);
         }
         return engine;
+    }
+
+    /**
+     * Les tâches {@code @Async} s'exécutent sous la direction de qui les a soumises.
+     *
+     * <p>Un fil de l'exécuteur n'a ni jeton ni direction : la session y voyait tous les clients, et
+     * la recherche d'un gabarit de courriel par son code — un par client — échouait sur plusieurs
+     * résultats. La direction est relevée à la soumission et rétablie dans le fil ; les appels à
+     * user-service qui en partent l'annoncent ({@code X-Direction-Id}), et n'y lisent que ce client.</p>
+     */
+    @Bean
+    public TaskDecorator directionDesTachesAsynchrones() {
+        return tache -> {
+            UUID direction = Cloisonnement.directionDuClient();
+            return direction == null ? tache : () -> Cloisonnement.pour(direction, tache);
+        };
     }
 }

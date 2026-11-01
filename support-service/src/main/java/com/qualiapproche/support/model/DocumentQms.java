@@ -8,6 +8,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "qms_documents")
+@Table(name = "qms_documents",
+        uniqueConstraints = @UniqueConstraint(name = "uk_document_number", columnNames = {"direction_id", "document_number"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,7 +39,8 @@ public class DocumentQms extends AuditEntity {
     @Version
     private Long version;
 
-    @Column(nullable = false, unique = true)
+    /** Unique chez un client : chacun a ses séries de numérotation. */
+    @Column(nullable = false)
     private String documentNumber;
 
     @Column(nullable = false)

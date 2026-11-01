@@ -113,7 +113,7 @@ class RoleInitializerTest {
         // installation échue reste définitivement en lecture seule.
         superAdmin("nc-read", "structure-write");
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         ArgumentCaptor<AppRole> enregistre = ArgumentCaptor.forClass(AppRole.class);
         verify(repository).save(enregistre.capture());
@@ -130,7 +130,7 @@ class RoleInitializerTest {
         AppRole superAdmin = superAdmin(LICENCE);
         superAdmin.getPermissions().removeAll(List.of(ASSISTANT_IA));
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         ArgumentCaptor<AppRole> enregistre = ArgumentCaptor.forClass(AppRole.class);
         verify(repository).save(enregistre.capture());
@@ -144,7 +144,7 @@ class RoleInitializerTest {
     void permissionPresente_riennEstReecrit() {
         superAdmin("nc-read", LICENCE);
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         verify(repository, never()).save(any());
     }
@@ -156,7 +156,7 @@ class RoleInitializerTest {
         // au redémarrage, sans le savoir.
         superAdmin(LICENCE);
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         verify(repository, never()).save(any());
     }
@@ -171,7 +171,7 @@ class RoleInitializerTest {
         AppRole pilote = role("PILOTE", List.of("nc-read"));
         AppRole qualite = role("RESPONSABLE_QUALITE", List.of("nc-read"));
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         // Chacun reçoit exactement sa portée, et pas celle du voisin : l'agent ne gagne pas la vue
         // d'ensemble de l'organisme en passant par ce chemin.
@@ -194,7 +194,7 @@ class RoleInitializerTest {
         AppRole qualite = role("RESPONSABLE_QUALITE", List.of("nc-read"));
         AppRole admin = role("SUPER_ADMIN", List.of(LICENCE));
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         // Voir n'est pas décider : le responsable qualité ne gagne pas le droit de décider partout
         // en passant par ce chemin, ni celui de passer outre le classement des documents.
@@ -211,7 +211,7 @@ class RoleInitializerTest {
         superAdmin(LICENCE);
         role("AGENT", List.of(PermissionsTableauDeBord.PERSONNEL));
 
-        initialiseur.run();
+        initialiseur.amorcer();
 
         // Un démarrage sur une base à jour ne touche aucune ligne.
         verify(repository, never()).save(any());

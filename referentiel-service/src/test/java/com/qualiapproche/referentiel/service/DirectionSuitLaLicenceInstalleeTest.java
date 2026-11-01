@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
  *
  * <p>Ces trois cas fixent l'accord entre ce qui est montré et ce qui est permis.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class DirectionSuitLaLicenceInstalleeTest {
 
     private StructureRepository structureRepository;
@@ -50,7 +51,7 @@ class DirectionSuitLaLicenceInstalleeTest {
         });
 
         service = new StructureServiceImpl(structureRepository, mapper, licenceInstalleeService,
-                new CodeDeLInstallation(structureRepository));
+                new CodeDeLInstallation(structureRepository), new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
 
         when(structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION))
                 .thenReturn(List.of(Structure.builder()

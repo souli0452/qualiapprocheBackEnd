@@ -1,5 +1,7 @@
 package com.qualiapproche.amelioration.messagerie;
 
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
+import org.springframework.transaction.PlatformTransactionManager;
 import com.qualiapproche.amelioration.service.NonConformiteService;
 import com.qualiapproche.amelioration.service.PlanActionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +41,8 @@ class RappelsDuCircuitTest {
     @SuppressWarnings("unchecked")
     private final Dedoublonnage<MessageTraite> dedoublonnage = mock(Dedoublonnage.class);
     private final RappelsDuCircuit rappels = new RappelsDuCircuit(nonConformites, plans, dedoublonnage,
-            new LecteurDeMessages(new ConvertisseurDesMessages(new ObjectMapper())));
+            new LecteurDeMessages(new ConvertisseurDesMessages(new ObjectMapper())),
+            new ExecutionCloisonnee(org.mockito.Mockito.mock(PlatformTransactionManager.class)));
     private final UUID dossier = UUID.randomUUID();
 
     @BeforeEach

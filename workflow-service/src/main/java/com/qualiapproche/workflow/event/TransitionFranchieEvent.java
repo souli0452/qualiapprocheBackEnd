@@ -65,6 +65,16 @@ public class TransitionFranchieEvent extends ApplicationEvent {
     @Setter
     private String resourceType;
 
+    /**
+     * Le client du dossier, relevé sur l'instance par la phase {@code BEFORE_COMMIT}.
+     *
+     * <p>Les suites asynchrones — courriel d'étape, ligne de la boîte de réception — s'exécutent
+     * hors de la requête : sans elle, elles liraient les gabarits et les circuits de tous les
+     * clients à la fois.</p>
+     */
+    @Setter
+    private UUID directionId;
+
     public TransitionFranchieEvent(String entityClass, String entityId, String workflowCode, String transitionCode,
                                    String etatAvant, String etatApres, String auteurId, String commentaire, String lotId) {
         super(entityId);

@@ -1,6 +1,8 @@
 
 package com.qualiapproche.referentiel.service.impl;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.dto.StructureDto;
 import com.qualiapproche.referentiel.entities.Structure;
@@ -36,6 +38,7 @@ public class StructureServiceImpl implements StructureService {
     private final StructureMapper mapper;
     private final LicenceInstalleeService licenceInstalleeService;
     private final CodeDeLInstallation installation;
+    private final ExecutionCloisonnee execution;
 
     @Override
     public StructureDto saveStructure(StructureDto structureDto) {
@@ -203,13 +206,18 @@ public class StructureServiceImpl implements StructureService {
      */
     @Override
     public StructureDto getDirection() {
-        List<Structure> directions = structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION);
-        if (directions.isEmpty()) {
-            log.error("Aucune structure de type DIRECTION n'existe.");
+        // La direction du client de l'appelant : une installation en sert plusieurs, il n'y a plus
+        // « la » direction.
+        // Sous la session du client, Hibernate ne rend que sa propre direction.
+        UUID client = Cloisonnement.directionDuClient();
+        Structure direction = client == null ? null : structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION)
+                .stream().findFirst().orElse(null);
+        if (direction == null) {
+            log.warn("Direction demandée hors de tout client ({}).", client);
             return null;
         }
 
-        StructureDto dto = mapper.toDto(directions.get(0));
+        StructureDto dto = mapper.toDto(direction);
         EtatLicenceDto licence = licenceInstalleeService.etat();
 
         dto.setLicenceActive(licence.isActionsOuvertes());
@@ -224,7 +232,9 @@ public class StructureServiceImpl implements StructureService {
     @Override
     public java.util.Map<String, Object> getStructureLicenseStatus(UUID structureId) {
         log.info("Vérification du statut de licence pour la structure: {}", structureId);
-        StructureDto direction = getDirection();
+        // La licence est celle du client de la structure demandée.
+        UUID client = structureRepository.findById(structureId).map(Structure::getDirectionId).orElse(null);
+        StructureDto direction = Cloisonnement.estUnClient(client) ? execution.pour(client, this::getDirection) : null;
         java.util.Map<String, Object> status = new java.util.HashMap<>();
 
         if (direction != null) {

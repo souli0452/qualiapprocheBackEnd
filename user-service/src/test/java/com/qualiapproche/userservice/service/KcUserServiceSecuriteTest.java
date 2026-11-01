@@ -34,6 +34,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,6 +60,8 @@ class KcUserServiceSecuriteTest {
 
     private static final String MOI = "moi";
     private static final String CIBLE = "cible";
+    /** La direction (le client) du gestionnaire connecté et des comptes qu'il administre. */
+    private static final String DIRECTION = "11111111-1111-1111-1111-111111111111";
 
     private final KcTokenService jetonsKeycloak = mock(KcTokenService.class);
     private final Keycloak keycloak = mock(Keycloak.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
@@ -82,6 +85,10 @@ class KcUserServiceSecuriteTest {
         when(keycloak.realm("quali").users()).thenReturn(comptes);
         when(comptes.get(CIBLE)).thenReturn(compteCible);
         when(affectations.findByUserId(anyString())).thenReturn(List.of());
+        when(compteCible.toRepresentation()).thenReturn(deMaDirection(CIBLE));
+        UserResource monCompte = mock(UserResource.class);
+        when(comptes.get(MOI)).thenReturn(monCompte);
+        when(monCompte.toRepresentation()).thenReturn(deMaDirection(MOI));
         connecter("gestionnaire");
     }
 
@@ -93,8 +100,16 @@ class KcUserServiceSecuriteTest {
     private static void connecter(String nom) {
         Jwt jwt = Jwt.withTokenValue("jeton").header("alg", "RS256").subject(MOI)
                 .claim("preferred_username", nom)
+                .claim("direction_id", DIRECTION)
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
+    }
+
+    private static UserRepresentation deMaDirection(String id) {
+        UserRepresentation compte = new UserRepresentation();
+        compte.setId(id);
+        compte.setAttributes(new java.util.HashMap<>(Map.of("direction", List.of(DIRECTION))));
+        return compte;
     }
 
     @Test
@@ -254,6 +269,7 @@ class KcUserServiceSecuriteTest {
         when(jetonsKeycloak.getAccessToken(any())).thenReturn(new KcTokenDto());
         UserRepresentation compte = new UserRepresentation();
         compte.setId(CIBLE);
+        compte.setAttributes(Map.of("direction", List.of(DIRECTION)));
         when(comptes.search("a.traore", true)).thenReturn(List.of(compte));
 
         ResponseEntity<Object> reponse = service.updatePassword("a.traore", "Ancien-1", "Nouveau-1");
@@ -279,6 +295,7 @@ class KcUserServiceSecuriteTest {
         when(jetonsKeycloak.getAccessToken(any())).thenReturn(new KcTokenDto());
         UserRepresentation compte = new UserRepresentation();
         compte.setId(CIBLE);
+        compte.setAttributes(Map.of("direction", List.of(DIRECTION)));
         when(comptes.search("admin", true)).thenReturn(List.of(compte));
         AppRole superAdmin = new AppRole();
         superAdmin.setName("SUPER_ADMIN");

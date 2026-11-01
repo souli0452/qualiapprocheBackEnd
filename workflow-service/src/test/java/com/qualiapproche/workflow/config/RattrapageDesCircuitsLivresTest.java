@@ -71,7 +71,7 @@ class RattrapageDesCircuitsLivresTest {
         Workflow circuit = circuitNonConformiteDAvant();
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         assertThat(circuit.getSteps()).extracting(WorkflowStep::getCode).contains("VALIDATION_RQ");
         verify(workflowRepository).save(circuit);
@@ -83,7 +83,7 @@ class RattrapageDesCircuitsLivresTest {
         Workflow circuit = circuitNonConformiteDAvant();
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Sans cela l'étape serait dans le circuit, visible dans l'éditeur, et jamais atteinte par
         // un seul dossier.
@@ -102,7 +102,7 @@ class RattrapageDesCircuitsLivresTest {
         etape(circuit, "NON_TRAITER").getFields().clear();
         enBase("PLAN_ACTION", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         assertThat(etape(circuit, "NON_TRAITER").getFields())
                 .extracting(WorkflowStepField::getFieldName)
@@ -123,7 +123,7 @@ class RattrapageDesCircuitsLivresTest {
         personnalise.setRequired(false);
         enBase("PLAN_ACTION", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // L'administrateur a pu changer le libellé ou la portée : ce n'est pas à un rattrapage de
         // défaire son choix. Seul ce qui manque est ajouté.
@@ -140,7 +140,7 @@ class RattrapageDesCircuitsLivresTest {
         enBase("NON_CONFORMITE", WorkflowDataInitializer.circuitNonConformiteParDefaut());
         enBase("PLAN_ACTION", WorkflowDataInitializer.circuitPlanActionParDefaut());
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         verify(workflowRepository, never()).save(any());
     }
@@ -156,7 +156,7 @@ class RattrapageDesCircuitsLivresTest {
         approbation.setSeverity(SeveriteAction.INFO);
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // La route est la structure du circuit et doit suivre ; l'apparence du bouton est le choix
         // de l'administrateur et n'a pas à être défait.
@@ -173,7 +173,7 @@ class RattrapageDesCircuitsLivresTest {
                 .responsableRole("PILOTE").build());
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Y greffer les étapes livrées mêlerait deux conceptions du circuit, et le résultat ne
         // serait celui de personne.
@@ -190,7 +190,7 @@ class RattrapageDesCircuitsLivresTest {
         aTraiter.getTransitions().forEach(t -> t.setRequiredRole(null));
         enBase("PLAN_ACTION", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Ouverte au rôle, l'étape laissait tout agent solder le plan d'un autre, et par là ouvrir
         // la clôture d'une non-conformité qui ne le concernait pas.
@@ -215,7 +215,7 @@ class RattrapageDesCircuitsLivresTest {
                 .type(FieldType.TEXT).isRequired(true).build());
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Le rattrapage ne complétant que ce qui manque, un champ retiré du circuit livré restait
         // en place sur toutes les bases en service — et, obligatoire, continuait d'être exigé à
@@ -237,7 +237,7 @@ class RattrapageDesCircuitsLivresTest {
                 .type(FieldType.TEXT).isRequired(false).build());
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Seuls les champs abandonnés par le circuit livré disparaissent : le reste appartient à
         // l'administrateur qui l'a posé.
@@ -255,7 +255,7 @@ class RattrapageDesCircuitsLivresTest {
         rejete.getFields().clear();
         enBase("PLAN_ACTION", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Sans le champ, l'étape serait réservée à une personne que rien ne permet de nommer, et
         // deviendrait indécidable.
@@ -289,7 +289,7 @@ class RattrapageDesCircuitsLivresTest {
         Workflow circuit = circuitAvantLaClotureDirecte();
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Une action est reconnue par son code. Sans renommage préalable, l'action livrée sous son
         // nouveau nom passerait pour absente et serait ajoutée : le dossier offrirait deux boutons
@@ -307,7 +307,7 @@ class RattrapageDesCircuitsLivresTest {
         Workflow circuit = circuitAvantLaClotureDirecte();
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         WorkflowStep validationRq = etape(circuit, "VALIDATION_RQ");
         assertThat(validationRq.getTransitions())
@@ -326,7 +326,7 @@ class RattrapageDesCircuitsLivresTest {
         Workflow circuit = circuitAvantLaClotureDirecte();
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Sans portée, le processus destinataire — obligatoire — aurait été réclamé des deux
         // actions : il serait devenu impossible de clore sans désigner à qui l'on transmet un
@@ -347,7 +347,7 @@ class RattrapageDesCircuitsLivresTest {
         aRealiser.getFields().forEach(champ -> champ.setRequired(true));
         enBase("PLAN_ACTION", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // La cause et la solution retenue sont désormais posées à la proposition du plan. Laissées
         // obligatoires ici, elles empêchaient le responsable de déclarer son action réalisée tant
@@ -370,7 +370,7 @@ class RattrapageDesCircuitsLivresTest {
         etape(circuit, "IMPUTATION").setEmailTemplateCode("monGabaritMaison");
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         assertThat(etape(circuit, "SOUMISSION").getEmailTemplateCode())
                 .isEqualTo("ncRenvoyeeAuDeclarant");
@@ -388,7 +388,7 @@ class RattrapageDesCircuitsLivresTest {
         cloture.setDestinataireCourriel(null);
         enBase("NON_CONFORMITE", circuit);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Sans elle, la clôture était annoncée au responsable qualité qui venait de la prononcer, et
         // non au pilote du processus qui avait signalé l'écart et attendait d'apprendre ce qu'il
@@ -411,7 +411,7 @@ class RattrapageDesCircuitsLivresTest {
         etape(enService, "APPROBATION").setEmailTemplateCode("validationRq");
         enBase("DOCUMENT", enService);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         assertThat(etape(enService, "REDACTION").getEmailTemplateCode())
                 .isEqualTo("documentRenvoyeAuRedacteur");
@@ -431,7 +431,7 @@ class RattrapageDesCircuitsLivresTest {
         etape(enService, "APPROBATION").setEmailTemplateCode("validationRq");
         enBase("DOCUMENT", enService);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         // Seuls les anciens codes livrés sont repris : le corps d'un courriel appartient à qui l'a
         // choisi, et le rattrapage n'a pas à défaire ce choix.
@@ -452,7 +452,7 @@ class RattrapageDesCircuitsLivresTest {
         etape(enService, "VERIFICATION").setEmailTemplateCode("structureToStructure");
         enBase("DOCUMENT", enService);
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         assertThat(enService.getSteps()).hasSize(2);
         assertThat(etape(enService, "VERIFICATION").getEmailTemplateCode())
@@ -464,7 +464,7 @@ class RattrapageDesCircuitsLivresTest {
     void circuitDocumentaire_dejaAJour_pasDEcriture() {
         enBase("DOCUMENT", WorkflowDataInitializer.circuitDocumentParDefaut());
 
-        rattrapage.run();
+        rattrapage.amorcer();
 
         verify(workflowRepository, never()).save(any());
     }

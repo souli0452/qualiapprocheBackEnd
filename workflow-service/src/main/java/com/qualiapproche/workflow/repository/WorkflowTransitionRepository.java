@@ -4,6 +4,7 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.model.StepDecision;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -32,7 +33,13 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
      */
     boolean existsByFromStepId(Long fromStepId);
 
-    /** Faits déjà exigés par au moins une transition, tous circuits confondus. */
-    @Query("select distinct t.conditionRequise from WorkflowTransition t where t.conditionRequise is not null")
-    List<String> faitsExiges();
+    /**
+     * Faits déjà exigés par au moins une transition des circuits de la direction.
+     *
+     * <p>La transition n'est pas cloisonnée par elle-même : elle suit son circuit. Sans la jointure
+     * jusqu'à lui, l'éditeur d'un client proposait les codes de faits des circuits des autres.</p>
+     */
+    @Query("select distinct t.conditionRequise from WorkflowTransition t join t.fromStep s join s.workflow w"
+            + " where t.conditionRequise is not null and (:racine = true or w.directionId = :direction)")
+    List<String> faitsExiges(@Param("direction") java.util.UUID direction, @Param("racine") boolean racine);
 }

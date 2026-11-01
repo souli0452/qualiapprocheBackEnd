@@ -13,7 +13,7 @@ import com.qualiapproche.workflow.model.WorkflowTransition;
 import com.qualiapproche.workflow.repository.WorkflowRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
+import com.qualiapproche.common.cloisonnement.Amorce;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +39,7 @@ import org.springframework.core.annotation.Order;
 @RequiredArgsConstructor
 @Slf4j
 @Order(10) // avant WorkflowStepCodeInitializer, qui complète les codes
-public class WorkflowDataInitializer implements CommandLineRunner {
+public class WorkflowDataInitializer implements Amorce {
 
     /**
      * Nom du champ portant le document justificatif d'un rejet. Repris tel quel par
@@ -165,9 +165,13 @@ public class WorkflowDataInitializer implements CommandLineRunner {
 
     private final WorkflowRepository workflowRepository;
 
+    /**
+     * Joué pour chaque client, dans une session placée sous sa direction ({@code AmorceDesDirections}) :
+     * au démarrage pour les clients connus, et à la création d'un client.
+     */
     @Override
     @Transactional
-    public void run(String... args) throws Exception {
+    public void amorcer() {
         log.info("Checking for default NON_CONFORMITE workflow...");
         List<Workflow> existingWorkflows = workflowRepository.findByResourceType("NON_CONFORMITE");
 
@@ -966,5 +970,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         workflow.addStep(decision);
 
         return workflow;
+    }
+
+    @Override
+    public int ordre() {
+        return 10;
     }
 }

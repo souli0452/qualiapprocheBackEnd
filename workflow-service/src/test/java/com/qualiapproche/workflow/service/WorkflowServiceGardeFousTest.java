@@ -72,8 +72,36 @@ class WorkflowServiceGardeFousTest {
     private final UUID workflowId = UUID.randomUUID();
     private final UUID resourceId = UUID.randomUUID();
 
+    /** Un client, comme dans toute requête : la résolution d'un circuit se fait pour lui. */
+    private static final UUID DIRECTION = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+    @org.junit.jupiter.api.AfterEach
+    void sansJeton() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private static void sousLaDirection(UUID direction) {
+        org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt
+                .withTokenValue("jeton").header("alg", "none")
+                .claim("sub", "u-1").claim("direction_id", direction.toString()).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+    }
+
+    @Test
+    @DisplayName("Sans direction annoncée, le circuit d'une famille n'est pas résolu : il le serait chez n'importe quel client")
+    void sansDirection_circuitDeFamilleRefuse() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+
+        assertThatThrownBy(() -> service.circuitPourFamilleEtCible("DOCUMENT", null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("aucune direction");
+        verify(workflowRepository, never()).findByResourceType(anyString());
+    }
+
     @BeforeEach
     void setUp() {
+        sousLaDirection(DIRECTION);
         service = new WorkflowService(moteur, historyRepository, eventPublisher, workflowRepository,
                 validationInstanceRepository, stepFieldRepository, fieldValueRepository,
                 transitionRepository, stepRepository,

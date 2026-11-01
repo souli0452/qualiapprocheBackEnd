@@ -1,5 +1,8 @@
 package com.qualiapproche.common.messagerie;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+
+import java.util.UUID;
 import jakarta.jms.JMSException;
 import jakarta.jms.Message;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +54,18 @@ public class LecteurDeMessages {
     public String identifiant(Message message) {
         try {
             return message.getStringProperty(AdressesMessagerie.PROPRIETE_IDENTIFIANT);
+        } catch (JMSException e) {
+            return null;
+        }
+    }
+
+    /**
+     * La direction pour le compte de laquelle le message a été déposé ; {@code null} pour un
+     * message du système, traité alors sur toute l'installation.
+     */
+    public UUID direction(Message message) {
+        try {
+            return Cloisonnement.uuid(message.getStringProperty(AdressesMessagerie.PROPRIETE_DIRECTION));
         } catch (JMSException e) {
             return null;
         }

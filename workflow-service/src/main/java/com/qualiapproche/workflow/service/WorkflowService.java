@@ -1,5 +1,6 @@
 package com.qualiapproche.workflow.service;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.qualiapproche.common.enumeration.AvancementCircuit;
 import com.qualiapproche.common.utils.SecurityUtils;
 import com.qualiapproche.workflow.core.port.input.IWorkflowEnginePort;
@@ -1008,6 +1009,12 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
      */
     @Transactional(readOnly = true)
     public WorkflowDto circuitPourFamilleEtCible(String famille, String cible) {
+        if (Cloisonnement.estLaRacine(Cloisonnement.courante())) {
+            // Chaque client a son circuit par défaut : sans savoir pour qui l'on demande, en
+            // rendre un serait ouvrir le dossier d'un client dans le circuit d'un autre.
+            throw new BusinessException("Le circuit d'une famille se résout pour un client : l'appel "
+                    + "n'annonce aucune direction.", HttpStatus.BAD_REQUEST);
+        }
         String familleNormalisee = TypeRessource.normaliser(famille);
         String cibleNormalisee = WorkflowMapper.cibleNormalisee(cible);
 
@@ -1962,6 +1969,10 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
                 // la clôture, longtemps après que le dossier aura changé de mains.
                 .structureEmettriceId(structureDuDeclarant)
                 .referenceLisible(referenceNettoyee(reference))
+                // Sous la direction d'un client, Hibernate pose la sienne. Ouvert par un geste du
+                // système (jeton de service sans direction annoncée), le dossier prend celle de son
+                // circuit : laissé à l'installation, aucun client ne le verrait.
+                .directionId(Cloisonnement.estLaRacine(Cloisonnement.courante()) ? workflow.getDirectionId() : null)
                 .build();
 
         WorkflowValidationInstance saved = this.initialiser(instance, workflow.getId().toString());
@@ -2086,7 +2097,9 @@ public class WorkflowService extends AbstractWorkflowService<WorkflowValidationI
     public java.util.List<String> faitsConnus() {
         java.util.Set<String> faits = new java.util.TreeSet<>();
 
-        transitionRepository.faitsExiges().stream()
+        java.util.UUID direction = com.qualiapproche.common.cloisonnement.Cloisonnement.courante();
+        transitionRepository.faitsExiges(direction,
+                        com.qualiapproche.common.cloisonnement.Cloisonnement.estLaRacine(direction)).stream()
                 .map(WorkflowMapper::normaliserFait)
                 .filter(java.util.Objects::nonNull)
                 .forEach(faits::add);

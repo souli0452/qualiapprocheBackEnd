@@ -1,5 +1,6 @@
 package com.qualiapproche.userservice.config;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import com.qualiapproche.userservice.config.utils.KcAuthProperties;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,10 @@ import java.util.Map;
  * chaque environnement, et survit à une recréation du royaume. Idempotent — un mapper déjà présent,
  * qu'il vienne d'un démarrage précédent ou de la console, est laissé tel quel.</p>
  *
+ * <p>Il pose de même le claim {@code direction_id}, tiré de l'attribut {@code direction} : la
+ * direction racine — le client — à laquelle le compte appartient. C'est elle qui cloisonne les
+ * données de chaque client ({@code Cloisonnement}) ; un jeton qui ne la porte pas ne voit rien.</p>
+ *
  * <p>Un échec n'empêche pas le service de démarrer : workflow-service sait résoudre la structure en
  * interrogeant user-service quand le jeton ne la porte pas ({@code StructureUtilisateurService}).
  * Le claim ne vaut que pour les jetons émis après son installation — les sessions ouvertes gardent
@@ -43,6 +48,12 @@ public class ClaimStructureInitializer implements CommandLineRunner {
 
     /** Claim que lisent les services (cf. SecurityUtils.getCurrentUserStructureId). */
     static final String CLAIM = "structure_id";
+
+    /** Attribut Keycloak où user-service inscrit la direction racine du compte. */
+    public static final String ATTRIBUT_DIRECTION = "direction";
+
+    /** Claim qui cloisonne les données par client (cf. Cloisonnement.CLAIM). */
+    static final String CLAIM_DIRECTION = Cloisonnement.CLAIM;
 
     private final Keycloak keycloak;
     private final KcAuthProperties kcAuthProperties;
@@ -61,27 +72,8 @@ public class ClaimStructureInitializer implements CommandLineRunner {
 
             ProtocolMappersResource mappers = keycloak.realm(kcAuthProperties.getRealm())
                     .clients().get(clients.get(0).getId()).getProtocolMappers();
-
-            boolean dejaPresent = mappers.getMappers().stream()
-                    .anyMatch(mapper -> mapper.getConfig() != null
-                            && CLAIM.equals(mapper.getConfig().get("claim.name")));
-            if (dejaPresent) {
-                log.info("Le claim {} est déjà mappé sur le client « {} » : rien à faire.",
-                        CLAIM, kcAuthProperties.getClientId());
-                return;
-            }
-
-            try (Response reponse = mappers.createMapper(mapperStructure())) {
-                if (reponse.getStatus() == Response.Status.CREATED.getStatusCode()) {
-                    log.info("Claim {} installé sur le client « {} » : les jetons émis désormais "
-                                    + "portent la structure de l'utilisateur.",
-                            CLAIM, kcAuthProperties.getClientId());
-                } else {
-                    log.warn("Le mapper du claim {} n'a pas été créé (HTTP {}). Les services "
-                                    + "compensent en interrogeant user-service.",
-                            CLAIM, reponse.getStatus());
-                }
-            }
+            installer(mappers, mapperStructure());
+            installer(mappers, mapperDirection());
         } catch (Exception e) {
             // Keycloak injoignable ou droits insuffisants : le service démarre quand même — le
             // repli par interrogation de user-service reste en place côté workflow.
@@ -90,16 +82,47 @@ public class ClaimStructureInitializer implements CommandLineRunner {
         }
     }
 
+    private void installer(ProtocolMappersResource mappers, ProtocolMapperRepresentation voulu) {
+        String claim = voulu.getConfig().get("claim.name");
+        boolean dejaPresent = mappers.getMappers().stream()
+                .anyMatch(mapper -> mapper.getConfig() != null
+                        && claim.equals(mapper.getConfig().get("claim.name")));
+        if (dejaPresent) {
+            log.info("Le claim {} est déjà mappé sur le client « {} » : rien à faire.",
+                    claim, kcAuthProperties.getClientId());
+            return;
+        }
+        try (Response reponse = mappers.createMapper(voulu)) {
+            if (reponse.getStatus() == Response.Status.CREATED.getStatusCode()) {
+                log.info("Claim {} installé sur le client « {} ».", claim, kcAuthProperties.getClientId());
+            } else {
+                log.warn("Le mapper du claim {} n'a pas été créé (HTTP {}).", claim, reponse.getStatus());
+            }
+        }
+    }
+
+    /** La direction racine du compte, qui cloisonne ses données. */
+    static ProtocolMapperRepresentation mapperDirection() {
+        ProtocolMapperRepresentation mapper = mapperDAttribut(ATTRIBUT_DIRECTION, CLAIM_DIRECTION);
+        mapper.setName("direction vers direction_id");
+        return mapper;
+    }
+
     /** Le mapper tel que la console l'aurait créé : « User Attribute », attribut → claim. */
     static ProtocolMapperRepresentation mapperStructure() {
-        ProtocolMapperRepresentation mapper = new ProtocolMapperRepresentation();
+        ProtocolMapperRepresentation mapper = mapperDAttribut(ATTRIBUT, CLAIM);
         mapper.setName("structure vers structure_id");
+        return mapper;
+    }
+
+    private static ProtocolMapperRepresentation mapperDAttribut(String attribut, String claim) {
+        ProtocolMapperRepresentation mapper = new ProtocolMapperRepresentation();
         mapper.setProtocol("openid-connect");
         mapper.setProtocolMapper("oidc-usermodel-attribute-mapper");
 
         Map<String, String> config = new HashMap<>();
-        config.put("user.attribute", ATTRIBUT);
-        config.put("claim.name", CLAIM);
+        config.put("user.attribute", attribut);
+        config.put("claim.name", claim);
         config.put("jsonType.label", "String");
         // Le jeton d'accès est celui que les services décodent ; l'ID token et userinfo suivent,
         // pour que le frontal puisse lire la même information sans autre appel.

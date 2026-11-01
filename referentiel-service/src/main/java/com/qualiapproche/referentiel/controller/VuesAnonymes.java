@@ -1,5 +1,9 @@
 package com.qualiapproche.referentiel.controller;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import java.util.UUID;
 import com.qualiapproche.common.dto.EtatLicenceDto;
 import com.qualiapproche.common.dto.StructureDto;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -24,6 +28,18 @@ import org.springframework.security.core.context.SecurityContextHolder;
 final class VuesAnonymes {
 
     private VuesAnonymes() {
+    }
+
+    /**
+     * Le client dont l'appelant anonyme demande la vue : l'en-tête {@code X-Direction-Id}, posé
+     * par la passerelle (depuis le jeton qu'elle a reçu) ou par user-service (à l'ouverture de
+     * session). Sans lui, il n'y a pas de client à décrire : une installation en sert plusieurs.
+     */
+    static UUID directionAnnoncee() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes servlet) {
+            return Cloisonnement.uuid(servlet.getRequest().getHeader(Cloisonnement.EN_TETE));
+        }
+        return null;
     }
 
     /** L'appel arrive-t-il sans jeton valide ? */

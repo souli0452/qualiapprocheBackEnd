@@ -58,4 +58,11 @@ public abstract class AbstractMessageSortant {
 
     @Column(name = "publie_le")
     private LocalDateTime publieLe;
+
+    /**
+     * Le client pour lequel le message a été déposé : le service qui le reçoit le traite sous
+     * cette direction. {@code null} pour un message du système.
+     */
+    @Column(name = "direction_id")
+    private UUID directionId;
 }

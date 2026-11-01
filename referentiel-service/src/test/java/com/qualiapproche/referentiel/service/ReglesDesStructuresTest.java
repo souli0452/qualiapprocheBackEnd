@@ -45,6 +45,7 @@ import static org.mockito.Mockito.when;
  * ce qui empêche deux structures de se confondre, et ce que l'écran reçoit quand il en cherche
  * une.</p>
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.qualiapproche.referentiel.support.SousUnClient.class)
 class ReglesDesStructuresTest {
 
     private StructureRepository depot;
@@ -77,7 +78,7 @@ class ReglesDesStructuresTest {
             dto.setLicenceActive(s.getLicenceActive());
             return dto;
         });
-        service = new StructureServiceImpl(depot, mapper, licence, installation);
+        service = new StructureServiceImpl(depot, mapper, licence, installation, new com.qualiapproche.common.cloisonnement.ExecutionCloisonnee(org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class)));
         when(depot.save(any(Structure.class))).thenAnswer(appel -> appel.getArgument(0));
     }
 
@@ -259,6 +260,10 @@ class ReglesDesStructuresTest {
         when(licence.etat()).thenReturn(EtatLicenceDto.builder().statut("ACTIVE").actionsOuvertes(true)
                 .joursRestants(12).fin(LocalDate.now().plusDays(12)).modules(List.of("AUDIT")).build());
 
+        // La licence est celle du client de la structure demandée.
+        Structure service_ = structure("SQ", "Service qualité");
+        service_.setDirectionId(com.qualiapproche.referentiel.support.SousUnClient.CLIENT);
+        when(depot.findById(any())).thenReturn(java.util.Optional.of(service_));
         Map<String, Object> etat = service.getStructureLicenseStatus(UUID.randomUUID());
         assertThat(etat).containsEntry("licenseActive", true).containsEntry("daysRemaining", 12)
                 .containsEntry("modules", List.of("AUDIT"));

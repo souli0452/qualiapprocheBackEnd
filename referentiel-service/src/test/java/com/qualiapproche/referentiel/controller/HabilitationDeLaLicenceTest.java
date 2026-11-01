@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HabilitationDeLaLicenceTest {
 
     private final PermissionChecker perm = new PermissionChecker();
-    private final LicenceController controleur = new LicenceController(null);
+    private final LicenceController controleur = new LicenceController(null, null);
 
     @AfterEach
     void tearDown() {

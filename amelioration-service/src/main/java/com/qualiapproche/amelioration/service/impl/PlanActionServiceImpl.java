@@ -1,5 +1,6 @@
 package com.qualiapproche.amelioration.service.impl;
 
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -11,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.qualiapproche.amelioration.entities.NonConformite;
 import com.qualiapproche.amelioration.entities.PlanAction;
@@ -539,7 +541,17 @@ public class PlanActionServiceImpl implements PlanActionService {
         if (!rappelEcheanceActif) {
             return;
         }
-        List<PlanAction> planActions = planActionRepository.findPlanActionsByStatus(StatutEnum.NON_TRAITER);
+        // La tournée voit tous les clients ; chacun est relancé sous sa propre direction : son seuil
+        // de relance, ses courriels et la boîte de notifications du moteur sont les siens.
+        Map<UUID, List<PlanAction>> parDirection = planActionRepository
+                .findPlanActionsByStatus(StatutEnum.NON_TRAITER).stream()
+                .filter(action -> action.getDirectionId() != null)
+                .collect(Collectors.groupingBy(PlanAction::getDirectionId));
+        parDirection.forEach((direction, plans) ->
+                Cloisonnement.pour(direction, () -> relancerLesEcheances(plans)));
+    }
+
+    private void relancerLesEcheances(List<PlanAction> planActions) {
         LocalDate today = LocalDate.now();
         long seuilDeRappel = reglagesOrganisation.entier(ClesReglages.RAPPEL_ECHEANCE_JOURS,
                 SEUIL_DE_RAPPEL_PAR_DEFAUT);

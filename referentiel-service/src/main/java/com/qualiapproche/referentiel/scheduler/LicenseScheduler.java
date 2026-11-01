@@ -3,7 +3,9 @@ package com.qualiapproche.referentiel.scheduler;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import com.qualiapproche.common.dto.DestinataireDto;
 import com.qualiapproche.common.dto.EtatLicenceDto;
-import com.qualiapproche.common.enumeration.TypeStructure;
+import com.qualiapproche.common.cloisonnement.Cloisonnement;
+import com.qualiapproche.common.cloisonnement.ExecutionCloisonnee;
+import com.qualiapproche.referentiel.plateforme.GestionDesClients;
 import com.qualiapproche.common.messagerie.Courriels;
 import com.qualiapproche.referentiel.client.UserClient;
 import com.qualiapproche.referentiel.entities.Structure;
@@ -19,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Prévient les administrateurs avant que la licence ne prenne fin.
@@ -50,6 +53,8 @@ public class LicenseScheduler {
     private final StructureRepository structureRepository;
     private final UserClient userClient;
     private final Courriels courriels;
+    private final GestionDesClients clients;
+    private final ExecutionCloisonnee execution;
 
     /** Derniers jours, où le rappel devient quotidien. */
     @Value("${qualisira.licence.preavis-jours:3}")
@@ -62,7 +67,19 @@ public class LicenseScheduler {
     @Scheduled(cron = "0 0 8 * * *") // Chaque matin, pour être lu dans la journée
     @SchedulerLock(name = "referentiel-echeance-de-licence", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     public void checkLicenseExpirations() {
-        EtatLicenceDto licence = licenceInstalleeService.etat();
+        // Chaque client a sa licence, et ses administrateurs : la ronde passe de l'un à l'autre,
+        // sous la direction de chacun — ses rôles, ses adresses, son échéance.
+        for (UUID client : clients.directions().stream().map(Structure::getId).toList()) {
+            try {
+                Cloisonnement.pour(client, this::verifierLeClientCourant);
+            } catch (Exception e) {
+                log.error("Échéance de licence du client {} non vérifiée : {}", client, e.getMessage());
+            }
+        }
+    }
+
+    private void verifierLeClientCourant() {
+        EtatLicenceDto licence = execution.pour(Cloisonnement.courante(), licenceInstalleeService::etat);
 
         if ("ABSENTE".equals(licence.getStatut())) {
             return;
@@ -162,8 +179,7 @@ public class LicenseScheduler {
         }
 
         if (adresses.isEmpty()) {
-            structureRepository.findAllByTypeStructure(TypeStructure.DIRECTION).stream()
-                    .findFirst()
+            execution.pour(Cloisonnement.courante(), () -> structureRepository.findById(Cloisonnement.courante()))
                     .map(Structure::getEmail)
                     .filter(adresse -> adresse != null && !adresse.isBlank())
                     .ifPresent(adresses::add);

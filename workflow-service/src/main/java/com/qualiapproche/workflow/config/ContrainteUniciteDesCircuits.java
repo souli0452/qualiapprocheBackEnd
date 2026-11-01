@@ -40,6 +40,10 @@ import java.util.stream.Collectors;
  * <p>D'où deux index partiels, exactement calqués sur la règle du service : un pour les circuits
  * réservés, un pour le circuit par défaut de chaque famille.</p>
  *
+ * <p>La règle vaut <b>par client</b> : chaque direction a son propre circuit par défaut de chaque
+ * famille. Les index commencent donc par {@code direction_id}, et le contrôle des doublons — qui
+ * tourne au démarrage, sur toutes les directions — groupe par direction.</p>
+ *
  * <p><b>Sur une base qui viole déjà la règle, rien n'est créé.</b> Les couples en double sont
  * journalisés avec les noms et les dates de création des circuits en cause, et le démarrage se
  * poursuit : aucune correction automatique ne saurait deviner lequel de deux circuits concurrents
@@ -69,10 +73,10 @@ public class ContrainteUniciteDesCircuits implements CommandLineRunner {
 
         creerLIndex(INDEX_CIBLE_RESERVEE,
                 "CREATE UNIQUE INDEX IF NOT EXISTS " + INDEX_CIBLE_RESERVEE
-                        + " ON workflow (resource_type, cible_id) WHERE cible_id IS NOT NULL AND actif");
+                        + " ON workflow (direction_id, resource_type, cible_id) WHERE cible_id IS NOT NULL AND actif");
         creerLIndex(INDEX_CIRCUIT_PAR_DEFAUT,
                 "CREATE UNIQUE INDEX IF NOT EXISTS " + INDEX_CIRCUIT_PAR_DEFAUT
-                        + " ON workflow (resource_type) WHERE cible_id IS NULL AND actif");
+                        + " ON workflow (direction_id, resource_type) WHERE cible_id IS NULL AND actif");
 
         verifier();
     }
@@ -89,7 +93,7 @@ public class ContrainteUniciteDesCircuits implements CommandLineRunner {
             Map<String, List<Workflow>> parCouple = workflowRepository.findAll().stream()
                     .filter(Workflow::isActif)
                     .collect(Collectors.groupingBy(
-                            circuit -> circuit.getResourceType() + " / "
+                            circuit -> circuit.getDirectionId() + " / " + circuit.getResourceType() + " / "
                                     + (circuit.estLeCircuitParDefaut() ? "(par défaut)" : circuit.getCibleId()),
                             LinkedHashMap::new, Collectors.toList()));
 

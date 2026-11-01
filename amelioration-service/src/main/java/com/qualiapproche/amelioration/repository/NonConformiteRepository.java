@@ -19,6 +19,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface NonConformiteRepository extends JpaRepository<NonConformite, UUID>, JpaSpecificationExecutor<NonConformite> {
+        /**
+         * Borne d'une requête native à la direction de la session.
+         *
+         * <p>Hibernate filtre sur la direction les requêtes JPQL, jamais le SQL natif : sans cette
+         * borne, les statistiques additionnaient les dossiers de tous les clients. La racine
+         * (le système) n'est pas bornée.</p>
+         */
+        String DE_LA_DIRECTION = " (:#{T(com.qualiapproche.common.cloisonnement.Cloisonnement).estLaRacine("
+                        + "T(com.qualiapproche.common.cloisonnement.Cloisonnement).courante())} = true"
+                        + " OR direction_id = :#{T(com.qualiapproche.common.cloisonnement.Cloisonnement).courante()}) ";
+
 
         Page<NonConformite> findByEtatTraitement(Etat etat, Pageable pageable);
 
@@ -37,7 +48,8 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         Page<NonConformite> findByUserImputIdAndEtatTraitement(String userImputId, Etat etatTraitement, Pageable pageable);
 
-        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE a.structure_soumission_id = :structureId GROUP BY a.status",
+        @Query(value = "SELECT a.status, COUNT(*) FROM quali_nc a WHERE " + DE_LA_DIRECTION
+                        + "AND a.structure_soumission_id = :structureId GROUP BY a.status",
                 nativeQuery = true)
         List<NcStats> countByStatusForStructure(@Param("structureId") String structureId);
 
@@ -49,6 +61,10 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "AND EXTRACT(YEAR FROM n.createdAt) = :annee")
         Integer findDernierNumero(@Param("structureSoumissionId") String structureSoumissionId, @Param("annee") int annee);
 
+        /** Les structures de soumission des dossiers de la direction : elles désignent ses séries. */
+        @Query("SELECT DISTINCT n.structureSoumissionId FROM NonConformite n WHERE n.structureSoumissionId IS NOT NULL")
+        List<String> structuresDeSoumission();
+
         boolean existsByStructureSoumissionIdAndNumeroReference(String structureSoumissionId, String numeroReference);
 
         /** Le dossier déjà ouvert pour cet écart d'origine, s'il l'a été : voir NonConformite.cleOrigine. */
@@ -56,7 +72,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT a.origine_service_libelle_court, COUNT(*) as count " +
                         "FROM quali_nc a " +
-                        "WHERE a.created_at BETWEEN :debut AND :fin " +
+                        "WHERE " + DE_LA_DIRECTION + "AND a.created_at BETWEEN :debut AND :fin " +
                         "GROUP BY a.origine_service_libelle_court", nativeQuery = true)
         List<NonConformiteByStructDto> getNonConformiteStatsByStructureAndPeriod(
                         @Param("debut") LocalDateTime debut,
@@ -64,7 +80,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT EXTRACT(MONTH FROM created_at) AS mois, COUNT(*) AS total " +
                         "FROM quali_nc " +
-                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "WHERE " + DE_LA_DIRECTION + "AND EXTRACT(YEAR FROM created_at) = :annee " +
                         "GROUP BY EXTRACT(MONTH FROM created_at)", nativeQuery = true)
         List<Object[]> countByMonth(@Param("annee") int annee);
 
@@ -73,7 +89,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "status, " + // Utilisez directement le nom de la colonne enum
                         "COUNT(*) AS total " +
                         "FROM quali_nc  " +
-                        "WHERE created_at BETWEEN :debut AND :fin " +
+                        "WHERE " + DE_LA_DIRECTION + "AND created_at BETWEEN :debut AND :fin " +
                         "AND status IN :statuts " + // Filtre par les valeurs enum
                         "GROUP BY EXTRACT(MONTH FROM created_at), status", nativeQuery = true)
         List<Object[]> countByMonthAndStatus(
@@ -93,7 +109,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "EXTRACT(MONTH FROM created_at) AS mois, " +
                         "COUNT(*) AS total " +
                         "FROM quali_nc " +
-                        "WHERE created_at BETWEEN :debut AND :fin " +
+                        "WHERE " + DE_LA_DIRECTION + "AND created_at BETWEEN :debut AND :fin " +
                         "AND origine_id = :origineServiceId " +
                         "GROUP BY EXTRACT(MONTH FROM created_at) " +
                         "ORDER BY EXTRACT(MONTH FROM created_at)", nativeQuery = true)
@@ -107,7 +123,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "status, " + // Utilisez directement le nom de la colonne enum
                         "COUNT(*) AS total " +
                         "FROM quali_nc  " +
-                        "WHERE created_at BETWEEN :debut AND :fin " +
+                        "WHERE " + DE_LA_DIRECTION + "AND created_at BETWEEN :debut AND :fin " +
                         "AND origine_id = :origineServiceId " +
                         "AND status IN :statuts " + // Filtre par les valeurs enum
                         "GROUP BY EXTRACT(MONTH FROM created_at), status", nativeQuery = true)
@@ -122,7 +138,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
                         "niveau_non_conformite_libelle AS niveau, " +
                         "COUNT(*) AS total " +
                         "FROM quali_nc " +
-                        "WHERE created_at BETWEEN :debut AND :fin " +
+                        "WHERE " + DE_LA_DIRECTION + "AND created_at BETWEEN :debut AND :fin " +
                         "AND origine_id = :origineServiceId " +
                         "AND niveau_non_conformite_libelle IS NOT NULL " +
                         "GROUP BY EXTRACT(MONTH FROM created_at), niveau_non_conformite_libelle " +
@@ -212,7 +228,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT EXTRACT(MONTH FROM created_at) as mois, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
                         "FROM quali_nc " +
-                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "WHERE " + DE_LA_DIRECTION + "AND EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND status <> 'DRAFT' " +
                         "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
                         "GROUP BY EXTRACT(MONTH FROM created_at), niveau_non_conformite_libelle", nativeQuery = true)
@@ -222,7 +238,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT COUNT(*) " +
                         "FROM quali_nc " +
-                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "WHERE " + DE_LA_DIRECTION + "AND EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND status <> 'DRAFT' " +
                         "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
                                 nativeQuery = true)
@@ -232,7 +248,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT CEIL(EXTRACT(DAY FROM created_at) / 7.0) as semaine, niveau_non_conformite_libelle as gravite, COUNT(*) as count " +
                         "FROM quali_nc " +
-                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "WHERE " + DE_LA_DIRECTION + "AND EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND EXTRACT(MONTH FROM created_at) = :mois " +
                         "AND status <> 'DRAFT' " +
                         "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId) " +
@@ -244,7 +260,7 @@ public interface NonConformiteRepository extends JpaRepository<NonConformite, UU
 
         @Query(value = "SELECT COUNT(*) " +
                         "FROM quali_nc " +
-                        "WHERE EXTRACT(YEAR FROM created_at) = :annee " +
+                        "WHERE " + DE_LA_DIRECTION + "AND EXTRACT(YEAR FROM created_at) = :annee " +
                         "AND EXTRACT(MONTH FROM created_at) = :mois " +
                         "AND status <> 'DRAFT' " +
                         "AND (:structureId IS NULL OR :structureId = '' OR structure_soumission_id = :structureId OR origine_id = :structureId)",
