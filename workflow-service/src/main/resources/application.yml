@@ -144,6 +144,7 @@ spring:
             connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
             read-timeout: ${FEIGN_READ_TIMEOUT:10000}
 
+---
 # Messagerie entre services (ActiveMQ Artemis) : tout ce que le service émet est inscrit dans sa
 # boîte d'envoi (message_sortant) puis publié sur le courtier ; le relais, sous verrou ShedLock,
 # reprend ce qui n'a pas pu partir. En développement : docker-compose.artemis.yml.

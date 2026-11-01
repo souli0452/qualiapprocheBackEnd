@@ -107,6 +107,7 @@ amelioration:
     # code qui ne mène nulle part.
     lien-dossier: ${frontend.url}/non-conformite/suivi?ncId={id}
 
+---
 # Appels entre services (Feign) : des délais bornés. Il n'y en avait aucun — un service lent ou
 # figé retenait sans fin les fils de tous ceux qui l'appelaient, jusqu'à les bloquer à leur tour.
 # 2 s pour joindre, 10 s pour répondre : assez pour un rendu PDF ou une page de référentiel, pas

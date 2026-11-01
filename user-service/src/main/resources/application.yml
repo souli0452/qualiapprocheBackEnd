@@ -93,6 +93,7 @@ keycloak:
 
 # Test du declenchement de deploiement automatique
 
+---
 # Appels entre services (Feign) : des délais bornés. Il n'y en avait aucun — un service lent ou
 # figé retenait sans fin les fils de tous ceux qui l'appelaient, jusqu'à les bloquer à leur tour.
 # 2 s pour joindre, 10 s pour répondre : assez pour un rendu PDF ou une page de référentiel, pas
@@ -106,6 +107,7 @@ spring:
             connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}
             read-timeout: ${FEIGN_READ_TIMEOUT:10000}
 
+---
 # Messagerie entre services (ActiveMQ Artemis) : tout ce que le service émet est inscrit dans sa
 # boîte d'envoi (message_sortant) puis publié sur le courtier ; le relais, sous verrou ShedLock,
 # reprend ce qui n'a pas pu partir. En développement : docker-compose.artemis.yml.
